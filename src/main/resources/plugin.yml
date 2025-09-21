@@ -1,0 +1,43 @@
+name: NetworkStorage
+version: 1.0.0
+main: com.yourserver.networkstorage.NetworkStoragePlugin
+api-version: 1.21
+author: YourName
+description: A networked storage system for Minecraft servers
+
+commands:
+  storage:
+    description: Main command for NetworkStorage
+    usage: /<command> [wand|info|reset|help]
+    aliases: [ns, netstorage, networkstorage]
+
+permissions:
+  networkstorage.*:
+    description: All NetworkStorage permissions
+    default: op
+    children:
+      networkstorage.use: true
+      networkstorage.wand: true
+      networkstorage.reset: true
+      networkstorage.access.all: true
+      networkstorage.admin: true
+
+  networkstorage.use:
+    description: Allows basic use of storage networks
+    default: true
+
+  networkstorage.wand:
+    description: Allows getting and using storage wands
+    default: true
+
+  networkstorage.reset:
+    description: Allows resetting own storage network
+    default: true
+
+  networkstorage.access.all:
+    description: Allows accessing any storage network
+    default: op
+
+  networkstorage.admin:
+    description: Administrative permissions for NetworkStorage
+    default: op

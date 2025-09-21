@@ -1,0 +1,33 @@
+# NetworkStorage Plugin Configuration
+
+# Maximum number of chests per network
+max-chests-per-network: 100
+
+# Maximum number of terminals per network
+max-terminals-per-network: 10
+
+# Allow networks to span across multiple worlds
+allow-cross-world-networks: false
+
+# Auto-save interval in minutes
+auto-save-interval-minutes: 5
+
+# Enable permissions system
+enable-permissions: true
+
+# Plugin messages
+messages:
+  network-created: "&aStorage network created!"
+  chest-added: "&aChest added to network! ({count} total)"
+  chest-removed: "&cChest removed from network! ({count} remaining)"
+  terminal-added: "&bTerminal added to network! ({count} total)"
+  terminal-removed: "&cTerminal removed from network! ({count} remaining)"
+  no-permission: "&cYou don't have permission to do that!"
+  network-full: "&cYour network has reached the maximum number of chests!"
+  terminal-limit-reached: "&cYour network has reached the maximum number of terminals!"
+  chest-already-in-network: "&eThis chest is already in your network!"
+  chest-not-in-network: "&cThis chest is not in your network!"
+  wand-received: "&aYou received a Storage Network Wand!"
+  network-accessed: "&aAccessing storage network..."
+  items-taken: "&aTook {amount}x {item}"
+  inventory-full: "&eSome items were dropped because your inventory is full!"
