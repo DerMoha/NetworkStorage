@@ -89,13 +89,92 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        event.setCancelled(true); // Prevent taking items directly
-
         int slot = event.getSlot();
+        int rawSlot = event.getRawSlot();
         boolean isRightClick = event.isRightClick();
         boolean isLeftClick = event.isLeftClick();
         boolean isShiftClick = event.isShiftClick();
 
+        // Check if player is clicking in their own inventory (bottom part)
+        // Terminal GUI has 54 slots (0-53), player inventory starts at slot 54+
+        if (rawSlot >= terminal.getInventory().getSize()) {
+            // Player is clicking in their own inventory
+            if (isShiftClick) {
+                // Shift+Click in player inventory = deposit to network
+                ItemStack clickedItem = event.getCurrentItem();
+                if (clickedItem != null && clickedItem.getType() != Material.AIR) {
+                    event.setCancelled(true);
+
+                    // Hole das Item direkt aus dem Spieler-Inventar und Slot
+                    ItemStack itemToDeposit = null;
+                    if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
+                        itemToDeposit = player.getInventory().getItem(event.getSlot());
+                    }
+                    if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) {
+                        // Fallback: Versuche das Item aus event.getCurrentItem
+                        itemToDeposit = clickedItem;
+                    }
+
+                    // Berechne den Slot im Spieler-Inventar
+                    int playerSlot = event.getSlot();
+                    if (playerSlot < 0 || playerSlot >= player.getInventory().getSize()) {
+                        plugin.getLogger().warning("Invalid player inventory slot: " + playerSlot);
+                        return;
+                    }
+
+                    // Zähle die Menge des Items im Netzwerk vor dem Einlagern
+                    int beforeCount = terminal.getNetwork().getItemCount(itemToDeposit);
+
+                    // Entferne das Item aus dem Inventar
+                    player.getInventory().setItem(playerSlot, null);
+
+                    // Versuche, das Item ins Netzwerk einzulagern
+                    ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
+
+                    // Zähle die Menge des Items im Netzwerk nach dem Einlagern
+                    int afterCount = terminal.getNetwork().getItemCount(itemToDeposit);
+                    int actuallyStored = afterCount - beforeCount;
+
+                    if (remaining == null || (remaining.getType() == Material.AIR) || remaining.getAmount() <= 0) {
+                        if (actuallyStored == itemToDeposit.getAmount()) {
+                            player.sendMessage(ChatColor.GREEN + "Deposited " + itemToDeposit.getAmount() + "x " + terminal.getItemDisplayName(itemToDeposit) + " to network!");
+                        } else {
+                            player.sendMessage(ChatColor.RED + "Warnung: Itemmenge stimmt nicht überein! Bitte Admin informieren.");
+                            // Item zurückgeben
+                            player.getInventory().setItem(playerSlot, itemToDeposit);
+                        }
+                    } else {
+                        int stored = itemToDeposit.getAmount() - remaining.getAmount();
+                        if (stored > 0 && actuallyStored == stored) {
+                            player.sendMessage(ChatColor.YELLOW + "Deposited " + stored + "x " + terminal.getItemDisplayName(itemToDeposit) + ", " + remaining.getAmount() + " remaining (network full)");
+                        } else {
+                            player.sendMessage(ChatColor.RED + "Warnung: Itemmenge stimmt nicht überein! Bitte Admin informieren.");
+                            // Item zurückgeben
+                            player.getInventory().setItem(playerSlot, itemToDeposit);
+                        }
+                        // Return remaining items to player
+                        player.getInventory().setItem(playerSlot, remaining);
+                    }
+
+                    // Kapazität über TerminalGUI abfragen
+                    double capacity = terminal.getCurrentCapacityPercent();
+                    if (capacity >= 80.0) {
+                        player.sendMessage(ChatColor.RED + "Warnung: Das Netzwerk ist zu " + String.format("%.1f", capacity) + "% voll!");
+                    }
+
+                    // Refresh GUI
+                    terminal.updateInventory();
+                    return;
+                }
+            }
+            // Allow normal inventory operations in player's inventory
+            return;
+        }
+
+        // Player is clicking in the terminal GUI - prevent taking items directly
+        event.setCancelled(true);
+
+        // Handle terminal clicks
         terminal.handleClick(slot, isRightClick, isShiftClick, isLeftClick);
     }
 

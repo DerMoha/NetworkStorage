@@ -258,4 +258,39 @@ public class StorageNetwork {
         // The double chest handling is now done through inventory size checks
         return location;
     }
+
+    /**
+     * Zählt die Gesamtmenge eines bestimmten Items im Netzwerk
+     * @param itemToCount Das zu zählende Item
+     * @return Gesamtanzahl im Netzwerk
+     */
+    public int getItemCount(ItemStack itemToCount) {
+        if (itemToCount == null || itemToCount.getType() == Material.AIR) {
+            return 0;
+        }
+        int count = 0;
+        Set<Location> processedLocations = new HashSet<>();
+        for (Location chestLoc : chestLocations) {
+            if (processedLocations.contains(chestLoc)) {
+                continue;
+            }
+            if (chestLoc.getBlock().getState() instanceof Chest) {
+                Chest chest = (Chest) chestLoc.getBlock().getState();
+                Inventory inv = chest.getInventory();
+                // Handle double chests
+                if (inv.getSize() == 54) {
+                    // For double chests, we mark this location as processed
+                } else {
+                    processedLocations.add(chestLoc);
+                }
+                processedLocations.add(chestLoc);
+                for (ItemStack stack : inv.getContents()) {
+                    if (stack != null && stack.isSimilar(itemToCount)) {
+                        count += stack.getAmount();
+                    }
+                }
+            }
+        }
+        return count;
+    }
 }

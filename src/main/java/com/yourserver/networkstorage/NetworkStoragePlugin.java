@@ -7,12 +7,14 @@ import com.yourserver.networkstorage.listeners.WandListener;
 import com.yourserver.networkstorage.listeners.AutoInsertListener;
 import com.yourserver.networkstorage.managers.NetworkManager;
 import com.yourserver.networkstorage.managers.ConfigManager;
+import com.yourserver.networkstorage.managers.SearchManager;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
     private static NetworkStoragePlugin instance;
     private NetworkManager networkManager;
     private ConfigManager configManager;
+    private SearchManager searchManager;
 
     @Override
     public void onEnable() {
@@ -21,6 +23,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         // Initialize managers
         configManager = new ConfigManager(this);
         networkManager = new NetworkManager(this);
+        searchManager = new SearchManager(this);
 
         // Register commands
         getCommand("storage").setExecutor(new StorageCommand(this));
@@ -54,5 +57,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public SearchManager getSearchManager() {
+        return searchManager;
     }
 }

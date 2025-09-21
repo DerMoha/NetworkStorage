@@ -4,7 +4,9 @@ import com.yourserver.networkstorage.NetworkStoragePlugin;
 import com.yourserver.networkstorage.storage.StorageNetwork;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -23,6 +25,7 @@ public class TerminalGUI implements InventoryHolder {
     private int currentPage = 0;
     private SortType sortType = SortType.ALPHABETICAL;
     private List<Map.Entry<ItemStack, Integer>> sortedItems;
+    private String searchFilter = "";
 
     private static final int ITEMS_PER_PAGE = 45; // 5 rows for items
     private static final int GUI_SIZE = 54; // 6 rows total
@@ -46,10 +49,19 @@ public class TerminalGUI implements InventoryHolder {
     public void updateInventory() {
         inventory.clear();
 
-        // Get and sort network items
+        // Get and filter network items
         Map<ItemStack, Integer> networkItems = network.getNetworkItems();
         sortedItems = new ArrayList<>(networkItems.entrySet());
 
+        // Apply search filter
+        if (!searchFilter.isEmpty()) {
+            sortedItems = sortedItems.stream()
+                    .filter(entry -> getItemDisplayName(entry.getKey())
+                            .toLowerCase().contains(searchFilter.toLowerCase()))
+                    .collect(java.util.stream.Collectors.toList());
+        }
+
+        // Sort items
         switch (sortType) {
             case ALPHABETICAL:
                 sortedItems.sort((a, b) -> {
@@ -71,7 +83,7 @@ public class TerminalGUI implements InventoryHolder {
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.size());
 
-        // Add items to inventory
+        // Add items to inventory (slots 0-44)
         int slot = 0;
         for (int i = startIndex; i < endIndex; i++) {
             Map.Entry<ItemStack, Integer> entry = sortedItems.get(i);
@@ -80,7 +92,7 @@ public class TerminalGUI implements InventoryHolder {
             slot++;
         }
 
-        // Add control buttons in bottom row (slots 45-53)
+        // Add control buttons in bottom row
         addControlButtons(currentPage, totalPages);
     }
 
@@ -95,7 +107,27 @@ public class TerminalGUI implements InventoryHolder {
             inventory.setItem(45, prevButton);
         }
 
-        // Sort button (slot 49)
+        // Search button (slot 46)
+        ItemStack searchButton = new ItemStack(Material.SPYGLASS);
+        ItemMeta searchMeta = searchButton.getItemMeta();
+        if (searchFilter.isEmpty()) {
+            searchMeta.setDisplayName(ChatColor.AQUA + "Search Items");
+            searchMeta.setLore(Arrays.asList(
+                    ChatColor.GRAY + "Click to search for items",
+                    ChatColor.GRAY + "Type item name in chat"
+            ));
+        } else {
+            searchMeta.setDisplayName(ChatColor.AQUA + "Search: " + ChatColor.WHITE + searchFilter);
+            searchMeta.setLore(Arrays.asList(
+                    ChatColor.GRAY + "Showing filtered results",
+                    ChatColor.GRAY + "Click to change search",
+                    ChatColor.YELLOW + "Right-click to clear"
+            ));
+        }
+        searchButton.setItemMeta(searchMeta);
+        inventory.setItem(46, searchButton);
+
+        // Sort button (slot 47)
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
         sortMeta.setDisplayName(ChatColor.YELLOW + "Sort: " + getSortDisplayName());
@@ -104,7 +136,51 @@ public class TerminalGUI implements InventoryHolder {
                 ChatColor.GRAY + "Current: " + getSortDisplayName()
         ));
         sortButton.setItemMeta(sortMeta);
-        inventory.setItem(49, sortButton);
+        inventory.setItem(47, sortButton);
+
+        // Network info button (slot 48)
+        // Calculate storage info
+        int totalSlots = 0;
+        int usedSlots = 0;
+        for (Location chestLoc : network.getChestLocations()) {
+            if (chestLoc.getBlock().getState() instanceof Chest) {
+                Chest chest = (Chest) chestLoc.getBlock().getState();
+                int chestSize = chest.getInventory().getSize();
+                totalSlots += chestSize;
+
+                for (ItemStack item : chest.getInventory().getContents()) {
+                    if (item != null && item.getType() != Material.AIR) {
+                        usedSlots++;
+                    }
+                }
+            }
+        }
+
+        ItemStack infoButton = new ItemStack(Material.BOOK);
+        ItemMeta infoMeta = infoButton.getItemMeta();
+        infoMeta.setDisplayName(ChatColor.AQUA + "Network Info");
+        infoMeta.setLore(Arrays.asList(
+                ChatColor.GRAY + "Total Items: " + sortedItems.size() + " types",
+                ChatColor.GRAY + "Connected Chests: " + network.getChestLocations().size(),
+                ChatColor.GRAY + "Terminals: " + network.getTerminalLocations().size(),
+                ChatColor.GRAY + "Storage Used: " + usedSlots + "/" + totalSlots + " slots",
+                ChatColor.GRAY + "Storage Free: " + ChatColor.GREEN + (totalSlots - usedSlots) + " slots",
+                ChatColor.GRAY + "Capacity: " + String.format("%.1f%%", (usedSlots * 100.0 / Math.max(1, totalSlots))),
+                "",
+                ChatColor.YELLOW + "Left-click items to take 1",
+                ChatColor.YELLOW + "Right-click items to take a stack",
+                ChatColor.GOLD + "Shift+Click items in YOUR inventory to deposit!"
+        ));
+        infoButton.setItemMeta(infoMeta);
+        inventory.setItem(48, infoButton);
+
+        // Refresh button (slot 52)
+        ItemStack refreshButton = new ItemStack(Material.CLOCK);
+        ItemMeta refreshMeta = refreshButton.getItemMeta();
+        refreshMeta.setDisplayName(ChatColor.GREEN + "Refresh");
+        refreshMeta.setLore(Arrays.asList(ChatColor.GRAY + "Update network contents"));
+        refreshButton.setItemMeta(refreshMeta);
+        inventory.setItem(52, refreshButton);
 
         // Next page button (slot 53)
         if (page < totalPages - 1) {
@@ -115,29 +191,6 @@ public class TerminalGUI implements InventoryHolder {
             nextButton.setItemMeta(meta);
             inventory.setItem(53, nextButton);
         }
-
-        // Info button (slot 46)
-        ItemStack infoButton = new ItemStack(Material.BOOK);
-        ItemMeta infoMeta = infoButton.getItemMeta();
-        infoMeta.setDisplayName(ChatColor.AQUA + "Network Info");
-        infoMeta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Total Items: " + sortedItems.size(),
-                ChatColor.GRAY + "Connected Chests: " + network.getChestLocations().size(),
-                ChatColor.GRAY + "Terminals: " + network.getTerminalLocations().size(),
-                "",
-                ChatColor.YELLOW + "Left-click items to take 1",
-                ChatColor.YELLOW + "Right-click items to take a stack"
-        ));
-        infoButton.setItemMeta(infoMeta);
-        inventory.setItem(46, infoButton);
-
-        // Refresh button (slot 52)
-        ItemStack refreshButton = new ItemStack(Material.CLOCK);
-        ItemMeta refreshMeta = refreshButton.getItemMeta();
-        refreshMeta.setDisplayName(ChatColor.GREEN + "Refresh");
-        refreshMeta.setLore(Arrays.asList(ChatColor.GRAY + "Update network contents"));
-        refreshButton.setItemMeta(refreshMeta);
-        inventory.setItem(52, refreshButton);
     }
 
     private ItemStack createDisplayItem(ItemStack original, int totalCount) {
@@ -176,7 +229,7 @@ public class TerminalGUI implements InventoryHolder {
         return display;
     }
 
-    private String getItemDisplayName(ItemStack item) {
+    public String getItemDisplayName(ItemStack item) {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             return item.getItemMeta().getDisplayName();
         }
@@ -220,6 +273,27 @@ public class TerminalGUI implements InventoryHolder {
         }
     }
 
+    /**
+     * Gibt die aktuelle Kapazität des Netzwerks in Prozent zurück
+     */
+    public double getCurrentCapacityPercent() {
+        int totalSlots = 0;
+        int usedSlots = 0;
+        for (Location chestLoc : network.getChestLocations()) {
+            if (chestLoc.getBlock().getState() instanceof Chest) {
+                Chest chest = (Chest) chestLoc.getBlock().getState();
+                int chestSize = chest.getInventory().getSize();
+                totalSlots += chestSize;
+                for (ItemStack item : chest.getInventory().getContents()) {
+                    if (item != null && item.getType() != Material.AIR) {
+                        usedSlots++;
+                    }
+                }
+            }
+        }
+        return totalSlots > 0 ? (usedSlots * 100.0 / totalSlots) : 0.0;
+    }
+
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
         // Handle control buttons
         if (slot == 45 && currentPage > 0) {
@@ -239,10 +313,30 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        if (slot == 49) {
+        if (slot == 46) {
+            // Search button
+            if (isRightClick && !searchFilter.isEmpty()) {
+                // Clear search
+                searchFilter = "";
+                currentPage = 0;
+                updateInventory();
+                player.sendMessage(ChatColor.YELLOW + "Search cleared!");
+            } else {
+                // Start search
+                player.closeInventory();
+                player.sendMessage(ChatColor.AQUA + "Type the name of the item you want to search for:");
+                player.sendMessage(ChatColor.GRAY + "Type 'cancel' to cancel the search.");
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    startSearchMode();
+                }, 1L);
+            }
+            return;
+        }
+
+        if (slot == 47) {
             // Sort button
             cycleSortType();
-            currentPage = 0; // Reset to first page when sorting changes
+            currentPage = 0;
             updateInventory();
             return;
         }
@@ -254,7 +348,7 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        // Handle item clicks
+        // Handle item clicks (slots 0-44)
         if (slot < ITEMS_PER_PAGE) {
             int itemIndex = (currentPage * ITEMS_PER_PAGE) + slot;
             if (itemIndex < sortedItems.size()) {
@@ -267,6 +361,11 @@ public class TerminalGUI implements InventoryHolder {
                 }
             }
         }
+    }
+
+    private void startSearchMode() {
+        // This will be handled by a separate chat listener
+        plugin.getSearchManager().startSearch(player, this);
     }
 
     private void handleItemExtraction(ItemStack itemType, int availableAmount, boolean isHalfStack, int specificAmount) {
@@ -338,6 +437,12 @@ public class TerminalGUI implements InventoryHolder {
         player.sendMessage(ChatColor.YELLOW + "Sort changed to: " + getSortDisplayName());
     }
 
+    public void setSearchFilter(String filter) {
+        this.searchFilter = filter;
+        this.currentPage = 0;
+        updateInventory();
+    }
+
     public void open() {
         player.openInventory(inventory);
     }
@@ -355,3 +460,4 @@ public class TerminalGUI implements InventoryHolder {
         return network;
     }
 }
+
