@@ -1,9 +1,8 @@
-package com.yourserver.networkstorage.listeners;
+package com.dermoha.networkstorage.listeners;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.gui.TerminalGUI;
-import com.yourserver.networkstorage.listeners.WandListener;
-import com.yourserver.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -12,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -189,6 +189,24 @@ public class ChestInteractListener implements Listener {
 
         if (terminal != null && event.getInventory().equals(terminal.getInventory())) {
             openTerminals.remove(player.getUniqueId());
+        }
+    }
+
+    @EventHandler
+    public void onBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST) {
+            Location chestLoc = block.getLocation();
+            StorageNetwork tempNetwork = new StorageNetwork("temp", "temp");
+            Location normalizedLoc = tempNetwork.getNormalizedLocation(chestLoc);
+            for (StorageNetwork network : plugin.getNetworkManager().getAllNetworks()) {
+                if (network.isChestInNetwork(chestLoc)) {
+                    network.removeChest(chestLoc);
+                }
+                if (network.isChestInNetwork(normalizedLoc)) {
+                    network.removeChest(normalizedLoc);
+                }
+            }
         }
     }
 }

@@ -1,20 +1,13 @@
-package com.yourserver.networkstorage.listeners;
+package com.dermoha.networkstorage.listeners;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.storage.StorageNetwork;
-import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-
-import java.util.HashMap;
 
 /**
  * Handles automatic insertion of items into storage networks when chests are closed

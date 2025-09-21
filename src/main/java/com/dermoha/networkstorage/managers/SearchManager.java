@@ -1,7 +1,7 @@
-package com.yourserver.networkstorage.managers;
+package com.dermoha.networkstorage.managers;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.TerminalGUI;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

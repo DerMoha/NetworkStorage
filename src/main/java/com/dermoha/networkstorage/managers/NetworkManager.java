@@ -1,7 +1,7 @@
-package com.yourserver.networkstorage.managers;
+package com.dermoha.networkstorage.managers;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;

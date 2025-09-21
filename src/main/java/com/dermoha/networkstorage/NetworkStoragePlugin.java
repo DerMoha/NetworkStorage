@@ -1,13 +1,13 @@
-package com.yourserver.networkstorage;
+package com.dermoha.networkstorage;
 
 import org.bukkit.plugin.java.JavaPlugin;
-import com.yourserver.networkstorage.commands.StorageCommand;
-import com.yourserver.networkstorage.listeners.ChestInteractListener;
-import com.yourserver.networkstorage.listeners.WandListener;
-import com.yourserver.networkstorage.listeners.AutoInsertListener;
-import com.yourserver.networkstorage.managers.NetworkManager;
-import com.yourserver.networkstorage.managers.ConfigManager;
-import com.yourserver.networkstorage.managers.SearchManager;
+import com.dermoha.networkstorage.commands.StorageCommand;
+import com.dermoha.networkstorage.listeners.ChestInteractListener;
+import com.dermoha.networkstorage.listeners.WandListener;
+import com.dermoha.networkstorage.listeners.AutoInsertListener;
+import com.dermoha.networkstorage.managers.NetworkManager;
+import com.dermoha.networkstorage.managers.ConfigManager;
+import com.dermoha.networkstorage.managers.SearchManager;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 

@@ -1,7 +1,7 @@
-package com.yourserver.networkstorage.listeners;
+package com.dermoha.networkstorage.listeners;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;

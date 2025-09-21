@@ -1,4 +1,4 @@
-package com.yourserver.networkstorage.storage;
+package com.dermoha.networkstorage.storage;
 
 import org.bukkit.Location;
 import org.bukkit.Material;

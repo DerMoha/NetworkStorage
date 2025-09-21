@@ -1,9 +1,9 @@
 name: NetworkStorage
-version: 2.0.0
-main: com.yourserver.networkstorage.NetworkStoragePlugin
+version: 2.5.0
+main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
-author: YourName
-description: A networked storage system for Minecraft servers
+author: DerMoha
+description: A networked storage system for Minecraft servers, make sharing storage easy!
 
 commands:
   storage:

@@ -1,8 +1,8 @@
-package com.yourserver.networkstorage.commands;
+package com.dermoha.networkstorage.commands;
 
-import com.yourserver.networkstorage.NetworkStoragePlugin;
-import com.yourserver.networkstorage.listeners.WandListener;
-import com.yourserver.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.listeners.WandListener;
+import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
