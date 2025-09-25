@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.gui;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -20,6 +21,7 @@ public class TerminalGUI implements InventoryHolder {
     private final Player player;
     private final StorageNetwork network;
     private final NetworkStoragePlugin plugin;
+    private final LanguageManager lang;
 
     private Inventory inventory;
     private int currentPage = 0;
@@ -40,9 +42,9 @@ public class TerminalGUI implements InventoryHolder {
         this.player = player;
         this.network = network;
         this.plugin = plugin;
+        this.lang = plugin.getLanguageManager();
         this.inventory = Bukkit.createInventory(this, GUI_SIZE,
-                ChatColor.DARK_BLUE + "Storage Network Terminal");
-
+                lang.get("terminal.title", player));
         updateInventory();
     }
 
@@ -101,8 +103,8 @@ public class TerminalGUI implements InventoryHolder {
         if (page > 0) {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta meta = prevButton.getItemMeta();
-            meta.setDisplayName(ChatColor.GREEN + "Previous Page");
-            meta.setLore(Arrays.asList(ChatColor.GRAY + "Page " + page + "/" + Math.max(1, totalPages)));
+            meta.setDisplayName(lang.get("terminal.prev_page", player));
+            meta.setLore(Arrays.asList(lang.get("terminal.page", player, String.valueOf(page), String.valueOf(Math.max(1, totalPages)))));
             prevButton.setItemMeta(meta);
             inventory.setItem(45, prevButton);
         }
@@ -111,17 +113,17 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack searchButton = new ItemStack(Material.SPYGLASS);
         ItemMeta searchMeta = searchButton.getItemMeta();
         if (searchFilter.isEmpty()) {
-            searchMeta.setDisplayName(ChatColor.AQUA + "Search Items");
+            searchMeta.setDisplayName(lang.get("terminal.search", player));
             searchMeta.setLore(Arrays.asList(
-                    ChatColor.GRAY + "Click to search for items",
-                    ChatColor.GRAY + "Type item name in chat"
+                    lang.get("terminal.search.lore1", player),
+                    lang.get("terminal.search.lore2", player)
             ));
         } else {
-            searchMeta.setDisplayName(ChatColor.AQUA + "Search: " + ChatColor.WHITE + searchFilter);
+            searchMeta.setDisplayName(lang.get("terminal.search.active", player, searchFilter));
             searchMeta.setLore(Arrays.asList(
-                    ChatColor.GRAY + "Showing filtered results",
-                    ChatColor.GRAY + "Click to change search",
-                    ChatColor.YELLOW + "Right-click to clear"
+                    lang.get("terminal.search.filtered", player),
+                    lang.get("terminal.search.change", player),
+                    lang.get("terminal.search.clear", player)
             ));
         }
         searchButton.setItemMeta(searchMeta);
@@ -130,16 +132,15 @@ public class TerminalGUI implements InventoryHolder {
         // Sort button (slot 47)
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
-        sortMeta.setDisplayName(ChatColor.YELLOW + "Sort: " + getSortDisplayName());
+        sortMeta.setDisplayName(lang.get("terminal.sort", player, getSortDisplayName()));
         sortMeta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Click to change sorting",
-                ChatColor.GRAY + "Current: " + getSortDisplayName()
+                lang.get("terminal.sort.lore1", player),
+                lang.get("terminal.sort.lore2", player, getSortDisplayName())
         ));
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
 
         // Network info button (slot 48)
-        // Calculate storage info
         int totalSlots = 0;
         int usedSlots = 0;
         for (Location chestLoc : network.getChestLocations()) {
@@ -147,7 +148,6 @@ public class TerminalGUI implements InventoryHolder {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 int chestSize = chest.getInventory().getSize();
                 totalSlots += chestSize;
-
                 for (ItemStack item : chest.getInventory().getContents()) {
                     if (item != null && item.getType() != Material.AIR) {
                         usedSlots++;
@@ -155,21 +155,20 @@ public class TerminalGUI implements InventoryHolder {
                 }
             }
         }
-
         ItemStack infoButton = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = infoButton.getItemMeta();
-        infoMeta.setDisplayName(ChatColor.AQUA + "Network Info");
+        infoMeta.setDisplayName(lang.get("terminal.info", player));
         infoMeta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Total Items: " + sortedItems.size() + " types",
-                ChatColor.GRAY + "Connected Chests: " + network.getChestLocations().size(),
-                ChatColor.GRAY + "Terminals: " + network.getTerminalLocations().size(),
-                ChatColor.GRAY + "Storage Used: " + usedSlots + "/" + totalSlots + " slots",
-                ChatColor.GRAY + "Storage Free: " + ChatColor.GREEN + (totalSlots - usedSlots) + " slots",
-                ChatColor.GRAY + "Capacity: " + String.format("%.1f%%", (usedSlots * 100.0 / Math.max(1, totalSlots))),
+                lang.get("terminal.info.items", player, String.valueOf(sortedItems.size())),
+                lang.get("terminal.info.chests", player, String.valueOf(network.getChestLocations().size())),
+                lang.get("terminal.info.terminals", player, String.valueOf(network.getTerminalLocations().size())),
+                lang.get("terminal.info.used", player, String.valueOf(usedSlots), String.valueOf(totalSlots)),
+                lang.get("terminal.info.free", player, String.valueOf(totalSlots - usedSlots)),
+                lang.get("terminal.info.capacity", player, String.format("%.1f", (usedSlots * 100.0 / Math.max(1, totalSlots)))),
                 "",
-                ChatColor.YELLOW + "Left-click items to take 1",
-                ChatColor.YELLOW + "Right-click items to take a stack",
-                ChatColor.GOLD + "Shift+Click items in YOUR inventory to deposit!"
+                lang.get("terminal.info.lore1", player),
+                lang.get("terminal.info.lore2", player),
+                lang.get("terminal.info.lore3", player)
         ));
         infoButton.setItemMeta(infoMeta);
         inventory.setItem(48, infoButton);
@@ -177,8 +176,8 @@ public class TerminalGUI implements InventoryHolder {
         // Refresh button (slot 52)
         ItemStack refreshButton = new ItemStack(Material.CLOCK);
         ItemMeta refreshMeta = refreshButton.getItemMeta();
-        refreshMeta.setDisplayName(ChatColor.GREEN + "Refresh");
-        refreshMeta.setLore(Arrays.asList(ChatColor.GRAY + "Update network contents"));
+        refreshMeta.setDisplayName(lang.get("terminal.refresh", player));
+        refreshMeta.setLore(Arrays.asList(lang.get("terminal.refresh.lore", player)));
         refreshButton.setItemMeta(refreshMeta);
         inventory.setItem(52, refreshButton);
 
@@ -186,8 +185,8 @@ public class TerminalGUI implements InventoryHolder {
         if (page < totalPages - 1) {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta meta = nextButton.getItemMeta();
-            meta.setDisplayName(ChatColor.GREEN + "Next Page");
-            meta.setLore(Arrays.asList(ChatColor.GRAY + "Page " + (page + 2) + "/" + totalPages));
+            meta.setDisplayName(lang.get("terminal.next_page", player));
+            meta.setLore(Arrays.asList(lang.get("terminal.page", player, String.valueOf(page + 2), String.valueOf(totalPages))));
             nextButton.setItemMeta(meta);
             inventory.setItem(53, nextButton);
         }
@@ -196,36 +195,29 @@ public class TerminalGUI implements InventoryHolder {
     private ItemStack createDisplayItem(ItemStack original, int totalCount) {
         ItemStack display = original.clone();
         display.setAmount(1); // Always show as 1 in GUI
-
         ItemMeta meta = display.getItemMeta();
         if (meta == null) {
             meta = Bukkit.getItemFactory().getItemMeta(display.getType());
         }
-
         String itemName = getItemDisplayName(original);
-        meta.setDisplayName(ChatColor.WHITE + itemName);
-
+        meta.setDisplayName(lang.get("terminal.item.display_name", player, itemName));
         List<String> lore = new ArrayList<>();
-        lore.add(ChatColor.GRAY + "Total in network: " + ChatColor.YELLOW + formatNumber(totalCount));
-        lore.add(ChatColor.GRAY + "Stacks: " + ChatColor.YELLOW + (totalCount / original.getMaxStackSize()));
+        lore.add(lang.get("terminal.item.lore.total", player, formatNumber(totalCount)));
+        lore.add(lang.get("terminal.item.lore.stacks", player, String.valueOf(totalCount / original.getMaxStackSize())));
         if (totalCount % original.getMaxStackSize() > 0) {
-            lore.add(ChatColor.GRAY + "Partial stack: " + ChatColor.YELLOW + (totalCount % original.getMaxStackSize()));
+            lore.add(lang.get("terminal.item.lore.partial", player, String.valueOf(totalCount % original.getMaxStackSize())));
         }
         lore.add("");
-        lore.add(ChatColor.GREEN + "Right-click to take a stack (" + original.getMaxStackSize() + ")");
-        lore.add(ChatColor.GREEN + "Shift + Right-click to take half stack");
-        lore.add(ChatColor.AQUA + "Left-click to take 1 item");
-
-        // Add original lore if it exists
+        lore.add(lang.get("terminal.item.lore.take_stack", player, String.valueOf(original.getMaxStackSize())));
+        lore.add(lang.get("terminal.item.lore.take_half", player));
+        lore.add(lang.get("terminal.item.lore.take_one", player));
         if (original.hasItemMeta() && original.getItemMeta().hasLore()) {
             lore.add("");
-            lore.add(ChatColor.DARK_GRAY + "Item Properties:");
+            lore.add(lang.get("terminal.item.lore.properties", player));
             lore.addAll(original.getItemMeta().getLore());
         }
-
         meta.setLore(lore);
         display.setItemMeta(meta);
-
         return display;
     }
 
@@ -253,13 +245,13 @@ public class TerminalGUI implements InventoryHolder {
     private String getSortDisplayName() {
         switch (sortType) {
             case ALPHABETICAL:
-                return "Alphabetical";
+                return lang.get("terminal.sort.alpha", player);
             case COUNT_DESC:
-                return "Count (High to Low)";
+                return lang.get("terminal.sort.desc", player);
             case COUNT_ASC:
-                return "Count (Low to High)";
+                return lang.get("terminal.sort.asc", player);
             default:
-                return "Unknown";
+                return lang.get("terminal.sort.unknown", player);
         }
     }
 
@@ -274,7 +266,8 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     /**
-     * Gibt die aktuelle Kapazität des Netzwerks in Prozent zurück
+     * Returns the current capacity percentage of the storage network.
+     * This is calculated based on the number of used slots versus total slots
      */
     public double getCurrentCapacityPercent() {
         int totalSlots = 0;
@@ -320,12 +313,12 @@ public class TerminalGUI implements InventoryHolder {
                 searchFilter = "";
                 currentPage = 0;
                 updateInventory();
-                player.sendMessage(ChatColor.YELLOW + "Search cleared!");
+                player.sendMessage(lang.get("terminal.search.cleared", player));
             } else {
                 // Start search
                 player.closeInventory();
-                player.sendMessage(ChatColor.AQUA + "Type the name of the item you want to search for:");
-                player.sendMessage(ChatColor.GRAY + "Type 'cancel' to cancel the search.");
+                player.sendMessage(lang.get("terminal.search.prompt", player));
+                player.sendMessage(lang.get("terminal.search.cancel_hint", player));
                 plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
                     startSearchMode();
                 }, 1L);
@@ -344,7 +337,7 @@ public class TerminalGUI implements InventoryHolder {
         if (slot == 52) {
             // Refresh button
             updateInventory();
-            player.sendMessage(ChatColor.GREEN + "Network refreshed!");
+            player.sendMessage(lang.get("terminal.refreshed", player));
             return;
         }
 
@@ -385,7 +378,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (amountToTake <= 0) {
-            player.sendMessage(ChatColor.RED + "No more of this item available!");
+            player.sendMessage(lang.get("terminal.no_items", player));
             return;
         }
 
@@ -404,20 +397,19 @@ public class TerminalGUI implements InventoryHolder {
                     if (stillRemaining != null) {
                         // Drop on ground as last resort
                         player.getWorld().dropItemNaturally(player.getLocation(), stillRemaining);
-                        player.sendMessage(ChatColor.YELLOW + "Some items were dropped because your inventory is full!");
+                        player.sendMessage(lang.get("terminal.items_dropped", player));
                     }
                 }
             }
 
             String actionDescription = specificAmount == 1 ? "1" :
                     (isHalfStack ? "half stack of" : "stack of");
-            player.sendMessage(ChatColor.GREEN + "Took " + actionDescription + " " + removedItem.getAmount() + "x " +
-                    getItemDisplayName(itemType));
+            player.sendMessage(lang.get("terminal.took_items", player, actionDescription, String.valueOf(removedItem.getAmount()), getItemDisplayName(itemType)));
 
             // Update GUI
             updateInventory();
         } else {
-            player.sendMessage(ChatColor.RED + "Could not remove items from network!");
+            player.sendMessage(lang.get("terminal.could_not_remove", player));
         }
     }
 
@@ -434,7 +426,7 @@ public class TerminalGUI implements InventoryHolder {
                 break;
         }
 
-        player.sendMessage(ChatColor.YELLOW + "Sort changed to: " + getSortDisplayName());
+        player.sendMessage(lang.get("terminal.sort_changed", player, getSortDisplayName()));
     }
 
     public void setSearchFilter(String filter) {
@@ -460,4 +452,3 @@ public class TerminalGUI implements InventoryHolder {
         return network;
     }
 }
-

@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -20,9 +21,11 @@ import java.util.Arrays;
 public class WandListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
+    private final LanguageManager lang;
 
     public WandListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
+        this.lang = plugin.getLanguageManager();
     }
 
     @EventHandler
@@ -49,7 +52,7 @@ public class WandListener implements Listener {
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             handleChestClick(player, clickedBlock, event.getAction());
         } else {
-            player.sendMessage(ChatColor.RED + "You can only use the storage wand on chests!");
+            player.sendMessage(lang.get("wand.only_chest", player));
         }
     }
 
@@ -60,21 +63,20 @@ public class WandListener implements Listener {
         if (action == Action.LEFT_CLICK_BLOCK) {
             // Add chest to network
             if (network.isChestInNetwork(normalizedLoc)) {
-                player.sendMessage(ChatColor.YELLOW + "This chest is already in your storage network!");
+                player.sendMessage(lang.get("wand.chest.already_in_network", player));
                 return;
             }
 
             // Check if the other half of a double chest is already in the network
             if (isOtherHalfInNetwork(chestBlock, network)) {
-                player.sendMessage(ChatColor.YELLOW + "The other half of this double chest is already in your network!");
-                player.sendMessage(ChatColor.GRAY + "Double chests are added as one unit.");
+                player.sendMessage(lang.get("wand.double_chest.other_half_in_network", player));
+                player.sendMessage(lang.get("wand.double_chest.unit_hint", player));
                 return;
             }
 
             // Check if it would exceed the limit
             if (network.getChestLocations().size() >= plugin.getConfigManager().getMaxChestsPerNetwork()) {
-                player.sendMessage(ChatColor.RED + "Your network has reached the maximum number of chests (" +
-                        plugin.getConfigManager().getMaxChestsPerNetwork() + ")!");
+                player.sendMessage(lang.get("wand.chest.limit_reached", player, String.valueOf(plugin.getConfigManager().getMaxChestsPerNetwork())));
                 return;
             }
 
@@ -82,29 +84,27 @@ public class WandListener implements Listener {
             plugin.getNetworkManager().saveNetworks();
 
             String chestType = getChestType(chestBlock);
-            player.sendMessage(ChatColor.GREEN + "Added " + chestType + " to your storage network! (" +
-                    network.getChestLocations().size() + " chests total)");
+            player.sendMessage(lang.get("wand.chest.added", player, chestType, String.valueOf(network.getChestLocations().size())));
 
         } else if (action == Action.RIGHT_CLICK_BLOCK) {
             // Remove chest from network or add as terminal
             if (player.isSneaking()) {
                 // Sneaking + right click = add as terminal
                 if (network.isTerminalInNetwork(normalizedLoc)) {
-                    player.sendMessage(ChatColor.YELLOW + "This chest is already a terminal!");
+                    player.sendMessage(lang.get("wand.terminal.already", player));
                     return;
                 }
 
                 // Check if the other half of a double chest is already a terminal
                 if (isOtherHalfInNetwork(chestBlock, network, true)) {
-                    player.sendMessage(ChatColor.YELLOW + "The other half of this double chest is already a terminal!");
-                    player.sendMessage(ChatColor.GRAY + "Double chests work as one unit.");
+                    player.sendMessage(lang.get("wand.terminal.other_half", player));
+                    player.sendMessage(lang.get("wand.terminal.unit_hint", player));
                     return;
                 }
 
                 // Check terminal limit
                 if (network.getTerminalLocations().size() >= plugin.getConfigManager().getMaxTerminalsPerNetwork()) {
-                    player.sendMessage(ChatColor.RED + "Your network has reached the maximum number of terminals (" +
-                            plugin.getConfigManager().getMaxTerminalsPerNetwork() + ")!");
+                    player.sendMessage(lang.get("wand.terminal.limit_reached", player, String.valueOf(plugin.getConfigManager().getMaxTerminalsPerNetwork())));
                     return;
                 }
 
@@ -112,8 +112,7 @@ public class WandListener implements Listener {
                 plugin.getNetworkManager().saveNetworks();
 
                 String chestType = getChestType(chestBlock);
-                player.sendMessage(ChatColor.AQUA + "Added " + chestType + " terminal to your storage network! (" +
-                        network.getTerminalLocations().size() + " terminals total)");
+                player.sendMessage(lang.get("wand.terminal.added", player, chestType, String.valueOf(network.getTerminalLocations().size())));
 
             } else {
                 // Regular right click = remove from network
@@ -121,7 +120,7 @@ public class WandListener implements Listener {
                 boolean wasTerminal = network.isTerminalInNetwork(normalizedLoc);
 
                 if (!wasChest && !wasTerminal) {
-                    player.sendMessage(ChatColor.RED + "This chest is not in your storage network!");
+                    player.sendMessage(lang.get("wand.chest.not_in_network", player));
                     return;
                 }
 
@@ -132,11 +131,9 @@ public class WandListener implements Listener {
                 String chestType = getChestType(chestBlock);
 
                 if (wasChest) {
-                    player.sendMessage(ChatColor.RED + "Removed " + chestType + " from your storage network! (" +
-                            network.getChestLocations().size() + " chests remaining)");
+                    player.sendMessage(lang.get("wand.chest.removed", player, chestType, String.valueOf(network.getChestLocations().size())));
                 } else {
-                    player.sendMessage(ChatColor.RED + "Removed " + chestType + " terminal from your storage network! (" +
-                            network.getTerminalLocations().size() + " terminals remaining)");
+                    player.sendMessage(lang.get("wand.terminal.removed", player, chestType, String.valueOf(network.getTerminalLocations().size())));
                 }
             }
         }
@@ -211,16 +208,13 @@ public class WandListener implements Listener {
         return meta.getDisplayName().equals(ChatColor.GOLD + "Storage Network Wand");
     }
 
-    public static ItemStack createStorageWand() {
+    public static ItemStack createStorageWand(LanguageManager lang, Player player) {
         ItemStack wand = new ItemStack(Material.STICK);
         ItemMeta meta = wand.getItemMeta();
-
-        meta.setDisplayName(ChatColor.GOLD + "Storage Network Wand");
+        meta.setDisplayName(lang.get("wand.item.display_name", player));
         meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Left Click: Add chest to network",
-                ChatColor.GRAY + "Right Click: Remove from network",
-                ChatColor.GRAY + "Shift + Right Click: Add as terminal",
-                ChatColor.DARK_GRAY + "Only works on chests!"
+                lang.get("wand.item.lore.add", player),
+                lang.get("wand.item.lore.remove", player)
         ));
 
         wand.setItemMeta(meta);

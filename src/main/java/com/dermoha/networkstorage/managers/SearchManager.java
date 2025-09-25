@@ -2,7 +2,6 @@ package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.TerminalGUI;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,10 +18,12 @@ public class SearchManager implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final Map<UUID, TerminalGUI> searchingPlayers;
+    private final LanguageManager lang;
 
     public SearchManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.searchingPlayers = new HashMap<>();
+        this.lang = plugin.getLanguageManager();
 
         // Register this as an event listener
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -35,7 +36,7 @@ public class SearchManager implements Listener {
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (searchingPlayers.containsKey(player.getUniqueId())) {
                 searchingPlayers.remove(player.getUniqueId());
-                player.sendMessage(ChatColor.YELLOW + "Search timeout. Search cancelled.");
+                player.sendMessage(lang.get("search.timeout", player));
             }
         }, 600L); // 30 seconds
     }
@@ -57,10 +58,10 @@ public class SearchManager implements Listener {
         // Handle search on main thread
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (message.equalsIgnoreCase("cancel")) {
-                player.sendMessage(ChatColor.YELLOW + "Search cancelled.");
+                player.sendMessage(lang.get("search.cancelled", player));
             } else {
                 gui.setSearchFilter(message);
-                player.sendMessage(ChatColor.GREEN + "Searching for: " + ChatColor.WHITE + message);
+                player.sendMessage(lang.get("search.searching_for", player, message));
             }
 
             // Reopen the GUI

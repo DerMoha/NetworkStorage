@@ -2,8 +2,8 @@ package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.StorageNetwork;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -25,10 +25,12 @@ public class ChestInteractListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final Map<UUID, TerminalGUI> openTerminals;
+    private final LanguageManager lang;
 
     public ChestInteractListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.openTerminals = new HashMap<>();
+        this.lang = plugin.getLanguageManager();
     }
 
     @EventHandler
@@ -71,7 +73,7 @@ public class ChestInteractListener implements Listener {
                 openTerminals.put(player.getUniqueId(), gui);
                 gui.open();
 
-                player.sendMessage(ChatColor.GREEN + "Accessing storage network...");
+                player.sendMessage(lang.get("network.access", player));
             }
         }
     }
@@ -105,61 +107,64 @@ public class ChestInteractListener implements Listener {
                 if (clickedItem != null && clickedItem.getType() != Material.AIR) {
                     event.setCancelled(true);
 
-                    // Hole das Item direkt aus dem Spieler-Inventar und Slot
+                    // Get the item directly from the player's inventory and slot
                     ItemStack itemToDeposit = null;
                     if (event.getClickedInventory() != null && event.getClickedInventory().equals(player.getInventory())) {
                         itemToDeposit = player.getInventory().getItem(event.getSlot());
                     }
                     if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) {
-                        // Fallback: Versuche das Item aus event.getCurrentItem
+                        // Fallback: Try to get the item from event.getCurrentItem
                         itemToDeposit = clickedItem;
                     }
 
-                    // Berechne den Slot im Spieler-Inventar
+                    // Calculate the slot in the player's inventory
                     int playerSlot = event.getSlot();
                     if (playerSlot < 0 || playerSlot >= player.getInventory().getSize()) {
                         plugin.getLogger().warning("Invalid player inventory slot: " + playerSlot);
                         return;
                     }
 
-                    // Zähle die Menge des Items im Netzwerk vor dem Einlagern
+                    // Count the amount of the item in the network before depositing
                     int beforeCount = terminal.getNetwork().getItemCount(itemToDeposit);
 
-                    // Entferne das Item aus dem Inventar
+                    // Remove the item from the inventory
                     player.getInventory().setItem(playerSlot, null);
 
-                    // Versuche, das Item ins Netzwerk einzulagern
+                    // Try to deposit the item into the network
                     ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
 
-                    // Zähle die Menge des Items im Netzwerk nach dem Einlagern
+                    // Count the amount of the item in the network after depositing
                     int afterCount = terminal.getNetwork().getItemCount(itemToDeposit);
                     int actuallyStored = afterCount - beforeCount;
 
                     if (remaining == null || (remaining.getType() == Material.AIR) || remaining.getAmount() <= 0) {
                         if (actuallyStored == itemToDeposit.getAmount()) {
-                            player.sendMessage(ChatColor.GREEN + "Deposited " + itemToDeposit.getAmount() + "x " + terminal.getItemDisplayName(itemToDeposit) + " to network!");
+                            player.sendMessage(lang.get("network.deposit.success", player,
+                                    String.valueOf(itemToDeposit.getAmount()), terminal.getItemDisplayName(itemToDeposit)));
                         } else {
-                            player.sendMessage(ChatColor.RED + "Warnung: Itemmenge stimmt nicht überein! Bitte Admin informieren.");
-                            // Item zurückgeben
+                            player.sendMessage(lang.get("network.deposit.warning", player));
+                            // Return item
                             player.getInventory().setItem(playerSlot, itemToDeposit);
                         }
                     } else {
                         int stored = itemToDeposit.getAmount() - remaining.getAmount();
                         if (stored > 0 && actuallyStored == stored) {
-                            player.sendMessage(ChatColor.YELLOW + "Deposited " + stored + "x " + terminal.getItemDisplayName(itemToDeposit) + ", " + remaining.getAmount() + " remaining (network full)");
+                            player.sendMessage(lang.get("network.deposit.partial", player,
+                                    String.valueOf(stored), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
                         } else {
-                            player.sendMessage(ChatColor.RED + "Warnung: Itemmenge stimmt nicht überein! Bitte Admin informieren.");
-                            // Item zurückgeben
+                            player.sendMessage(lang.get("network.deposit.warning", player));
+                            // Return item
                             player.getInventory().setItem(playerSlot, itemToDeposit);
                         }
                         // Return remaining items to player
                         player.getInventory().setItem(playerSlot, remaining);
                     }
 
-                    // Kapazität über TerminalGUI abfragen
+                    // Query capacity via TerminalGUI
                     double capacity = terminal.getCurrentCapacityPercent();
                     if (capacity >= 80.0) {
-                        player.sendMessage(ChatColor.RED + "Warnung: Das Netzwerk ist zu " + String.format("%.1f", capacity) + "% voll!");
+                        player.sendMessage(lang.get("network.full.warning", player,
+                                String.format("%.1f", capacity)));
                     }
 
                     // Refresh GUI

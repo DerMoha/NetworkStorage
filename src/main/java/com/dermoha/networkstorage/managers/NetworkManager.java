@@ -81,7 +81,7 @@ public class NetworkManager {
     }
 
     private String generateNetworkId() {
-        return "network_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000);
+        return "network_" + System.currentTimeMillis() + "_" + (int) (Math.random() * 1000);
     }
 
     public void saveNetworks() {
@@ -162,7 +162,7 @@ public class NetworkManager {
                             network.addTerminal(loc);
                         }
                     }
-    
+
                     networks.put(networkId, network);
                 }
             }
@@ -200,12 +200,7 @@ public class NetworkManager {
         try {
             String[] parts = str.split(",");
             if (parts.length >= 4) {
-                return new Location(
-                        plugin.getServer().getWorld(parts[0]),
-                        Double.parseDouble(parts[1]),
-                        Double.parseDouble(parts[2]),
-                        Double.parseDouble(parts[3])
-                );
+                return new Location(plugin.getServer().getWorld(parts[0]), Double.parseDouble(parts[1]), Double.parseDouble(parts[2]), Double.parseDouble(parts[3]));
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Could not parse location: " + str + " - " + e.getMessage());

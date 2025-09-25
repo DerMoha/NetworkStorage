@@ -8,6 +8,7 @@ import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.SearchManager;
+import com.dermoha.networkstorage.managers.LanguageManager;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -15,6 +16,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private NetworkManager networkManager;
     private ConfigManager configManager;
     private SearchManager searchManager;
+    private LanguageManager languageManager;
 
     @Override
     public void onEnable() {
@@ -22,6 +24,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Initialize managers
         configManager = new ConfigManager(this);
+        languageManager = new LanguageManager(getConfig());
         networkManager = new NetworkManager(this);
         searchManager = new SearchManager(this);
 
@@ -61,5 +64,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public SearchManager getSearchManager() {
         return searchManager;
+    }
+
+    public LanguageManager getLanguageManager() {
+        return languageManager;
     }
 }
