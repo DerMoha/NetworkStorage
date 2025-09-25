@@ -343,17 +343,49 @@ public class TerminalGUI implements InventoryHolder {
 
         // Handle item clicks (slots 0-44)
         if (slot < ITEMS_PER_PAGE) {
+            // Calculate the actual index in the sortedItems list based on the current page
             int itemIndex = (currentPage * ITEMS_PER_PAGE) + slot;
+
             if (itemIndex < sortedItems.size()) {
                 Map.Entry<ItemStack, Integer> entry = sortedItems.get(itemIndex);
+                ItemStack originalItem = entry.getKey().clone();
+                int availableAmount = entry.getValue();
 
                 if (isLeftClick) {
-                    handleItemExtraction(entry.getKey(), entry.getValue(), false, 1);
+                    // Left click always takes 1 item
+                    handleItemExtraction(originalItem, availableAmount, false, 1);
                 } else if (isRightClick) {
-                    handleItemExtraction(entry.getKey(), entry.getValue(), isShiftClick, 0);
+                    // Right click takes a stack, shift+right click takes half stack
+                    handleItemExtraction(originalItem, availableAmount, isShiftClick, 0);
+                }
+
+                // Update the inventory immediately after extraction
+                plugin.getServer().getScheduler().runTask(plugin, () -> {
+                    updateInventory();
+                    // Re-open the inventory to ensure the client is in sync
+                    player.updateInventory();
+                });
+            }
+        }
+    }
+
+    private boolean itemsMatch(ItemStack item1, ItemStack item2) {
+        if (item1 == null || item2 == null) return false;
+        if (item1.getType() != item2.getType()) return false;
+
+        ItemMeta meta1 = item1.getItemMeta();
+        ItemMeta meta2 = item2.getItemMeta();
+
+        // Compare display names if present
+        if (meta1 != null && meta2 != null) {
+            if (meta1.hasDisplayName() && meta2.hasDisplayName()) {
+                if (!meta1.getDisplayName().equals(meta2.getDisplayName())) {
+                    return false;
                 }
             }
         }
+
+        return item1.isSimilar(item2);
     }
 
     private void startSearchMode() {

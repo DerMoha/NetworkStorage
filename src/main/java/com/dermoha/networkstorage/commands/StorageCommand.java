@@ -67,7 +67,7 @@ public class StorageCommand implements CommandExecutor {
             return;
         }
 
-        player.getInventory().addItem(WandListener.createStorageWand());
+        player.getInventory().addItem(WandListener.createStorageWand(lang, player));
         player.sendMessage(lang.get("received_wand"));
         player.sendMessage(lang.get("wand_left_click"));
         player.sendMessage(lang.get("wand_right_click"));

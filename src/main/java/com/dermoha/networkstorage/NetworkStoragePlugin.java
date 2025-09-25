@@ -24,7 +24,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Initialize managers
         configManager = new ConfigManager(this);
-        languageManager = new LanguageManager(getConfig());
+        languageManager = new LanguageManager(this, getConfig());
         networkManager = new NetworkManager(this);
         searchManager = new SearchManager(this);
 

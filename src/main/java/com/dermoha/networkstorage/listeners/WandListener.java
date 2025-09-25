@@ -33,7 +33,7 @@ public class WandListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        if (!isStorageWand(item)) {
+        if (!isStorageWand(item, lang)) {
             return;
         }
 
@@ -195,29 +195,30 @@ public class WandListener implements Listener {
         return "chest";
     }
 
-    public static boolean isStorageWand(ItemStack item) {
-        if (item == null || item.getType() != Material.STICK) {
+    public static ItemStack createStorageWand(LanguageManager lang, Player player) {
+        ItemStack wand = new ItemStack(Material.BLAZE_ROD);
+        ItemMeta meta = wand.getItemMeta();
+
+        if (meta != null) {
+            meta.setDisplayName(lang.get("wand.name", player));
+            meta.setLore(Arrays.asList(
+                    lang.get("wand.lore1", player),
+                    lang.get("wand.lore2", player),
+                    lang.get("wand.lore3", player)
+            ));
+            wand.setItemMeta(meta);
+        }
+
+        return wand;
+    }
+
+    public static boolean isStorageWand(ItemStack item, LanguageManager lang) {
+        if (item == null || item.getType() != Material.BLAZE_ROD) {
             return false;
         }
 
         ItemMeta meta = item.getItemMeta();
-        if (meta == null || !meta.hasDisplayName()) {
-            return false;
-        }
-
-        return meta.getDisplayName().equals(ChatColor.GOLD + "Storage Network Wand");
-    }
-
-    public static ItemStack createStorageWand(LanguageManager lang, Player player) {
-        ItemStack wand = new ItemStack(Material.STICK);
-        ItemMeta meta = wand.getItemMeta();
-        meta.setDisplayName(lang.get("wand.item.display_name", player));
-        meta.setLore(Arrays.asList(
-                lang.get("wand.item.lore.add", player),
-                lang.get("wand.item.lore.remove", player)
-        ));
-
-        wand.setItemMeta(meta);
-        return wand;
+        return meta != null && meta.hasDisplayName() &&
+                meta.getDisplayName().equals(lang.get("wand.name", null));
     }
 }
