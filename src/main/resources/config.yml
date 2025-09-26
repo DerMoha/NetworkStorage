@@ -4,7 +4,7 @@
 max-chests-per-network: 100
 
 # Maximum number of terminals per network
-max-terminals-per-network: 10
+max-terminals-per-network: 100
 
 # Allow networks to span across multiple worlds
 allow-cross-world-networks: false

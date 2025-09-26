@@ -23,22 +23,23 @@ public class LanguageManager {
     }
 
     private void loadMessages() {
-        // First try to load from the plugin's data folder
-        File langFile = new File(plugin.getDataFolder(), "lang_" + language + ".yml");
-        if (langFile.exists()) {
-            loadFromFile(langFile);
-        } else {
-            // If not found in data folder, load from resources
-            loadFromResource("lang_" + language + ".yml");
-        }
+        // Always load English from resources as the base.
+        loadFromResource("lang_en.yml");
 
-        // Always load English as fallback for missing keys
+        // Load the configured language if it's not English, overwriting the defaults.
         if (!language.equals("en")) {
-            loadFromResource("lang_en.yml");
+            File langFile = new File(plugin.getDataFolder(), "lang_" + language + ".yml");
+            if (langFile.exists()) {
+                loadFromFile(langFile); // This uses put(), overwriting defaults.
+            } else {
+                // Load the default for the language from resources, overwriting defaults.
+                loadFromResource("lang_" + language + ".yml");
+            }
         }
 
-        // Save the language file to the plugin folder if it doesn't exist
-        if (!langFile.exists()) {
+        // Save the language file for the configured language to the plugin folder if it doesn't exist.
+        File userLangFile = new File(plugin.getDataFolder(), "lang_" + language + ".yml");
+        if (!userLangFile.exists()) {
             plugin.saveResource("lang_" + language + ".yml", false);
         }
     }
@@ -61,6 +62,9 @@ public class LanguageManager {
         InputStream stream = plugin.getResource(fileName);
         if (stream == null) {
             plugin.getLogger().warning("Could not find language file in resources: " + fileName);
+            if ("lang_en.yml".equals(fileName)) {
+                plugin.getLogger().severe("English language file (lang_en.yml) is missing! This is a critical error.");
+            }
             return;
         }
 
@@ -68,8 +72,8 @@ public class LanguageManager {
             YamlConfiguration yaml = YamlConfiguration.loadConfiguration(new InputStreamReader(stream));
             for (String key : yaml.getKeys(true)) {
                 if (yaml.isString(key)) {
-                    // Only add if key doesn't exist (fallback mechanism)
-                    messages.putIfAbsent(key, yaml.getString(key));
+                    // Overwrite existing keys to allow the fallback system to work correctly.
+                    messages.put(key, yaml.getString(key));
                 }
             }
         } catch (Exception e) {

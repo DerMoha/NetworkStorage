@@ -73,7 +73,7 @@ public class ChestInteractListener implements Listener {
                 openTerminals.put(player.getUniqueId(), gui);
                 gui.open();
 
-                player.sendMessage(lang.get("network.access", player));
+                player.sendMessage(lang.get("network.access"));
             }
         }
     }
@@ -144,23 +144,23 @@ public class ChestInteractListener implements Listener {
 
         if (remaining == null || remaining.getType() == Material.AIR) {
             if (actuallyStored == originalAmount) {
-                player.sendMessage(lang.get("network.deposit.success", player,
+                player.sendMessage(lang.get("network.deposit.success",
                         String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
             } else {
                 // Something went wrong, return the item
-                player.sendMessage(lang.get("network.deposit.warning", player));
+                player.sendMessage(lang.get("network.deposit.warning"));
                 player.getInventory().setItem(playerSlot, itemToDeposit);
             }
         } else {
             int stored = originalAmount - remaining.getAmount();
             if (stored > 0 && actuallyStored == stored) {
-                player.sendMessage(lang.get("network.deposit.partial", player,
+                player.sendMessage(lang.get("network.deposit.partial",
                         String.valueOf(stored), terminal.getItemDisplayName(itemToDeposit),
                         String.valueOf(remaining.getAmount())));
                 player.getInventory().setItem(playerSlot, remaining);
             } else {
                 // Something went wrong, return the item
-                player.sendMessage(lang.get("network.deposit.warning", player));
+                player.sendMessage(lang.get("network.deposit.warning"));
                 player.getInventory().setItem(playerSlot, itemToDeposit);
             }
         }
@@ -168,7 +168,7 @@ public class ChestInteractListener implements Listener {
         // Check network capacity
         double capacity = terminal.getCurrentCapacityPercent();
         if (capacity >= 80.0) {
-            player.sendMessage(lang.get("network.full.warning", player,
+            player.sendMessage(lang.get("network.full.warning",
                     String.format("%.1f", capacity)));
         }
 
