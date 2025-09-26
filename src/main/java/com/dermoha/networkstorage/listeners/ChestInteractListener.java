@@ -128,48 +128,30 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        // Store original amount for verification
         int originalAmount = itemToDeposit.getAmount();
-        int beforeCount = terminal.getNetwork().getItemCount(itemToDeposit);
-
-        // Remove the item from the inventory first
-        player.getInventory().setItem(playerSlot, null);
 
         // Try to deposit the item into the network
         ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
 
-        // Verify the deposit
-        int afterCount = terminal.getNetwork().getItemCount(itemToDeposit);
-        int actuallyStored = afterCount - beforeCount;
-
-        if (remaining == null || remaining.getType() == Material.AIR) {
-            if (actuallyStored == originalAmount) {
-                player.sendMessage(lang.get("network.deposit.success",
-                        String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
-            } else {
-                // Something went wrong, return the item
-                player.sendMessage(lang.get("network.deposit.warning"));
-                player.getInventory().setItem(playerSlot, itemToDeposit);
-            }
+        if (remaining == null || remaining.getAmount() == 0) {
+            // Successfully deposited the full stack
+            player.getInventory().setItem(playerSlot, null);
+            player.sendMessage(lang.get("network.deposit.success", String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
         } else {
-            int stored = originalAmount - remaining.getAmount();
-            if (stored > 0 && actuallyStored == stored) {
-                player.sendMessage(lang.get("network.deposit.partial",
-                        String.valueOf(stored), terminal.getItemDisplayName(itemToDeposit),
-                        String.valueOf(remaining.getAmount())));
-                player.getInventory().setItem(playerSlot, remaining);
-            } else {
-                // Something went wrong, return the item
-                player.sendMessage(lang.get("network.deposit.warning"));
-                player.getInventory().setItem(playerSlot, itemToDeposit);
+            // Partially deposited or not deposited at all
+            int storedAmount = originalAmount - remaining.getAmount();
+            if (storedAmount > 0) {
+                player.sendMessage(lang.get("network.deposit.partial", String.valueOf(storedAmount), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
             }
+            // Give back the remainder
+            player.getInventory().setItem(playerSlot, remaining);
         }
+
 
         // Check network capacity
         double capacity = terminal.getCurrentCapacityPercent();
         if (capacity >= 80.0) {
-            player.sendMessage(lang.get("network.full.warning",
-                    String.format("%.1f", capacity)));
+            player.sendMessage(lang.get("network.full.warning", String.format("%.1f", capacity)));
         }
 
         // Update the GUI
@@ -183,6 +165,12 @@ public class ChestInteractListener implements Listener {
         }
 
         Player player = (Player) event.getPlayer();
+
+        // If the player is closing the inventory to start a search, don't remove the terminal instance.
+        if (plugin.getSearchManager().isSearching(player)) {
+            return;
+        }
+
         TerminalGUI terminal = openTerminals.get(player.getUniqueId());
 
         if (terminal != null && event.getInventory().equals(terminal.getInventory())) {
@@ -195,14 +183,23 @@ public class ChestInteractListener implements Listener {
         Block block = event.getBlock();
         if (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST) {
             Location chestLoc = block.getLocation();
-            StorageNetwork tempNetwork = new StorageNetwork("temp", "temp");
+            StorageNetwork tempNetwork = new StorageNetwork("temp", "temp"); // Helper to get normalized location
             Location normalizedLoc = tempNetwork.getNormalizedLocation(chestLoc);
+
+            // It's possible the chest is part of any network, so we have to check all of them.
             for (StorageNetwork network : plugin.getNetworkManager().getAllNetworks()) {
+                // Check both original and normalized locations, just in case.
                 if (network.isChestInNetwork(chestLoc)) {
                     network.removeChest(chestLoc);
                 }
                 if (network.isChestInNetwork(normalizedLoc)) {
                     network.removeChest(normalizedLoc);
+                }
+                if (network.isTerminalInNetwork(chestLoc)) {
+                    network.removeTerminal(chestLoc);
+                }
+                if (network.isTerminalInNetwork(normalizedLoc)) {
+                    network.removeTerminal(normalizedLoc);
                 }
             }
         }

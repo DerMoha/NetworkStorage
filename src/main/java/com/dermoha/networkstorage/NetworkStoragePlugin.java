@@ -1,14 +1,14 @@
 package com.dermoha.networkstorage;
 
-import org.bukkit.plugin.java.JavaPlugin;
 import com.dermoha.networkstorage.commands.StorageCommand;
+import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
 import com.dermoha.networkstorage.listeners.WandListener;
-import com.dermoha.networkstorage.listeners.AutoInsertListener;
-import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.ConfigManager;
-import com.dermoha.networkstorage.managers.SearchManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
+import com.dermoha.networkstorage.managers.NetworkManager;
+import com.dermoha.networkstorage.managers.SearchManager;
+import org.bukkit.plugin.java.JavaPlugin;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -17,6 +17,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private ConfigManager configManager;
     private SearchManager searchManager;
     private LanguageManager languageManager;
+    private ChestInteractListener chestInteractListener;
 
     @Override
     public void onEnable() {
@@ -26,13 +27,16 @@ public class NetworkStoragePlugin extends JavaPlugin {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, getConfig());
         networkManager = new NetworkManager(this);
-        searchManager = new SearchManager(this);
+
+        // Initialize listeners that need to be accessed
+        this.chestInteractListener = new ChestInteractListener(this);
+        this.searchManager = new SearchManager(this);
 
         // Register commands
         getCommand("storage").setExecutor(new StorageCommand(this));
 
         // Register event listeners
-        getServer().getPluginManager().registerEvents(new ChestInteractListener(this), this);
+        getServer().getPluginManager().registerEvents(chestInteractListener, this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
 
@@ -68,5 +72,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public LanguageManager getLanguageManager() {
         return languageManager;
+    }
+
+    public ChestInteractListener getChestInteractListener() {
+        return chestInteractListener;
     }
 }

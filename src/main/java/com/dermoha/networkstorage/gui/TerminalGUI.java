@@ -275,10 +275,11 @@ public class TerminalGUI implements InventoryHolder {
                 updateInventory();
                 player.sendMessage(lang.get("terminal.search.cleared"));
             } else {
+                // Start search mode FIRST, then close inventory.
+                plugin.getSearchManager().startSearch(player, this);
                 player.closeInventory();
                 player.sendMessage(lang.get("terminal.search.prompt"));
                 player.sendMessage(lang.get("terminal.search.cancel_hint"));
-                plugin.getSearchManager().startSearch(player, this);
             }
             return;
         }
