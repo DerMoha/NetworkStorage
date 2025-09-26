@@ -8,13 +8,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class StorageNetwork {
@@ -24,6 +18,7 @@ public class StorageNetwork {
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
     private final Map<UUID, PlayerStat> playerStats;
+    private final Set<UUID> trustedPlayers;
 
     public StorageNetwork(String networkId, String ownerUUID) {
         this.networkId = networkId;
@@ -31,6 +26,7 @@ public class StorageNetwork {
         this.chestLocations = new HashSet<>();
         this.terminalLocations = new HashSet<>();
         this.playerStats = new ConcurrentHashMap<>();
+        this.trustedPlayers = new HashSet<>();
     }
 
     public String getNetworkId() {
@@ -51,6 +47,10 @@ public class StorageNetwork {
 
     public Map<UUID, PlayerStat> getPlayerStats() {
         return playerStats;
+    }
+
+    public Set<UUID> getTrustedPlayers() {
+        return trustedPlayers;
     }
 
     public void addChest(Location location) {
@@ -87,6 +87,23 @@ public class StorageNetwork {
 
     public void recordItemsWithdrawn(Player player, int amount) {
         getPlayerStat(player).addItemsWithdrawn(amount);
+    }
+
+    public boolean canAccess(Player player) {
+        UUID playerUUID = player.getUniqueId();
+        return playerUUID.toString().equals(this.ownerUUID) || trustedPlayers.contains(playerUUID) || player.hasPermission("networkstorage.admin");
+    }
+
+    public boolean isTrusted(UUID playerUUID) {
+        return trustedPlayers.contains(playerUUID);
+    }
+
+    public void addTrustedPlayer(UUID playerUUID) {
+        trustedPlayers.add(playerUUID);
+    }
+
+    public void removeTrustedPlayer(UUID playerUUID) {
+        trustedPlayers.remove(playerUUID);
     }
 
     /**

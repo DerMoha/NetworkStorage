@@ -60,7 +60,6 @@ public class ChestInteractListener implements Listener {
 
             // Also check with normalized location for double chests
             if (network == null) {
-                // Create a temporary network to use the normalize method
                 StorageNetwork tempNetwork = new StorageNetwork("temp", "temp");
                 Location normalizedLoc = tempNetwork.getNormalizedLocation(clickedBlock.getLocation());
                 network = plugin.getNetworkManager().getNetworkByLocation(normalizedLoc);
@@ -69,8 +68,15 @@ public class ChestInteractListener implements Listener {
             if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) ||
                     network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
 
-                // Open terminal GUI - everyone can access any network (as requested)
                 event.setCancelled(true);
+
+                // Check for permission before opening
+                if (!network.canAccess(player)) {
+                    player.sendMessage(lang.get("trust.no_permission_access"));
+                    return;
+                }
+
+                // Open terminal GUI
                 TerminalGUI gui = new TerminalGUI(player, network, plugin);
                 openTerminals.put(player.getUniqueId(), gui);
                 gui.open();

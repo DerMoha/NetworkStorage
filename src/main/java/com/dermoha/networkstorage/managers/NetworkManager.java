@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class NetworkManager {
 
@@ -98,18 +99,13 @@ public class NetworkManager {
                 config.set(path + ".owner", network.getOwnerUUID());
 
                 // Save chest locations
-                List<String> chestLocs = new ArrayList<>();
-                for (Location loc : network.getChestLocations()) {
-                    chestLocs.add(locationToString(loc));
-                }
-                config.set(path + ".chests", chestLocs);
+                config.set(path + ".chests", network.getChestLocations().stream().map(this::locationToString).collect(Collectors.toList()));
 
                 // Save terminal locations
-                List<String> terminalLocs = new ArrayList<>();
-                for (Location loc : network.getTerminalLocations()) {
-                    terminalLocs.add(locationToString(loc));
-                }
-                config.set(path + ".terminals", terminalLocs);
+                config.set(path + ".terminals", network.getTerminalLocations().stream().map(this::locationToString).collect(Collectors.toList()));
+
+                // Save trusted players
+                config.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
                 // Save player stats
                 Map<UUID, PlayerStat> stats = network.getPlayerStats();
@@ -125,9 +121,7 @@ public class NetworkManager {
             }
 
             // Save player network mappings
-            for (Map.Entry<String, String> entry : playerNetworks.entrySet()) {
-                config.set("player_networks." + entry.getKey(), entry.getValue());
-            }
+            config.set("player_networks", playerNetworks);
 
             config.save(networksFile);
         } catch (IOException e) {
@@ -159,22 +153,19 @@ public class NetworkManager {
                     StorageNetwork network = new StorageNetwork(networkId, ownerUUID);
 
                     // Load chest locations
-                    List<String> chestLocs = config.getStringList(path + ".chests");
-                    for (String locString : chestLocs) {
-                        Location loc = stringToLocation(locString);
-                        if (loc != null) {
-                            network.addChest(loc);
-                        }
-                    }
+                    config.getStringList(path + ".chests").stream().map(this::stringToLocation).filter(Objects::nonNull).forEach(network::addChest);
 
                     // Load terminal locations
-                    List<String> terminalLocs = config.getStringList(path + ".terminals");
-                    for (String locString : terminalLocs) {
-                        Location loc = stringToLocation(locString);
-                        if (loc != null) {
-                            network.addTerminal(loc);
+                    config.getStringList(path + ".terminals").stream().map(this::stringToLocation).filter(Objects::nonNull).forEach(network::addTerminal);
+
+                    // Load trusted players
+                    config.getStringList(path + ".trusted").forEach(uuidString -> {
+                        try {
+                            network.addTrustedPlayer(UUID.fromString(uuidString));
+                        } catch (IllegalArgumentException e) {
+                            plugin.getLogger().warning("Skipping invalid trusted UUID: " + uuidString);
                         }
-                    }
+                    });
 
                     // Load player stats
                     if (config.getConfigurationSection(path + ".stats") != null) {

@@ -4,6 +4,8 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.StorageNetwork;
+import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -15,12 +17,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public class StorageCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust");
 
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -47,21 +51,20 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             case "wand":
                 handleWandCommand(player);
                 break;
-
             case "info":
                 handleInfoCommand(player);
                 break;
-
             case "reset":
                 handleResetCommand(player);
                 break;
-
-            case "help":
-                sendHelpMessage(player);
+            case "trust":
+                handleTrustCommand(player, args);
                 break;
-
+            case "untrust":
+                handleUntrustCommand(player, args);
+                break;
+            case "help":
             default:
-                player.sendMessage(lang.get("unknown_subcommand", subCommand));
                 sendHelpMessage(player);
                 break;
         }
@@ -74,7 +77,92 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
         }
+        if (args.length == 2 && (args[0].equalsIgnoreCase("trust") || args[0].equalsIgnoreCase("untrust"))) {
+            return Bukkit.getOnlinePlayers().stream()
+                    .map(Player::getName)
+                    .filter(name -> StringUtil.startsWithIgnoreCase(name, args[1]))
+                    .collect(Collectors.toList());
+        }
         return Collections.emptyList();
+    }
+
+    private void handleTrustCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.get("trust.usage"));
+            return;
+        }
+
+        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        if (network == null) {
+            player.sendMessage(lang.get("no_network"));
+            return;
+        }
+
+        if (!network.getOwnerUUID().equals(player.getUniqueId().toString())) {
+            player.sendMessage(lang.get("trust.not_owner"));
+            return;
+        }
+
+        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+        if (!target.hasPlayedBefore() && !target.isOnline()) {
+            player.sendMessage(lang.get("trust.player_not_found", args[1]));
+            return;
+        }
+
+        if (target.getUniqueId().equals(player.getUniqueId())) {
+            player.sendMessage(lang.get("trust.self"));
+            return;
+        }
+
+        if (network.isTrusted(target.getUniqueId())) {
+            player.sendMessage(lang.get("trust.already_trusted", target.getName()));
+            return;
+        }
+
+        network.addTrustedPlayer(target.getUniqueId());
+        plugin.getNetworkManager().saveNetworks();
+        player.sendMessage(lang.get("trust.success", target.getName()));
+
+        if (target.isOnline()) {
+            ((Player) target).sendMessage(lang.get("trust.notification", player.getName()));
+        }
+    }
+
+    private void handleUntrustCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.get("untrust.usage"));
+            return;
+        }
+
+        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        if (network == null) {
+            player.sendMessage(lang.get("no_network"));
+            return;
+        }
+
+        if (!network.getOwnerUUID().equals(player.getUniqueId().toString())) {
+            player.sendMessage(lang.get("trust.not_owner"));
+            return;
+        }
+
+        OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+        if (!target.hasPlayedBefore() && !target.isOnline()) {
+            player.sendMessage(lang.get("trust.player_not_found", args[1]));
+            return;
+        }
+
+        if (!network.isTrusted(target.getUniqueId())) {
+            player.sendMessage(lang.get("untrust.not_trusted", target.getName()));
+            return;
+        }
+
+        network.removeTrustedPlayer(target.getUniqueId());
+        plugin.getNetworkManager().saveNetworks();
+        player.sendMessage(lang.get("untrust.success", target.getName()));
+
+        if (target.isOnline()) {
+            ((Player) target).sendMessage(lang.get("untrust.notification", player.getName()));
+        }
     }
 
     private void handleWandCommand(Player player) {
@@ -103,9 +191,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.get("connected_chests", network.getChestLocations().size()));
         player.sendMessage(lang.get("access_terminals", network.getTerminalLocations().size()));
 
-        // Calculate total items
-        long totalItems = network.getNetworkItems().values().stream()
-                .mapToLong(Integer::longValue).sum();
+        long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
 
         player.sendMessage(lang.get("total_items", formatNumber(totalItems)));
@@ -135,6 +221,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.get("help_wand"));
         player.sendMessage(lang.get("help_info"));
         player.sendMessage(lang.get("help_reset"));
+        player.sendMessage(lang.get("help_trust"));
+        player.sendMessage(lang.get("help_untrust"));
         player.sendMessage(lang.get("help_help"));
         player.sendMessage("");
         player.sendMessage(lang.get("help_usage"));
