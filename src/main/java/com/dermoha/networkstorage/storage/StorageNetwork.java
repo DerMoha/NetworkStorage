@@ -1,26 +1,36 @@
 package com.dermoha.networkstorage.storage;
 
+import com.dermoha.networkstorage.stats.PlayerStat;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Chest;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.block.Chest;
-import org.bukkit.inventory.InventoryHolder;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class StorageNetwork {
 
     private final String networkId;
+    private final String ownerUUID;
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
-    private final String ownerUUID;
+    private final Map<UUID, PlayerStat> playerStats;
 
     public StorageNetwork(String networkId, String ownerUUID) {
         this.networkId = networkId;
         this.ownerUUID = ownerUUID;
         this.chestLocations = new HashSet<>();
         this.terminalLocations = new HashSet<>();
+        this.playerStats = new ConcurrentHashMap<>();
     }
 
     public String getNetworkId() {
@@ -37,6 +47,10 @@ public class StorageNetwork {
 
     public Set<Location> getTerminalLocations() {
         return new HashSet<>(terminalLocations);
+    }
+
+    public Map<UUID, PlayerStat> getPlayerStats() {
+        return playerStats;
     }
 
     public void addChest(Location location) {
@@ -61,6 +75,18 @@ public class StorageNetwork {
 
     public boolean isTerminalInNetwork(Location location) {
         return terminalLocations.contains(location);
+    }
+
+    public PlayerStat getPlayerStat(Player player) {
+        return playerStats.computeIfAbsent(player.getUniqueId(), k -> new PlayerStat(player.getUniqueId(), player.getName()));
+    }
+
+    public void recordItemsDeposited(Player player, int amount) {
+        getPlayerStat(player).addItemsDeposited(amount);
+    }
+
+    public void recordItemsWithdrawn(Player player, int amount) {
+        getPlayerStat(player).addItemsWithdrawn(amount);
     }
 
     /**

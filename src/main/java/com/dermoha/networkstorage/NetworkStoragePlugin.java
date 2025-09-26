@@ -23,6 +23,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
+        // Save default config first to ensure it exists before being accessed.
+        saveDefaultConfig();
+
         // Initialize managers
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, getConfig());
@@ -32,16 +35,15 @@ public class NetworkStoragePlugin extends JavaPlugin {
         this.chestInteractListener = new ChestInteractListener(this);
         this.searchManager = new SearchManager(this);
 
-        // Register commands
-        getCommand("storage").setExecutor(new StorageCommand(this));
+        // Register commands and tab completer
+        StorageCommand storageCommand = new StorageCommand(this);
+        getCommand("storage").setExecutor(storageCommand);
+        getCommand("storage").setTabCompleter(storageCommand);
 
         // Register event listeners
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
-
-        // Save default config
-        saveDefaultConfig();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }

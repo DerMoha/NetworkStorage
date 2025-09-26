@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -109,6 +110,18 @@ public class NetworkManager {
                     terminalLocs.add(locationToString(loc));
                 }
                 config.set(path + ".terminals", terminalLocs);
+
+                // Save player stats
+                Map<UUID, PlayerStat> stats = network.getPlayerStats();
+                if (stats != null && !stats.isEmpty()) {
+                    for (Map.Entry<UUID, PlayerStat> entry : stats.entrySet()) {
+                        String statPath = path + ".stats." + entry.getKey().toString();
+                        PlayerStat stat = entry.getValue();
+                        config.set(statPath + ".name", stat.getPlayerName());
+                        config.set(statPath + ".deposited", stat.getItemsDeposited());
+                        config.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
+                    }
+                }
             }
 
             // Save player network mappings
@@ -160,6 +173,27 @@ public class NetworkManager {
                         Location loc = stringToLocation(locString);
                         if (loc != null) {
                             network.addTerminal(loc);
+                        }
+                    }
+
+                    // Load player stats
+                    if (config.getConfigurationSection(path + ".stats") != null) {
+                        for (String playerUUIDString : config.getConfigurationSection(path + ".stats").getKeys(false)) {
+                            String statPath = path + ".stats." + playerUUIDString;
+                            try {
+                                UUID playerUUID = UUID.fromString(playerUUIDString);
+                                String playerName = config.getString(statPath + ".name", "Unknown");
+                                long deposited = config.getLong(statPath + ".deposited", 0);
+                                long withdrawn = config.getLong(statPath + ".withdrawn", 0);
+
+                                PlayerStat stat = new PlayerStat(playerUUID, playerName);
+                                stat.addItemsDeposited(deposited);
+                                stat.addItemsWithdrawn(withdrawn);
+
+                                network.getPlayerStats().put(playerUUID, stat);
+                            } catch (IllegalArgumentException e) {
+                                plugin.getLogger().warning("Skipping invalid UUID in stats: " + playerUUIDString);
+                            }
                         }
                     }
 

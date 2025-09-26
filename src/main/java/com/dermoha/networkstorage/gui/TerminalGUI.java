@@ -158,6 +158,14 @@ public class TerminalGUI implements InventoryHolder {
         infoButton.setItemMeta(infoMeta);
         inventory.setItem(48, infoButton);
 
+        // Stats button (slot 49)
+        ItemStack statsButton = new ItemStack(Material.EMERALD);
+        ItemMeta statsMeta = statsButton.getItemMeta();
+        statsMeta.setDisplayName(lang.get("terminal.stats.title"));
+        statsMeta.setLore(Collections.singletonList(lang.get("terminal.stats.lore")));
+        statsButton.setItemMeta(statsMeta);
+        inventory.setItem(49, statsButton);
+
         // Refresh button (slot 52)
         ItemStack refreshButton = new ItemStack(Material.CLOCK);
         ItemMeta refreshMeta = refreshButton.getItemMeta();
@@ -241,7 +249,7 @@ public class TerminalGUI implements InventoryHolder {
         }
     }
 
-    private String formatNumber(int number) {
+    private String formatNumber(long number) {
         if (number >= 1000000) {
             return String.format("%.1fM", number / 1000000.0);
         } else if (number >= 1000) {
@@ -291,6 +299,12 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
+        if (slot == 49) { // Stats button
+            StatsGUI statsGUI = new StatsGUI(player, network, plugin, this);
+            statsGUI.open();
+            return;
+        }
+
         if (slot == 52) {
             updateInventory();
             player.sendMessage(lang.get("terminal.refreshed"));
@@ -332,6 +346,9 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack removedItem = network.removeFromNetwork(itemType, finalAmount);
 
         if (removedItem != null && removedItem.getAmount() > 0) {
+            // Record the withdrawal
+            network.recordItemsWithdrawn(player, removedItem.getAmount());
+
             HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(removedItem);
 
             if (!remaining.isEmpty()) {

@@ -7,12 +7,20 @@ import com.dermoha.networkstorage.storage.StorageNetwork;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 
-public class StorageCommand implements CommandExecutor {
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public class StorageCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
+    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help");
 
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -61,6 +69,14 @@ public class StorageCommand implements CommandExecutor {
         return true;
     }
 
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (args.length == 1) {
+            return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
+        }
+        return Collections.emptyList();
+    }
+
     private void handleWandCommand(Player player) {
         if (!player.hasPermission("networkstorage.wand")) {
             player.sendMessage(lang.get("no_permission_wand"));
@@ -88,8 +104,8 @@ public class StorageCommand implements CommandExecutor {
         player.sendMessage(lang.get("access_terminals", network.getTerminalLocations().size()));
 
         // Calculate total items
-        int totalItems = network.getNetworkItems().values().stream()
-                .mapToInt(Integer::intValue).sum();
+        long totalItems = network.getNetworkItems().values().stream()
+                .mapToLong(Integer::longValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
 
         player.sendMessage(lang.get("total_items", formatNumber(totalItems)));
@@ -129,7 +145,7 @@ public class StorageCommand implements CommandExecutor {
         player.sendMessage(lang.get("help_step5"));
     }
 
-    private String formatNumber(int number) {
+    private String formatNumber(long number) {
         if (number >= 1000000) {
             return String.format("%.1fM", number / 1000000.0);
         } else if (number >= 1000) {

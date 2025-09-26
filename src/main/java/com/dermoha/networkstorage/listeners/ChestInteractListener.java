@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.StorageNetwork;
@@ -15,6 +16,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
@@ -85,33 +87,46 @@ public class ChestInteractListener implements Listener {
         }
 
         Player player = (Player) event.getWhoClicked();
-        TerminalGUI terminal = openTerminals.get(player.getUniqueId());
+        InventoryHolder holder = event.getInventory().getHolder();
 
-        if (terminal == null || !event.getInventory().equals(terminal.getInventory())) {
+        // Handle StatsGUI clicks
+        if (holder instanceof StatsGUI) {
+            event.setCancelled(true);
+            StatsGUI statsGUI = (StatsGUI) holder;
+            statsGUI.handleClick(event.getSlot());
             return;
         }
 
-        event.setCancelled(true); // Cancel the event immediately to prevent any unwanted item movement
-
-        int rawSlot = event.getRawSlot();
-        int slot = event.getSlot();
-        boolean isRightClick = event.isRightClick();
-        boolean isLeftClick = event.isLeftClick();
-        boolean isShiftClick = event.isShiftClick();
-
-        // Check if player is clicking in their own inventory (bottom part)
-        if (rawSlot >= terminal.getInventory().getSize()) {
-            // Player is clicking in their own inventory
-            if (isShiftClick) {
-                handleShiftClickDeposit(event, terminal, player);
+        // Handle TerminalGUI clicks
+        if (holder instanceof TerminalGUI) {
+            TerminalGUI terminal = (TerminalGUI) holder;
+            // Verify that this is the correct terminal for the player
+            if (!terminal.equals(openTerminals.get(player.getUniqueId()))) {
+                return;
             }
-            return;
-        }
 
-        // Handle terminal GUI clicks (only if clicking in the top inventory)
-        if (rawSlot < terminal.getInventory().getSize()) {
-            // Ensure we're working with the correct slot number for the terminal GUI
-            terminal.handleClick(slot, isRightClick, isShiftClick, isLeftClick);
+            event.setCancelled(true); // Cancel the event immediately to prevent any unwanted item movement
+
+            int rawSlot = event.getRawSlot();
+            int slot = event.getSlot();
+            boolean isRightClick = event.isRightClick();
+            boolean isLeftClick = event.isLeftClick();
+            boolean isShiftClick = event.isShiftClick();
+
+            // Check if player is clicking in their own inventory (bottom part)
+            if (rawSlot >= terminal.getInventory().getSize()) {
+                // Player is clicking in their own inventory
+                if (isShiftClick) {
+                    handleShiftClickDeposit(event, terminal, player);
+                }
+                return;
+            }
+
+            // Handle terminal GUI clicks (only if clicking in the top inventory)
+            if (rawSlot < terminal.getInventory().getSize()) {
+                // Ensure we're working with the correct slot number for the terminal GUI
+                terminal.handleClick(slot, isRightClick, isShiftClick, isLeftClick);
+            }
         }
     }
 
@@ -129,24 +144,30 @@ public class ChestInteractListener implements Listener {
         }
 
         int originalAmount = itemToDeposit.getAmount();
+        int depositedAmount = 0;
 
         // Try to deposit the item into the network
         ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
 
         if (remaining == null || remaining.getAmount() == 0) {
             // Successfully deposited the full stack
+            depositedAmount = originalAmount;
             player.getInventory().setItem(playerSlot, null);
             player.sendMessage(lang.get("network.deposit.success", String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
         } else {
             // Partially deposited or not deposited at all
-            int storedAmount = originalAmount - remaining.getAmount();
-            if (storedAmount > 0) {
-                player.sendMessage(lang.get("network.deposit.partial", String.valueOf(storedAmount), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
+            depositedAmount = originalAmount - remaining.getAmount();
+            if (depositedAmount > 0) {
+                player.sendMessage(lang.get("network.deposit.partial", String.valueOf(depositedAmount), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
             }
             // Give back the remainder
             player.getInventory().setItem(playerSlot, remaining);
         }
 
+        // Record the deposit if any items were actually stored
+        if (depositedAmount > 0) {
+            terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
+        }
 
         // Check network capacity
         double capacity = terminal.getCurrentCapacityPercent();
@@ -165,15 +186,15 @@ public class ChestInteractListener implements Listener {
         }
 
         Player player = (Player) event.getPlayer();
+        InventoryHolder holder = event.getInventory().getHolder();
 
-        // If the player is closing the inventory to start a search, don't remove the terminal instance.
-        if (plugin.getSearchManager().isSearching(player)) {
+        // Don't remove the terminal if a search is active or if the stats GUI is open
+        if (plugin.getSearchManager().isSearching(player) || holder instanceof StatsGUI) {
             return;
         }
 
-        TerminalGUI terminal = openTerminals.get(player.getUniqueId());
-
-        if (terminal != null && event.getInventory().equals(terminal.getInventory())) {
+        // Only remove the terminal if the top-level GUI is being closed
+        if (holder instanceof TerminalGUI) {
             openTerminals.remove(player.getUniqueId());
         }
     }
