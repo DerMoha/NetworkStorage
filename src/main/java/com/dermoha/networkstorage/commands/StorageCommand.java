@@ -2,6 +2,7 @@ package com.dermoha.networkstorage.commands;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.listeners.WandListener;
+import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
@@ -24,7 +25,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust", "wireless");
 
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -62,6 +63,9 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
                 break;
             case "untrust":
                 handleUntrustCommand(player, args);
+                break;
+            case "wireless":
+                handleWirelessCommand(player);
                 break;
             case "help":
             default:
@@ -177,6 +181,16 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.get("wand_right_click"));
     }
 
+    private void handleWirelessCommand(Player player) {
+        if (!player.hasPermission("networkstorage.wireless")) {
+            player.sendMessage(lang.get("no_permission_wireless"));
+            return;
+        }
+
+        player.getInventory().addItem(WirelessTerminalListener.createWirelessTerminal(lang));
+        player.sendMessage(lang.get("received_wireless_terminal"));
+    }
+
     private void handleInfoCommand(Player player) {
         Network network = plugin.getNetworkManager().getPlayerNetwork(player);
 
@@ -193,9 +207,11 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
 
         long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
+        double capacity = network.getCapacityPercent();
 
         player.sendMessage(lang.get("total_items", formatNumber(totalItems)));
         player.sendMessage(lang.get("unique_types", uniqueTypes));
+        player.sendMessage(lang.get("terminal.info.capacity", String.format("%.1f%%", capacity)));
     }
 
     private void handleResetCommand(Player player) {

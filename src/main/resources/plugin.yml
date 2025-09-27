@@ -1,5 +1,5 @@
 name: NetworkStorage
-version: 3.0
+version: 4.5
 main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
 author: DerMoha
@@ -8,7 +8,7 @@ description: A networked storage system for Minecraft servers, make sharing stor
 commands:
   storage:
     description: Main command for NetworkStorage
-    usage: /<command> [wand|info|reset|help]
+    usage: /<command> [wand|info|reset|help|wireless]
     aliases: [ns, netstorage, networkstorage]
   network:
     description: Manages networks
@@ -34,6 +34,10 @@ permissions:
     description: Allows getting and using storage wands
     default: true
 
+  networkstorage.wireless:
+    description: Allows getting and using wireless terminals
+    default: op
+
   networkstorage.reset:
     description: Allows resetting own storage network
     default: true
@@ -49,15 +53,16 @@ permissions:
       networkstorage.network.create: true
       networkstorage.network.edit: true
       networkstorage.network.rename: true
-      
+      networkstorage.wireless: true
+
   networkstorage.network.create:
     description: Allows creating new networks
     default: op
-    
+
   networkstorage.network.edit:
     description: Allows editing existing networks
     default: op
-    
+
   networkstorage.network.rename:
     description: Allows renaming existing networks
     default: op

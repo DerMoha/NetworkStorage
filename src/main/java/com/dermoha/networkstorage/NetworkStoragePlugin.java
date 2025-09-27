@@ -5,6 +5,7 @@ import com.dermoha.networkstorage.commands.StorageCommand;
 import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
 import com.dermoha.networkstorage.listeners.WandListener;
+import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
@@ -46,6 +47,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
+        getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
