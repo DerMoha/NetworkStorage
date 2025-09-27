@@ -23,24 +23,37 @@ public class LanguageManager {
     }
 
     private void loadMessages() {
-        // Always load English from resources as the base.
-        loadFromResource("lang_en.yml");
+        // Ensure default language files are present for customization.
+        saveDefaultLanguageFile("lang_en.yml");
+        saveDefaultLanguageFile("lang_de.yml");
 
-        // Load the configured language if it's not English, overwriting the defaults.
-        if (!language.equals("en")) {
-            File langFile = new File(plugin.getDataFolder(), "lang_" + language + ".yml");
-            if (langFile.exists()) {
-                loadFromFile(langFile); // This uses put(), overwriting defaults.
-            } else {
-                // Load the default for the language from resources, overwriting defaults.
-                loadFromResource("lang_" + language + ".yml");
-            }
+        // Determine which file to load. Default to English.
+        File langFile = new File(plugin.getDataFolder(), "lang_" + this.language + ".yml");
+        File englishFile = new File(plugin.getDataFolder(), "lang_en.yml");
+
+        // First, load English as the base for fallbacks.
+        if (englishFile.exists()) {
+            loadFromFile(englishFile);
+        } else {
+            // This should not happen if saveDefaultLanguageFile works, but it's a good safeguard.
+            plugin.getLogger().severe("English language file (lang_en.yml) is missing! Cannot load messages.");
+            return;
         }
 
-        // Save the language file for the configured language to the plugin folder if it doesn't exist.
-        File userLangFile = new File(plugin.getDataFolder(), "lang_" + language + ".yml");
-        if (!userLangFile.exists()) {
-            plugin.saveResource("lang_" + language + ".yml", false);
+        // If a different language is configured, load it to override English messages.
+        if (!"en".equals(this.language)) {
+            if (langFile.exists()) {
+                loadFromFile(langFile);
+            } else {
+                plugin.getLogger().warning("Language file for '" + this.language + "' not found. Using English.");
+            }
+        }
+    }
+
+    private void saveDefaultLanguageFile(String fileName) {
+        File langFile = new File(plugin.getDataFolder(), fileName);
+        if (!langFile.exists()) {
+            plugin.saveResource(fileName, false); // false to not replace if it exists
         }
     }
 
@@ -54,30 +67,6 @@ public class LanguageManager {
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Error loading language file: " + file.getName());
-            e.printStackTrace();
-        }
-    }
-
-    private void loadFromResource(String fileName) {
-        InputStream stream = plugin.getResource(fileName);
-        if (stream == null) {
-            plugin.getLogger().warning("Could not find language file in resources: " + fileName);
-            if ("lang_en.yml".equals(fileName)) {
-                plugin.getLogger().severe("English language file (lang_en.yml) is missing! This is a critical error.");
-            }
-            return;
-        }
-
-        try {
-            YamlConfiguration yaml = YamlConfiguration.loadConfiguration(new InputStreamReader(stream));
-            for (String key : yaml.getKeys(true)) {
-                if (yaml.isString(key)) {
-                    // Overwrite existing keys to allow the fallback system to work correctly.
-                    messages.put(key, yaml.getString(key));
-                }
-            }
-        } catch (Exception e) {
-            plugin.getLogger().warning("Error loading language file from resources: " + fileName);
             e.printStackTrace();
         }
     }
