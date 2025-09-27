@@ -35,6 +35,10 @@ public class ChestInteractListener implements Listener {
         this.lang = plugin.getLanguageManager();
     }
 
+    public void addOpenTerminal(UUID playerId, TerminalGUI gui) {
+        openTerminals.put(playerId, gui);
+    }
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
@@ -65,7 +69,7 @@ public class ChestInteractListener implements Listener {
                 }
 
                 TerminalGUI gui = new TerminalGUI(player, network, plugin);
-                openTerminals.put(player.getUniqueId(), gui);
+                addOpenTerminal(player.getUniqueId(), gui);
                 gui.open();
 
                 player.sendMessage(lang.get("network.access"));

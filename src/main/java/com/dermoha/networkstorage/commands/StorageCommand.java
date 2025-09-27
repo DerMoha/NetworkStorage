@@ -239,6 +239,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.get("help_reset"));
         player.sendMessage(lang.get("help_trust"));
         player.sendMessage(lang.get("help_untrust"));
+        player.sendMessage(lang.get("help_wireless"));
         player.sendMessage(lang.get("help_help"));
         player.sendMessage("");
         player.sendMessage(lang.get("help_usage"));

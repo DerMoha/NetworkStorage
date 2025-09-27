@@ -48,7 +48,9 @@ public class WirelessTerminalListener implements Listener {
                 return;
             }
 
-            new TerminalGUI(player, network, plugin).open();
+            TerminalGUI gui = new TerminalGUI(player, network, plugin);
+            plugin.getChestInteractListener().addOpenTerminal(player.getUniqueId(), gui);
+            gui.open();
         }
     }
 
