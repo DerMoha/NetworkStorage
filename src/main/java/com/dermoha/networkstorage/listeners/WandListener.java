@@ -2,7 +2,7 @@ package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -48,7 +48,6 @@ public class WandListener implements Listener {
 
         event.setCancelled(true);
 
-        // Check if it's a chest
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             handleChestClick(player, clickedBlock, event.getAction());
         } else {
@@ -57,24 +56,25 @@ public class WandListener implements Listener {
     }
 
     private void handleChestClick(Player player, Block chestBlock, Action action) {
-        StorageNetwork network = plugin.getNetworkManager().getOrCreatePlayerNetwork(player);
+        Network network = plugin.getNetworkManager().getOrCreatePlayerNetwork(player);
+        if (network == null) {
+            player.sendMessage(lang.get("network.error.create"));
+            return;
+        }
         Location normalizedLoc = network.getNormalizedLocation(chestBlock.getLocation());
 
         if (action == Action.LEFT_CLICK_BLOCK) {
-            // Add chest to network
             if (network.isChestInNetwork(normalizedLoc)) {
                 player.sendMessage(lang.get("wand.chest.already_in_network"));
                 return;
             }
 
-            // Check if the other half of a double chest is already in the network
             if (isOtherHalfInNetwork(chestBlock, network)) {
                 player.sendMessage(lang.get("wand.double_chest.other_half_in_network"));
                 player.sendMessage(lang.get("wand.double_chest.unit_hint"));
                 return;
             }
 
-            // Check if it would exceed the limit
             if (network.getChestLocations().size() >= plugin.getConfigManager().getMaxChestsPerNetwork()) {
                 player.sendMessage(lang.get("wand.chest.limit_reached", String.valueOf(plugin.getConfigManager().getMaxChestsPerNetwork())));
                 return;
@@ -87,22 +87,18 @@ public class WandListener implements Listener {
             player.sendMessage(lang.get("wand.chest.added", chestType, String.valueOf(network.getChestLocations().size())));
 
         } else if (action == Action.RIGHT_CLICK_BLOCK) {
-            // Remove chest from network or add as terminal
             if (player.isSneaking()) {
-                // Sneaking + right click = add as terminal
                 if (network.isTerminalInNetwork(normalizedLoc)) {
                     player.sendMessage(lang.get("wand.terminal.already"));
                     return;
                 }
 
-                // Check if the other half of a double chest is already a terminal
                 if (isOtherHalfInNetwork(chestBlock, network, true)) {
                     player.sendMessage(lang.get("wand.terminal.other_half"));
                     player.sendMessage(lang.get("wand.terminal.unit_hint"));
                     return;
                 }
 
-                // Check terminal limit
                 if (network.getTerminalLocations().size() >= plugin.getConfigManager().getMaxTerminalsPerNetwork()) {
                     player.sendMessage(lang.get("wand.terminal.limit_reached", String.valueOf(plugin.getConfigManager().getMaxTerminalsPerNetwork())));
                     return;
@@ -115,7 +111,6 @@ public class WandListener implements Listener {
                 player.sendMessage(lang.get("wand.terminal.added", chestType, String.valueOf(network.getTerminalLocations().size())));
 
             } else {
-                // Regular right click = remove from network
                 boolean wasChest = network.isChestInNetwork(normalizedLoc);
                 boolean wasTerminal = network.isTerminalInNetwork(normalizedLoc);
 
@@ -139,35 +134,24 @@ public class WandListener implements Listener {
         }
     }
 
-    /**
-     * Checks if the other half of a double chest is already in the network
-     */
-    private boolean isOtherHalfInNetwork(Block chestBlock, StorageNetwork network) {
+    private boolean isOtherHalfInNetwork(Block chestBlock, Network network) {
         return isOtherHalfInNetwork(chestBlock, network, false);
     }
 
-    /**
-     * Checks if the other half of a double chest is already in the network
-     * @param chestBlock The chest block to check
-     * @param network The network to check in
-     * @param checkTerminals If true, check terminals; if false, check storage chests
-     */
-    private boolean isOtherHalfInNetwork(Block chestBlock, StorageNetwork network, boolean checkTerminals) {
+    private boolean isOtherHalfInNetwork(Block chestBlock, Network network, boolean checkTerminals) {
         if (!(chestBlock.getState() instanceof Chest)) {
             return false;
         }
 
-        // Check adjacent blocks for the other half of a double chest
         Location[] adjacentLocs = {
-                chestBlock.getLocation().clone().add(1, 0, 0),  // East
-                chestBlock.getLocation().clone().add(-1, 0, 0), // West
-                chestBlock.getLocation().clone().add(0, 0, 1),  // South
-                chestBlock.getLocation().clone().add(0, 0, -1)  // North
+                chestBlock.getLocation().clone().add(1, 0, 0),
+                chestBlock.getLocation().clone().add(-1, 0, 0),
+                chestBlock.getLocation().clone().add(0, 0, 1),
+                chestBlock.getLocation().clone().add(0, 0, -1)
         };
 
         for (Location adjLoc : adjacentLocs) {
             if (adjLoc.getBlock().getState() instanceof Chest) {
-                // Found the other half - check if it's in the network
                 Location normalizedAdjLoc = network.getNormalizedLocation(adjLoc);
                 if (checkTerminals) {
                     if (network.isTerminalInNetwork(normalizedAdjLoc)) {
@@ -187,7 +171,6 @@ public class WandListener implements Listener {
     private String getChestType(Block chestBlock) {
         if (chestBlock.getState() instanceof Chest) {
             Chest chest = (Chest) chestBlock.getState();
-            // Check if it's a double chest by inventory size (54 slots = double chest)
             if (chest.getInventory().getSize() == 54) {
                 return "double chest";
             }

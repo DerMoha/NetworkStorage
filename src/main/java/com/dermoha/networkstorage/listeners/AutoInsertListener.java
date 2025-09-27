@@ -1,7 +1,7 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -39,22 +39,14 @@ public class AutoInsertListener implements Listener {
             return;
         }
 
-        StorageNetwork network = plugin.getNetworkManager().getNetworkByLocation(chest.getLocation().getBlock().getLocation());
-
-        // Also check normalized location for double chests
-        if (network == null) {
-            StorageNetwork tempNetwork = new StorageNetwork("temp", "temp");
-            network = plugin.getNetworkManager().getNetworkByLocation(
-                    tempNetwork.getNormalizedLocation(chest.getLocation().getBlock().getLocation())
-            );
-        }
+        Network network = plugin.getNetworkManager().getNetworkByLocation(chest.getLocation().getBlock().getLocation());
 
         if (network == null) {
             return;
         }
 
         // Only allow owner or players with permission to auto-insert
-        if (!network.getOwnerUUID().equals(player.getUniqueId().toString()) &&
+        if (!network.getOwner().equals(player.getUniqueId()) &&
                 !player.hasPermission("networkstorage.access.all")) {
             return;
         }

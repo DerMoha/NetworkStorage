@@ -1,5 +1,6 @@
 package com.dermoha.networkstorage;
 
+import com.dermoha.networkstorage.commands.NetworkCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
 import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
@@ -39,6 +40,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         StorageCommand storageCommand = new StorageCommand(this);
         getCommand("storage").setExecutor(storageCommand);
         getCommand("storage").setTabCompleter(storageCommand);
+        getCommand("network").setExecutor(new NetworkCommand(this));
 
         // Register event listeners
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
@@ -51,7 +53,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (networkManager != null) {
-            networkManager.saveNetworks();
+            // networkManager.saveNetworks();
         }
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }

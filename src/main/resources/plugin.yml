@@ -10,6 +10,10 @@ commands:
     description: Main command for NetworkStorage
     usage: /<command> [wand|info|reset|help]
     aliases: [ns, netstorage, networkstorage]
+  network:
+    description: Manages networks
+    usage: /<command> [create|edit|rename]
+    aliases: [net]
 
 permissions:
   networkstorage.*:
@@ -40,4 +44,20 @@ permissions:
 
   networkstorage.admin:
     description: Administrative permissions for NetworkStorage
+    default: op
+    children:
+      networkstorage.network.create: true
+      networkstorage.network.edit: true
+      networkstorage.network.rename: true
+      
+  networkstorage.network.create:
+    description: Allows creating new networks
+    default: op
+    
+  networkstorage.network.edit:
+    description: Allows editing existing networks
+    default: op
+    
+  networkstorage.network.rename:
+    description: Allows renaming existing networks
     default: op

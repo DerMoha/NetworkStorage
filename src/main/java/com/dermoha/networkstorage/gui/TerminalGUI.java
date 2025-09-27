@@ -2,7 +2,7 @@ package com.dermoha.networkstorage.gui;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 public class TerminalGUI implements InventoryHolder {
 
     private final Player player;
-    private final StorageNetwork network;
+    private final Network network;
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
 
@@ -29,8 +29,8 @@ public class TerminalGUI implements InventoryHolder {
     private List<Map.Entry<ItemStack, Integer>> sortedItems;
     private String searchFilter = "";
 
-    private static final int ITEMS_PER_PAGE = 45; // 5 rows for items
-    private static final int GUI_SIZE = 54; // 6 rows total
+    private static final int ITEMS_PER_PAGE = 45;
+    private static final int GUI_SIZE = 54;
 
     public enum SortType {
         ALPHABETICAL,
@@ -38,7 +38,7 @@ public class TerminalGUI implements InventoryHolder {
         COUNT_ASC
     }
 
-    public TerminalGUI(Player player, StorageNetwork network, NetworkStoragePlugin plugin) {
+    public TerminalGUI(Player player, Network network, NetworkStoragePlugin plugin) {
         this.player = player;
         this.network = network;
         this.plugin = plugin;
@@ -50,11 +50,9 @@ public class TerminalGUI implements InventoryHolder {
     public void updateInventory() {
         inventory.clear();
 
-        // Get and filter network items
         Map<ItemStack, Integer> networkItems = network.getNetworkItems();
         sortedItems = new ArrayList<>(networkItems.entrySet());
 
-        // Apply search filter
         if (!searchFilter.isEmpty()) {
             sortedItems = sortedItems.stream()
                     .filter(entry -> getItemDisplayName(entry.getKey())
@@ -62,7 +60,6 @@ public class TerminalGUI implements InventoryHolder {
                     .collect(Collectors.toList());
         }
 
-        // Sort items
         switch (sortType) {
             case ALPHABETICAL:
                 sortedItems.sort((a, b) -> {
@@ -79,12 +76,10 @@ public class TerminalGUI implements InventoryHolder {
                 break;
         }
 
-        // Calculate pagination
         int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.size());
 
-        // Add items to inventory (slots 0-44)
         for (int i = startIndex; i < endIndex; i++) {
             int slot = i - startIndex;
             Map.Entry<ItemStack, Integer> entry = sortedItems.get(i);
@@ -92,12 +87,10 @@ public class TerminalGUI implements InventoryHolder {
             inventory.setItem(slot, displayItem);
         }
 
-        // Add control buttons in bottom row
         addControlButtons(currentPage, totalPages);
     }
 
     private void addControlButtons(int page, int totalPages) {
-        // Previous page button (slot 45)
         if (page > 0) {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta meta = prevButton.getItemMeta();
@@ -107,7 +100,6 @@ public class TerminalGUI implements InventoryHolder {
             inventory.setItem(45, prevButton);
         }
 
-        // Search button (slot 46)
         ItemStack searchButton = new ItemStack(Material.SPYGLASS);
         ItemMeta searchMeta = searchButton.getItemMeta();
         if (searchFilter.isEmpty()) {
@@ -127,7 +119,6 @@ public class TerminalGUI implements InventoryHolder {
         searchButton.setItemMeta(searchMeta);
         inventory.setItem(46, searchButton);
 
-        // Sort button (slot 47)
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
         sortMeta.setDisplayName(lang.get("terminal.sort.title", getSortDisplayName()));
@@ -138,9 +129,9 @@ public class TerminalGUI implements InventoryHolder {
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
 
-        // Network info button (slot 48)
         int totalItems = network.getNetworkItems().values().stream().mapToInt(Integer::intValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
+        double capacity = network.getCapacityPercent();
 
         ItemStack infoButton = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = infoButton.getItemMeta();
@@ -150,6 +141,7 @@ public class TerminalGUI implements InventoryHolder {
                 lang.get("total_items", formatNumber(totalItems)),
                 lang.get("terminal.info.chests", String.valueOf(network.getChestLocations().size())),
                 lang.get("terminal.info.terminals", String.valueOf(network.getTerminalLocations().size())),
+                lang.get("terminal.info.capacity", String.format("%.1f%%", capacity)),
                 "",
                 lang.get("terminal.info.lore1"),
                 lang.get("terminal.info.lore2"),
@@ -158,7 +150,6 @@ public class TerminalGUI implements InventoryHolder {
         infoButton.setItemMeta(infoMeta);
         inventory.setItem(48, infoButton);
 
-        // Stats button (slot 49)
         ItemStack statsButton = new ItemStack(Material.EMERALD);
         ItemMeta statsMeta = statsButton.getItemMeta();
         statsMeta.setDisplayName(lang.get("terminal.stats.title"));
@@ -166,7 +157,6 @@ public class TerminalGUI implements InventoryHolder {
         statsButton.setItemMeta(statsMeta);
         inventory.setItem(49, statsButton);
 
-        // Refresh button (slot 52)
         ItemStack refreshButton = new ItemStack(Material.CLOCK);
         ItemMeta refreshMeta = refreshButton.getItemMeta();
         refreshMeta.setDisplayName(lang.get("terminal.refresh.title"));
@@ -174,7 +164,6 @@ public class TerminalGUI implements InventoryHolder {
         refreshButton.setItemMeta(refreshMeta);
         inventory.setItem(52, refreshButton);
 
-        // Next page button (slot 53)
         if (page < totalPages - 1) {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta meta = nextButton.getItemMeta();
@@ -187,7 +176,7 @@ public class TerminalGUI implements InventoryHolder {
 
     private ItemStack createDisplayItem(ItemStack original, int totalCount) {
         ItemStack display = original.clone();
-        display.setAmount(1); // Always show as 1 in GUI
+        display.setAmount(1);
         ItemMeta meta = display.getItemMeta();
         if (meta == null) {
             meta = Bukkit.getItemFactory().getItemMeta(display.getType());
@@ -221,7 +210,6 @@ public class TerminalGUI implements InventoryHolder {
             return item.getItemMeta().getDisplayName();
         }
 
-        // Convert material name to readable format
         String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
         String[] words = materialName.split(" ");
         StringBuilder displayName = new StringBuilder();
@@ -249,7 +237,7 @@ public class TerminalGUI implements InventoryHolder {
         }
     }
 
-    private String formatNumber(long number) {
+    public String formatNumber(long number) {
         if (number >= 1000000) {
             return String.format("%.1fM", number / 1000000.0);
         } else if (number >= 1000) {
@@ -260,7 +248,6 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
-        // Handle control buttons
         if (slot == 45 && currentPage > 0) {
             currentPage--;
             updateInventory();
@@ -283,7 +270,6 @@ public class TerminalGUI implements InventoryHolder {
                 updateInventory();
                 player.sendMessage(lang.get("terminal.search.cleared"));
             } else {
-                // Start search mode FIRST, then close inventory.
                 plugin.getSearchManager().startSearch(player, this);
                 player.closeInventory();
                 player.sendMessage(lang.get("terminal.search.prompt"));
@@ -311,7 +297,6 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        // Handle item clicks
         if (slot >= 0 && slot < ITEMS_PER_PAGE) {
             int itemIndex = (currentPage * ITEMS_PER_PAGE) + slot;
             if (itemIndex < sortedItems.size()) {
@@ -346,7 +331,6 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack removedItem = network.removeFromNetwork(itemType, finalAmount);
 
         if (removedItem != null && removedItem.getAmount() > 0) {
-            // Record the withdrawal
             network.recordItemsWithdrawn(player, removedItem.getAmount());
 
             HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(removedItem);
@@ -392,25 +376,7 @@ public class TerminalGUI implements InventoryHolder {
         return player;
     }
 
-    public StorageNetwork getNetwork() {
+    public Network getNetwork() {
         return network;
-    }
-
-    public double getCurrentCapacityPercent() {
-        int totalSlots = 0;
-        int usedSlots = 0;
-        for (Location chestLoc : network.getChestLocations()) {
-            if (chestLoc.getBlock().getState() instanceof Chest) {
-                Chest chest = (Chest) chestLoc.getBlock().getState();
-                int chestSize = chest.getInventory().getSize();
-                totalSlots += chestSize;
-                for (ItemStack item : chest.getInventory().getContents()) {
-                    if (item != null && item.getType() != Material.AIR) {
-                        usedSlots++;
-                    }
-                }
-            }
-        }
-        return totalSlots > 0 ? (usedSlots * 100.0 / totalSlots) : 0.0;
     }
 }

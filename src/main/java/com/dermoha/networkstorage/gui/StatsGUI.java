@@ -3,7 +3,7 @@ package com.dermoha.networkstorage.gui;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.stats.PlayerStat;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -25,7 +25,7 @@ public class StatsGUI implements InventoryHolder {
     private final LanguageManager lang;
     private final TerminalGUI previousGUI;
 
-    public StatsGUI(Player player, StorageNetwork network, NetworkStoragePlugin plugin, TerminalGUI previousGUI) {
+    public StatsGUI(Player player, Network network, NetworkStoragePlugin plugin, TerminalGUI previousGUI) {
         this.player = player;
         this.lang = plugin.getLanguageManager();
         this.previousGUI = previousGUI;
@@ -34,7 +34,7 @@ public class StatsGUI implements InventoryHolder {
         updateInventory(network);
     }
 
-    private void updateInventory(StorageNetwork network) {
+    private void updateInventory(Network network) {
         inventory.clear();
 
         List<PlayerStat> stats = new ArrayList<>(network.getPlayerStats().values());

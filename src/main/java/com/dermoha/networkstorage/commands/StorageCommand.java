@@ -3,7 +3,7 @@ package com.dermoha.networkstorage.commands;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.managers.LanguageManager;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -92,13 +92,13 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        Network network = plugin.getNetworkManager().getPlayerNetwork(player);
         if (network == null) {
             player.sendMessage(lang.get("no_network"));
             return;
         }
 
-        if (!network.getOwnerUUID().equals(player.getUniqueId().toString())) {
+        if (!network.getOwner().equals(player.getUniqueId())) {
             player.sendMessage(lang.get("trust.not_owner"));
             return;
         }
@@ -134,13 +134,13 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        Network network = plugin.getNetworkManager().getPlayerNetwork(player);
         if (network == null) {
             player.sendMessage(lang.get("no_network"));
             return;
         }
 
-        if (!network.getOwnerUUID().equals(player.getUniqueId().toString())) {
+        if (!network.getOwner().equals(player.getUniqueId())) {
             player.sendMessage(lang.get("trust.not_owner"));
             return;
         }
@@ -178,7 +178,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleInfoCommand(Player player) {
-        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        Network network = plugin.getNetworkManager().getPlayerNetwork(player);
 
         if (network == null) {
             player.sendMessage(lang.get("no_network"));
@@ -187,7 +187,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(lang.get("network_info_title"));
-        player.sendMessage(lang.get("network_id", network.getNetworkId()));
+        player.sendMessage(lang.get("network_id", network.getName()));
         player.sendMessage(lang.get("connected_chests", network.getChestLocations().size()));
         player.sendMessage(lang.get("access_terminals", network.getTerminalLocations().size()));
 
@@ -204,7 +204,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        StorageNetwork network = plugin.getNetworkManager().getPlayerNetwork(player);
+        Network network = plugin.getNetworkManager().getPlayerNetwork(player);
 
         if (network == null) {
             player.sendMessage(lang.get("no_network_reset"));

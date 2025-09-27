@@ -4,7 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
-import com.dermoha.networkstorage.storage.StorageNetwork;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -48,35 +48,22 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        // Don't interfere with wand usage
         ItemStack itemInHand = event.getItem();
         if (WandListener.isStorageWand(itemInHand, lang)) {
             return;
         }
 
-        // Check if the clicked block is a terminal
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
-            StorageNetwork network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
+            Network network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
 
-            // Also check with normalized location for double chests
-            if (network == null) {
-                StorageNetwork tempNetwork = new StorageNetwork("temp", "temp");
-                Location normalizedLoc = tempNetwork.getNormalizedLocation(clickedBlock.getLocation());
-                network = plugin.getNetworkManager().getNetworkByLocation(normalizedLoc);
-            }
-
-            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) ||
-                    network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
-
+            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) || network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
                 event.setCancelled(true);
 
-                // Check for permission before opening
                 if (!network.canAccess(player)) {
                     player.sendMessage(lang.get("trust.no_permission_access"));
                     return;
                 }
 
-                // Open terminal GUI
                 TerminalGUI gui = new TerminalGUI(player, network, plugin);
                 openTerminals.put(player.getUniqueId(), gui);
                 gui.open();
@@ -95,7 +82,6 @@ public class ChestInteractListener implements Listener {
         Player player = (Player) event.getWhoClicked();
         InventoryHolder holder = event.getInventory().getHolder();
 
-        // Handle StatsGUI clicks
         if (holder instanceof StatsGUI) {
             event.setCancelled(true);
             StatsGUI statsGUI = (StatsGUI) holder;
@@ -103,15 +89,13 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        // Handle TerminalGUI clicks
         if (holder instanceof TerminalGUI) {
             TerminalGUI terminal = (TerminalGUI) holder;
-            // Verify that this is the correct terminal for the player
             if (!terminal.equals(openTerminals.get(player.getUniqueId()))) {
                 return;
             }
 
-            event.setCancelled(true); // Cancel the event immediately to prevent any unwanted item movement
+            event.setCancelled(true);
 
             int rawSlot = event.getRawSlot();
             int slot = event.getSlot();
@@ -119,18 +103,14 @@ public class ChestInteractListener implements Listener {
             boolean isLeftClick = event.isLeftClick();
             boolean isShiftClick = event.isShiftClick();
 
-            // Check if player is clicking in their own inventory (bottom part)
             if (rawSlot >= terminal.getInventory().getSize()) {
-                // Player is clicking in their own inventory
                 if (isShiftClick) {
                     handleShiftClickDeposit(event, terminal, player);
                 }
                 return;
             }
 
-            // Handle terminal GUI clicks (only if clicking in the top inventory)
             if (rawSlot < terminal.getInventory().getSize()) {
-                // Ensure we're working with the correct slot number for the terminal GUI
                 terminal.handleClick(slot, isRightClick, isShiftClick, isLeftClick);
             }
         }
@@ -142,7 +122,6 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        // Get the item directly from the player's inventory
         int playerSlot = event.getSlot();
         ItemStack itemToDeposit = player.getInventory().getItem(playerSlot);
         if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) {
@@ -150,38 +129,21 @@ public class ChestInteractListener implements Listener {
         }
 
         int originalAmount = itemToDeposit.getAmount();
-        int depositedAmount = 0;
-
-        // Try to deposit the item into the network
         ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
 
         if (remaining == null || remaining.getAmount() == 0) {
-            // Successfully deposited the full stack
-            depositedAmount = originalAmount;
             player.getInventory().setItem(playerSlot, null);
             player.sendMessage(lang.get("network.deposit.success", String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
+            terminal.getNetwork().recordItemsDeposited(player, originalAmount);
         } else {
-            // Partially deposited or not deposited at all
-            depositedAmount = originalAmount - remaining.getAmount();
+            int depositedAmount = originalAmount - remaining.getAmount();
             if (depositedAmount > 0) {
                 player.sendMessage(lang.get("network.deposit.partial", String.valueOf(depositedAmount), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
+                terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
             }
-            // Give back the remainder
             player.getInventory().setItem(playerSlot, remaining);
         }
 
-        // Record the deposit if any items were actually stored
-        if (depositedAmount > 0) {
-            terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
-        }
-
-        // Check network capacity
-        double capacity = terminal.getCurrentCapacityPercent();
-        if (capacity >= 80.0) {
-            player.sendMessage(lang.get("network.full.warning", String.format("%.1f", capacity)));
-        }
-
-        // Update the GUI
         plugin.getServer().getScheduler().runTask(plugin, terminal::updateInventory);
     }
 
@@ -190,16 +152,13 @@ public class ChestInteractListener implements Listener {
         if (!(event.getPlayer() instanceof Player)) {
             return;
         }
-
         Player player = (Player) event.getPlayer();
         InventoryHolder holder = event.getInventory().getHolder();
 
-        // Don't remove the terminal if a search is active or if the stats GUI is open
         if (plugin.getSearchManager().isSearching(player) || holder instanceof StatsGUI) {
             return;
         }
 
-        // Only remove the terminal if the top-level GUI is being closed
         if (holder instanceof TerminalGUI) {
             openTerminals.remove(player.getUniqueId());
         }
@@ -210,23 +169,29 @@ public class ChestInteractListener implements Listener {
         Block block = event.getBlock();
         if (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST) {
             Location chestLoc = block.getLocation();
-            StorageNetwork tempNetwork = new StorageNetwork("temp", "temp"); // Helper to get normalized location
-            Location normalizedLoc = tempNetwork.getNormalizedLocation(chestLoc);
+            Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
 
-            // It's possible the chest is part of any network, so we have to check all of them.
-            for (StorageNetwork network : plugin.getNetworkManager().getAllNetworks()) {
-                // Check both original and normalized locations, just in case.
+            if (network != null) {
+                Location normalizedLoc = network.getNormalizedLocation(chestLoc);
+                boolean changed = false;
                 if (network.isChestInNetwork(chestLoc)) {
                     network.removeChest(chestLoc);
+                    changed = true;
                 }
                 if (network.isChestInNetwork(normalizedLoc)) {
                     network.removeChest(normalizedLoc);
+                    changed = true;
                 }
                 if (network.isTerminalInNetwork(chestLoc)) {
                     network.removeTerminal(chestLoc);
+                    changed = true;
                 }
                 if (network.isTerminalInNetwork(normalizedLoc)) {
                     network.removeTerminal(normalizedLoc);
+                    changed = true;
+                }
+                if(changed) {
+                    plugin.getNetworkManager().saveNetworks();
                 }
             }
         }
