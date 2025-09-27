@@ -187,7 +187,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        player.getInventory().addItem(WirelessTerminalListener.createWirelessTerminal(lang));
+        player.getInventory().addItem(WirelessTerminalListener.createWirelessTerminal(plugin));
         player.sendMessage(lang.get("received_wireless_terminal"));
     }
 

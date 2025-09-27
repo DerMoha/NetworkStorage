@@ -13,12 +13,16 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class WirelessTerminalListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
+    private static final Pattern USES_PATTERN = Pattern.compile("([0-9]+) / ([0-9]+)");
 
     public WirelessTerminalListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -37,6 +41,31 @@ public class WirelessTerminalListener implements Listener {
         if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
 
+            ItemMeta meta = item.getItemMeta();
+            if (meta == null || !meta.hasLore()) {
+                return;
+            }
+
+            List<String> lore = meta.getLore();
+            int usesLineIndex = -1;
+            int currentUses = -1;
+            int maxUses = -1;
+
+            for (int i = 0; i < lore.size(); i++) {
+                Matcher matcher = USES_PATTERN.matcher(lore.get(i));
+                if (matcher.find()) {
+                    usesLineIndex = i;
+                    currentUses = Integer.parseInt(matcher.group(1));
+                    maxUses = Integer.parseInt(matcher.group(2));
+                    break;
+                }
+            }
+
+            if (currentUses == 0) {
+                player.sendMessage(lang.get("wireless_terminal.broken"));
+                return;
+            }
+
             Network network = plugin.getNetworkManager().getPlayerNetwork(player);
             if (network == null) {
                 player.sendMessage(lang.get("no_network"));
@@ -48,21 +77,32 @@ public class WirelessTerminalListener implements Listener {
                 return;
             }
 
+            if (currentUses > 0 && usesLineIndex != -1) {
+                currentUses--;
+                lore.set(usesLineIndex, lang.get("wireless_terminal.lore.durability", String.valueOf(currentUses), String.valueOf(maxUses)));
+                meta.setLore(lore);
+                item.setItemMeta(meta);
+            }
+
             TerminalGUI gui = new TerminalGUI(player, network, plugin);
             plugin.getChestInteractListener().addOpenTerminal(player.getUniqueId(), gui);
             gui.open();
         }
     }
 
-    public static ItemStack createWirelessTerminal(LanguageManager lang) {
+    public static ItemStack createWirelessTerminal(NetworkStoragePlugin plugin) {
+        LanguageManager lang = plugin.getLanguageManager();
+        int durability = plugin.getConfigManager().getWirelessTerminalDurability();
+
         ItemStack terminal = new ItemStack(Material.RECOVERY_COMPASS);
         ItemMeta meta = terminal.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(lang.get("wireless_terminal.name"));
-            meta.setLore(Arrays.asList(
-                    lang.get("wireless_terminal.lore1"),
-                    lang.get("wireless_terminal.lore2")
-            ));
+            List<String> lore = new ArrayList<>();
+            lore.add(lang.get("wireless_terminal.lore1"));
+            lore.add(lang.get("wireless_terminal.lore2"));
+            lore.add(lang.get("wireless_terminal.lore.durability", String.valueOf(durability), String.valueOf(durability)));
+            meta.setLore(lore);
             terminal.setItemMeta(meta);
         }
         return terminal;

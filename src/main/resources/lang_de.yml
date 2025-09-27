@@ -125,5 +125,7 @@ trust.no_permission_access: "§cDu hast keine Berechtigung, auf dieses Netzwerk 
 wireless_terminal.name: "§bDrahtloses Netzwerk-Terminal"
 wireless_terminal.lore1: "§7Rechtsklick, um dein Netzwerk zu öffnen."
 wireless_terminal.lore2: "§7Ein tragbarer Weg, um auf deine Items zuzugreifen."
+wireless_terminal.lore.durability: "§7Benutzungen: %s / %s"
+wireless_terminal.broken: "§cDieses drahtlose Terminal ist kaputt und kann nicht mehr verwendet werden."
 received_wireless_terminal: "§aDu hast ein drahtloses Netzwerk-Terminal erhalten!"
 no_permission_wireless: "§cDu hast keine Berechtigung, ein drahtloses Terminal zu erhalten!"

@@ -44,6 +44,10 @@ public class ConfigManager {
             config.set("enable-permissions", true);
         }
         
+        if (!config.contains("wireless-terminal-durability")) {
+            config.set("wireless-terminal-durability", 100);
+        }
+        
         if (!config.contains("messages.network-created")) {
             config.set("messages.network-created", "&aStorage network created!");
         }
@@ -67,6 +71,10 @@ public class ConfigManager {
     
     public int getMaxTerminalsPerNetwork() {
         return config.getInt("max-terminals-per-network", 10);
+    }
+    
+    public int getWirelessTerminalDurability() {
+        return config.getInt("wireless-terminal-durability", 100);
     }
     
     public boolean isPermissionsEnabled() {

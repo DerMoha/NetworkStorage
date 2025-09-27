@@ -10,6 +10,9 @@ import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.SearchManager;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class NetworkStoragePlugin extends JavaPlugin {
@@ -49,6 +52,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
         getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
 
+        // Register recipes
+        registerRecipes();
+
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
 
@@ -58,6 +64,17 @@ public class NetworkStoragePlugin extends JavaPlugin {
             // networkManager.saveNetworks();
         }
         getLogger().info("NetworkStorage Plugin has been disabled!");
+    }
+
+    private void registerRecipes() {
+        NamespacedKey key = new NamespacedKey(this, "wireless_terminal");
+        ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
+
+        recipe.shape("CCC", "CSC", "CCC");
+        recipe.setIngredient('C', Material.RECOVERY_COMPASS);
+        recipe.setIngredient('S', Material.NETHER_STAR);
+
+        getServer().addRecipe(recipe);
     }
 
     public static NetworkStoragePlugin getInstance() {
