@@ -29,7 +29,7 @@ public class StatsGUI implements InventoryHolder {
         this.player = player;
         this.lang = plugin.getLanguageManager();
         this.previousGUI = previousGUI;
-        this.inventory = Bukkit.createInventory(this, 54, lang.get("stats.title"));
+        this.inventory = Bukkit.createInventory(this, 54, lang.getMessage("stats.title"));
 
         updateInventory(network);
     }
@@ -51,7 +51,7 @@ public class StatsGUI implements InventoryHolder {
         // Add back button
         ItemStack backButton = new ItemStack(Material.BARRIER);
         ItemMeta meta = backButton.getItemMeta();
-        meta.setDisplayName(lang.get("stats.back"));
+        meta.setDisplayName(lang.getMessage("stats.back"));
         backButton.setItemMeta(meta);
         inventory.setItem(49, backButton);
     }
@@ -62,13 +62,13 @@ public class StatsGUI implements InventoryHolder {
 
         if (meta != null) {
             meta.setOwningPlayer(Bukkit.getOfflinePlayer(stat.getPlayerUUID()));
-            meta.setDisplayName(lang.get("stats.player.name", rank, stat.getPlayerName()));
+            meta.setDisplayName(String.format(lang.getMessage("stats.player.name"), rank, stat.getPlayerName()));
 
             List<String> lore = new ArrayList<>();
-            lore.add(lang.get("stats.player.deposited", stat.getItemsDeposited()));
-            lore.add(lang.get("stats.player.withdrawn", stat.getItemsWithdrawn()));
+            lore.add(String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()));
+            lore.add(String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()));
             long balance = stat.getItemsDeposited() - stat.getItemsWithdrawn();
-            lore.add(lang.get("stats.player.balance", balance));
+            lore.add(String.format(lang.getMessage("stats.player.balance"), balance));
 
             meta.setLore(lore);
             item.setItemMeta(meta);

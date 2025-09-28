@@ -51,32 +51,32 @@ public class WandListener implements Listener {
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             handleChestClick(player, clickedBlock, event.getAction());
         } else {
-            player.sendMessage(lang.get("wand.only_chest"));
+            player.sendMessage(lang.getMessage("wand.only_chest"));
         }
     }
 
     private void handleChestClick(Player player, Block chestBlock, Action action) {
         Network network = plugin.getNetworkManager().getOrCreatePlayerNetwork(player);
         if (network == null) {
-            player.sendMessage(lang.get("network.error.create"));
+            player.sendMessage(lang.getMessage("network.error.create"));
             return;
         }
         Location normalizedLoc = network.getNormalizedLocation(chestBlock.getLocation());
 
         if (action == Action.LEFT_CLICK_BLOCK) {
             if (network.isChestInNetwork(normalizedLoc)) {
-                player.sendMessage(lang.get("wand.chest.already_in_network"));
+                player.sendMessage(lang.getMessage("wand.chest.already_in_network"));
                 return;
             }
 
             if (isOtherHalfInNetwork(chestBlock, network)) {
-                player.sendMessage(lang.get("wand.double_chest.other_half_in_network"));
-                player.sendMessage(lang.get("wand.double_chest.unit_hint"));
+                player.sendMessage(lang.getMessage("wand.double_chest.other_half_in_network"));
+                player.sendMessage(lang.getMessage("wand.double_chest.unit_hint"));
                 return;
             }
 
             if (network.getChestLocations().size() >= plugin.getConfigManager().getMaxChestsPerNetwork()) {
-                player.sendMessage(lang.get("wand.chest.limit_reached", String.valueOf(plugin.getConfigManager().getMaxChestsPerNetwork())));
+                player.sendMessage(String.format(lang.getMessage("wand.chest.limit_reached"), plugin.getConfigManager().getMaxChestsPerNetwork()));
                 return;
             }
 
@@ -84,23 +84,23 @@ public class WandListener implements Listener {
             plugin.getNetworkManager().saveNetworks();
 
             String chestType = getChestType(chestBlock);
-            player.sendMessage(lang.get("wand.chest.added", chestType, String.valueOf(network.getChestLocations().size())));
+            player.sendMessage(String.format(lang.getMessage("wand.chest.added"), chestType, network.getChestLocations().size()));
 
         } else if (action == Action.RIGHT_CLICK_BLOCK) {
             if (player.isSneaking()) {
                 if (network.isTerminalInNetwork(normalizedLoc)) {
-                    player.sendMessage(lang.get("wand.terminal.already"));
+                    player.sendMessage(lang.getMessage("wand.terminal.already"));
                     return;
                 }
 
                 if (isOtherHalfInNetwork(chestBlock, network, true)) {
-                    player.sendMessage(lang.get("wand.terminal.other_half"));
-                    player.sendMessage(lang.get("wand.terminal.unit_hint"));
+                    player.sendMessage(lang.getMessage("wand.terminal.other_half"));
+                    player.sendMessage(lang.getMessage("wand.terminal.unit_hint"));
                     return;
                 }
 
                 if (network.getTerminalLocations().size() >= plugin.getConfigManager().getMaxTerminalsPerNetwork()) {
-                    player.sendMessage(lang.get("wand.terminal.limit_reached", String.valueOf(plugin.getConfigManager().getMaxTerminalsPerNetwork())));
+                    player.sendMessage(String.format(lang.getMessage("wand.terminal.limit_reached"), plugin.getConfigManager().getMaxTerminalsPerNetwork()));
                     return;
                 }
 
@@ -108,14 +108,14 @@ public class WandListener implements Listener {
                 plugin.getNetworkManager().saveNetworks();
 
                 String chestType = getChestType(chestBlock);
-                player.sendMessage(lang.get("wand.terminal.added", chestType, String.valueOf(network.getTerminalLocations().size())));
+                player.sendMessage(String.format(lang.getMessage("wand.terminal.added"), chestType, network.getTerminalLocations().size()));
 
             } else {
                 boolean wasChest = network.isChestInNetwork(normalizedLoc);
                 boolean wasTerminal = network.isTerminalInNetwork(normalizedLoc);
 
                 if (!wasChest && !wasTerminal) {
-                    player.sendMessage(lang.get("wand.chest.not_in_network"));
+                    player.sendMessage(lang.getMessage("wand.chest.not_in_network"));
                     return;
                 }
 
@@ -126,9 +126,9 @@ public class WandListener implements Listener {
                 String chestType = getChestType(chestBlock);
 
                 if (wasChest) {
-                    player.sendMessage(lang.get("wand.chest.removed", chestType, String.valueOf(network.getChestLocations().size())));
+                    player.sendMessage(String.format(lang.getMessage("wand.chest.removed"), chestType, network.getChestLocations().size()));
                 } else {
-                    player.sendMessage(lang.get("wand.terminal.removed", chestType, String.valueOf(network.getTerminalLocations().size())));
+                    player.sendMessage(String.format(lang.getMessage("wand.terminal.removed"), chestType, network.getTerminalLocations().size()));
                 }
             }
         }
@@ -178,16 +178,16 @@ public class WandListener implements Listener {
         return "chest";
     }
 
-    public static ItemStack createStorageWand(LanguageManager lang, Player player) {
+    public static ItemStack createStorageWand(LanguageManager lang) {
         ItemStack wand = new ItemStack(Material.BLAZE_ROD);
         ItemMeta meta = wand.getItemMeta();
 
         if (meta != null) {
-            meta.setDisplayName(lang.get("wand.name"));
+            meta.setDisplayName(lang.getMessage("wand.name"));
             meta.setLore(Arrays.asList(
-                    lang.get("wand.lore1"),
-                    lang.get("wand.lore2"),
-                    lang.get("wand.lore3")
+                    lang.getMessage("wand.lore1"),
+                    lang.getMessage("wand.lore2"),
+                    lang.getMessage("wand.lore3")
             ));
             wand.setItemMeta(meta);
         }
@@ -202,6 +202,6 @@ public class WandListener implements Listener {
 
         ItemMeta meta = item.getItemMeta();
         return meta != null && meta.hasDisplayName() &&
-                meta.getDisplayName().equals(lang.get("wand.name"));
+                meta.getDisplayName().equals(lang.getMessage("wand.name"));
     }
 }

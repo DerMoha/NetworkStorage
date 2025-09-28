@@ -24,7 +24,12 @@ public class NetworkManager {
         this.plugin = plugin;
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
         if (!networksFile.exists()) {
-            plugin.saveResource("networks.yml", false);
+            try {
+                plugin.getDataFolder().mkdirs();
+                networksFile.createNewFile();
+            } catch (IOException e) {
+                plugin.getLogger().severe("Could not create networks.yml: " + e.getMessage());
+            }
         }
         loadNetworks();
     }

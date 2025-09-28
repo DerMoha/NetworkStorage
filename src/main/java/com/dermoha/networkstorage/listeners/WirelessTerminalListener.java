@@ -62,24 +62,24 @@ public class WirelessTerminalListener implements Listener {
             }
 
             if (currentUses == 0) {
-                player.sendMessage(lang.get("wireless_terminal.broken"));
+                player.sendMessage(lang.getMessage("wireless_terminal.broken"));
                 return;
             }
 
             Network network = plugin.getNetworkManager().getPlayerNetwork(player);
             if (network == null) {
-                player.sendMessage(lang.get("no_network"));
+                player.sendMessage(lang.getMessage("no_network"));
                 return;
             }
 
             if (!network.canAccess(player)) {
-                player.sendMessage(lang.get("trust.no_permission_access"));
+                player.sendMessage(lang.getMessage("trust.no_permission_access"));
                 return;
             }
 
             if (currentUses > 0 && usesLineIndex != -1) {
                 currentUses--;
-                lore.set(usesLineIndex, lang.get("wireless_terminal.lore.durability", String.valueOf(currentUses), String.valueOf(maxUses)));
+                lore.set(usesLineIndex, String.format(lang.getMessage("wireless_terminal.lore.durability"), currentUses, maxUses));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
             }
@@ -97,11 +97,11 @@ public class WirelessTerminalListener implements Listener {
         ItemStack terminal = new ItemStack(Material.RECOVERY_COMPASS);
         ItemMeta meta = terminal.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(lang.get("wireless_terminal.name"));
+            meta.setDisplayName(lang.getMessage("wireless_terminal.name"));
             List<String> lore = new ArrayList<>();
-            lore.add(lang.get("wireless_terminal.lore1"));
-            lore.add(lang.get("wireless_terminal.lore2"));
-            lore.add(lang.get("wireless_terminal.lore.durability", String.valueOf(durability), String.valueOf(durability)));
+            lore.add(lang.getMessage("wireless_terminal.lore1"));
+            lore.add(lang.getMessage("wireless_terminal.lore2"));
+            lore.add(String.format(lang.getMessage("wireless_terminal.lore.durability"), durability, durability));
             meta.setLore(lore);
             terminal.setItemMeta(meta);
         }
@@ -113,6 +113,6 @@ public class WirelessTerminalListener implements Listener {
             return false;
         }
         ItemMeta meta = item.getItemMeta();
-        return meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(lang.get("wireless_terminal.name"));
+        return meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(lang.getMessage("wireless_terminal.name"));
     }
 }

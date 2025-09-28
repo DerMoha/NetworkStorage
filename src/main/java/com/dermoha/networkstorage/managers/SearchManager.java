@@ -36,7 +36,7 @@ public class SearchManager implements Listener {
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (searchingPlayers.containsKey(player.getUniqueId())) {
                 searchingPlayers.remove(player.getUniqueId());
-                player.sendMessage(lang.get("search.timeout"));
+                player.sendMessage(lang.getMessage("search.timeout"));
             }
         }, 600L); // 30 seconds
     }
@@ -58,10 +58,10 @@ public class SearchManager implements Listener {
         // Handle search on main thread
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (message.equalsIgnoreCase("cancel")) {
-                player.sendMessage(lang.get("search.cancelled"));
+                player.sendMessage(lang.getMessage("search.cancelled"));
             } else {
                 gui.setSearchFilter(message);
-                player.sendMessage(lang.get("search.searching_for", message));
+                player.sendMessage(String.format(lang.getMessage("search.searching_for"), message));
             }
 
             // Reopen the GUI

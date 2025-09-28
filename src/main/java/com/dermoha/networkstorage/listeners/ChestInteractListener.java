@@ -64,7 +64,7 @@ public class ChestInteractListener implements Listener {
                 event.setCancelled(true);
 
                 if (!network.canAccess(player)) {
-                    player.sendMessage(lang.get("trust.no_permission_access"));
+                    player.sendMessage(lang.getMessage("trust.no_permission_access"));
                     return;
                 }
 
@@ -72,7 +72,7 @@ public class ChestInteractListener implements Listener {
                 addOpenTerminal(player.getUniqueId(), gui);
                 gui.open();
 
-                player.sendMessage(lang.get("network.access"));
+                player.sendMessage(lang.getMessage("network.access"));
             }
         }
     }
@@ -137,12 +137,12 @@ public class ChestInteractListener implements Listener {
 
         if (remaining == null || remaining.getAmount() == 0) {
             player.getInventory().setItem(playerSlot, null);
-            player.sendMessage(lang.get("network.deposit.success", String.valueOf(originalAmount), terminal.getItemDisplayName(itemToDeposit)));
+            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, terminal.getItemDisplayName(itemToDeposit)));
             terminal.getNetwork().recordItemsDeposited(player, originalAmount);
         } else {
             int depositedAmount = originalAmount - remaining.getAmount();
             if (depositedAmount > 0) {
-                player.sendMessage(lang.get("network.deposit.partial", String.valueOf(depositedAmount), terminal.getItemDisplayName(itemToDeposit), String.valueOf(remaining.getAmount())));
+                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, terminal.getItemDisplayName(itemToDeposit), remaining.getAmount()));
                 terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
             }
             player.getInventory().setItem(playerSlot, remaining);

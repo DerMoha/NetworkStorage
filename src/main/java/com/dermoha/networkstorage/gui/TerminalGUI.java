@@ -43,7 +43,7 @@ public class TerminalGUI implements InventoryHolder {
         this.network = network;
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
-        this.inventory = Bukkit.createInventory(this, GUI_SIZE, lang.get("terminal.title"));
+        this.inventory = Bukkit.createInventory(this, GUI_SIZE, lang.getMessage("terminal.title"));
         updateInventory();
     }
 
@@ -94,8 +94,8 @@ public class TerminalGUI implements InventoryHolder {
         if (page > 0) {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta meta = prevButton.getItemMeta();
-            meta.setDisplayName(lang.get("terminal.prev_page"));
-            meta.setLore(Collections.singletonList(lang.get("terminal.page", String.valueOf(page + 1), String.valueOf(Math.max(1, totalPages)))));
+            meta.setDisplayName(lang.getMessage("terminal.prev_page"));
+            meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 1, Math.max(1, totalPages))));
             prevButton.setItemMeta(meta);
             inventory.setItem(45, prevButton);
         }
@@ -103,17 +103,17 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack searchButton = new ItemStack(Material.SPYGLASS);
         ItemMeta searchMeta = searchButton.getItemMeta();
         if (searchFilter.isEmpty()) {
-            searchMeta.setDisplayName(lang.get("terminal.search.title"));
+            searchMeta.setDisplayName(lang.getMessage("terminal.search.title"));
             searchMeta.setLore(Arrays.asList(
-                    lang.get("terminal.search.lore1"),
-                    lang.get("terminal.search.lore2")
+                    lang.getMessage("terminal.search.lore1"),
+                    lang.getMessage("terminal.search.lore2")
             ));
         } else {
-            searchMeta.setDisplayName(lang.get("terminal.search.active", searchFilter));
+            searchMeta.setDisplayName(String.format(lang.getMessage("terminal.search.active"), searchFilter));
             searchMeta.setLore(Arrays.asList(
-                    lang.get("terminal.search.filtered"),
-                    lang.get("terminal.search.change"),
-                    lang.get("terminal.search.clear")
+                    lang.getMessage("terminal.search.filtered"),
+                    lang.getMessage("terminal.search.change"),
+                    lang.getMessage("terminal.search.clear")
             ));
         }
         searchButton.setItemMeta(searchMeta);
@@ -121,10 +121,10 @@ public class TerminalGUI implements InventoryHolder {
 
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
-        sortMeta.setDisplayName(lang.get("terminal.sort.title", getSortDisplayName()));
+        sortMeta.setDisplayName(String.format(lang.getMessage("terminal.sort.title"), getSortDisplayName()));
         sortMeta.setLore(Arrays.asList(
-                lang.get("terminal.sort.lore1"),
-                lang.get("terminal.sort.lore2", getSortDisplayName())
+                lang.getMessage("terminal.sort.lore1"),
+                String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())
         ));
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
@@ -135,40 +135,40 @@ public class TerminalGUI implements InventoryHolder {
 
         ItemStack infoButton = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = infoButton.getItemMeta();
-        infoMeta.setDisplayName(lang.get("terminal.info.title"));
+        infoMeta.setDisplayName(lang.getMessage("terminal.info.title"));
         infoMeta.setLore(Arrays.asList(
-                lang.get("terminal.info.items", String.valueOf(uniqueTypes)),
-                lang.get("total_items", formatNumber(totalItems)),
-                lang.get("terminal.info.chests", String.valueOf(network.getChestLocations().size())),
-                lang.get("terminal.info.terminals", String.valueOf(network.getTerminalLocations().size())),
-                lang.get("terminal.info.capacity", String.format("%.1f%%", capacity)),
+                String.format(lang.getMessage("terminal.info.items"), uniqueTypes),
+                String.format(lang.getMessage("total_items"), formatNumber(totalItems)),
+                String.format(lang.getMessage("terminal.info.chests"), network.getChestLocations().size()),
+                String.format(lang.getMessage("terminal.info.terminals"), network.getTerminalLocations().size()),
+                String.format(lang.getMessage("terminal.info.capacity"), String.format("%.1f%%", capacity)),
                 "",
-                lang.get("terminal.info.lore1"),
-                lang.get("terminal.info.lore2"),
-                lang.get("terminal.info.lore3")
+                lang.getMessage("terminal.info.lore1"),
+                lang.getMessage("terminal.info.lore2"),
+                lang.getMessage("terminal.info.lore3")
         ));
         infoButton.setItemMeta(infoMeta);
         inventory.setItem(48, infoButton);
 
         ItemStack statsButton = new ItemStack(Material.EMERALD);
         ItemMeta statsMeta = statsButton.getItemMeta();
-        statsMeta.setDisplayName(lang.get("terminal.stats.title"));
-        statsMeta.setLore(Collections.singletonList(lang.get("terminal.stats.lore")));
+        statsMeta.setDisplayName(lang.getMessage("terminal.stats.title"));
+        statsMeta.setLore(Collections.singletonList(lang.getMessage("terminal.stats.lore")));
         statsButton.setItemMeta(statsMeta);
         inventory.setItem(49, statsButton);
 
         ItemStack refreshButton = new ItemStack(Material.CLOCK);
         ItemMeta refreshMeta = refreshButton.getItemMeta();
-        refreshMeta.setDisplayName(lang.get("terminal.refresh.title"));
-        refreshMeta.setLore(Collections.singletonList(lang.get("terminal.refresh.lore")));
+        refreshMeta.setDisplayName(lang.getMessage("terminal.refresh.title"));
+        refreshMeta.setLore(Collections.singletonList(lang.getMessage("terminal.refresh.lore")));
         refreshButton.setItemMeta(refreshMeta);
         inventory.setItem(52, refreshButton);
 
         if (page < totalPages - 1) {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta meta = nextButton.getItemMeta();
-            meta.setDisplayName(lang.get("terminal.next_page"));
-            meta.setLore(Collections.singletonList(lang.get("terminal.page", String.valueOf(page + 2), String.valueOf(totalPages))));
+            meta.setDisplayName(lang.getMessage("terminal.next_page"));
+            meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 2, totalPages)));
             nextButton.setItemMeta(meta);
             inventory.setItem(53, nextButton);
         }
@@ -182,20 +182,20 @@ public class TerminalGUI implements InventoryHolder {
             meta = Bukkit.getItemFactory().getItemMeta(display.getType());
         }
         String itemName = getItemDisplayName(original);
-        meta.setDisplayName(lang.get("terminal.item.display_name", itemName));
+        meta.setDisplayName(String.format(lang.getMessage("terminal.item.display_name"), itemName));
         List<String> lore = new ArrayList<>();
-        lore.add(lang.get("terminal.item.lore.total", formatNumber(totalCount)));
-        lore.add(lang.get("terminal.item.lore.stacks", String.valueOf(totalCount / original.getMaxStackSize())));
+        lore.add(String.format(lang.getMessage("terminal.item.lore.total"), formatNumber(totalCount)));
+        lore.add(String.format(lang.getMessage("terminal.item.lore.stacks"), totalCount / original.getMaxStackSize()));
         if (totalCount % original.getMaxStackSize() > 0) {
-            lore.add(lang.get("terminal.item.lore.partial", String.valueOf(totalCount % original.getMaxStackSize())));
+            lore.add(String.format(lang.getMessage("terminal.item.lore.partial"), totalCount % original.getMaxStackSize()));
         }
         lore.add("");
-        lore.add(lang.get("terminal.item.lore.take_stack", String.valueOf(original.getMaxStackSize())));
-        lore.add(lang.get("terminal.item.lore.take_half"));
-        lore.add(lang.get("terminal.item.lore.take_one"));
+        lore.add(String.format(lang.getMessage("terminal.item.lore.take_stack"), original.getMaxStackSize()));
+        lore.add(lang.getMessage("terminal.item.lore.take_half"));
+        lore.add(lang.getMessage("terminal.item.lore.take_one"));
         if (original.hasItemMeta() && original.getItemMeta().hasLore()) {
             lore.add("");
-            lore.add(lang.get("terminal.item.lore.properties"));
+            lore.add(lang.getMessage("terminal.item.lore.properties"));
             if (original.getItemMeta().getLore() != null) {
                 lore.addAll(original.getItemMeta().getLore());
             }
@@ -227,13 +227,13 @@ public class TerminalGUI implements InventoryHolder {
     private String getSortDisplayName() {
         switch (sortType) {
             case ALPHABETICAL:
-                return lang.get("terminal.sort.alpha");
+                return lang.getMessage("terminal.sort.alpha");
             case COUNT_DESC:
-                return lang.get("terminal.sort.desc");
+                return lang.getMessage("terminal.sort.desc");
             case COUNT_ASC:
-                return lang.get("terminal.sort.asc");
+                return lang.getMessage("terminal.sort.asc");
             default:
-                return lang.get("terminal.sort.unknown");
+                return lang.getMessage("terminal.sort.unknown");
         }
     }
 
@@ -268,12 +268,12 @@ public class TerminalGUI implements InventoryHolder {
                 searchFilter = "";
                 currentPage = 0;
                 updateInventory();
-                player.sendMessage(lang.get("terminal.search.cleared"));
+                player.sendMessage(lang.getMessage("terminal.search.cleared"));
             } else {
                 plugin.getSearchManager().startSearch(player, this);
                 player.closeInventory();
-                player.sendMessage(lang.get("terminal.search.prompt"));
-                player.sendMessage(lang.get("terminal.search.cancel_hint"));
+                player.sendMessage(lang.getMessage("terminal.search.prompt"));
+                player.sendMessage(lang.getMessage("terminal.search.cancel_hint"));
             }
             return;
         }
@@ -293,7 +293,7 @@ public class TerminalGUI implements InventoryHolder {
 
         if (slot == 52) {
             updateInventory();
-            player.sendMessage(lang.get("terminal.refreshed"));
+            player.sendMessage(lang.getMessage("terminal.refreshed"));
             return;
         }
 
@@ -324,7 +324,7 @@ public class TerminalGUI implements InventoryHolder {
         int finalAmount = Math.min(availableAmount, amountToTake);
 
         if (finalAmount <= 0) {
-            player.sendMessage(lang.get("terminal.no_items"));
+            player.sendMessage(lang.getMessage("terminal.no_items"));
             return;
         }
 
@@ -341,21 +341,21 @@ public class TerminalGUI implements InventoryHolder {
                     ItemStack stillRemaining = network.addToNetwork(leftover);
                     if (stillRemaining != null && stillRemaining.getAmount() > 0) {
                         player.getWorld().dropItemNaturally(player.getLocation(), stillRemaining);
-                        player.sendMessage(lang.get("terminal.items_dropped"));
+                        player.sendMessage(lang.getMessage("terminal.items_dropped"));
                     }
                 }
             }
-            player.sendMessage(lang.get("terminal.took_items", String.valueOf(removedItem.getAmount()), getItemDisplayName(itemType)));
+            player.sendMessage(String.format(lang.getMessage("terminal.took_items"), removedItem.getAmount(), getItemDisplayName(itemType)));
 
             plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
         } else {
-            player.sendMessage(lang.get("terminal.could_not_remove"));
+            player.sendMessage(lang.getMessage("terminal.could_not_remove"));
         }
     }
 
     private void cycleSortType() {
         sortType = SortType.values()[(sortType.ordinal() + 1) % SortType.values().length];
-        player.sendMessage(lang.get("terminal.sort_changed", getSortDisplayName()));
+        player.sendMessage(String.format(lang.getMessage("terminal.sort_changed"), getSortDisplayName()));
     }
 
     public void setSearchFilter(String filter) {
