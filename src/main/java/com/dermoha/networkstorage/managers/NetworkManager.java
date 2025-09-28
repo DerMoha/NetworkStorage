@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
@@ -39,22 +40,32 @@ public class NetworkManager {
                         UUID owner = UUID.fromString(netSection.getString("owner"));
                         Network network = new Network(networkName, owner);
 
-                        List<?> chestLocationsRaw = netSection.getList("chests", new ArrayList<>());
-                        for (Object locObj : chestLocationsRaw) {
-                            if (locObj instanceof Location) {
-                                network.addChest((Location) locObj);
-                            }
+                        List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
+                        for (Map<?, ?> locMap : chestLocationsMaps) {
+                            network.addChest(Location.deserialize((Map<String, Object>) locMap));
                         }
 
-                        List<?> terminalLocationsRaw = netSection.getList("terminals", new ArrayList<>());
-                        for (Object locObj : terminalLocationsRaw) {
-                            if (locObj instanceof Location) {
-                                network.addTerminal((Location) locObj);
-                            }
+                        List<Map<?, ?>> terminalLocationsMaps = netSection.getMapList("terminals");
+                        for (Map<?, ?> locMap : terminalLocationsMaps) {
+                            network.addTerminal(Location.deserialize((Map<String, Object>) locMap));
                         }
 
                         List<String> trustedUuids = netSection.getStringList("trusted");
                         trustedUuids.stream().map(UUID::fromString).forEach(network::addTrustedPlayer);
+
+                        // Load player stats
+                        ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
+                        if (statsSection != null) {
+                            for (String uuidString : statsSection.getKeys(false)) {
+                                UUID playerUUID = UUID.fromString(uuidString);
+                                String name = statsSection.getString(uuidString + ".name");
+                                long deposited = statsSection.getLong(uuidString + ".deposited");
+                                long withdrawn = statsSection.getLong(uuidString + ".withdrawn");
+
+                                PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn);
+                                network.getPlayerStats().put(playerUUID, stat);
+                            }
+                        }
 
                         networks.put(networkName, network);
                     } catch (Exception e) {
@@ -70,9 +81,28 @@ public class NetworkManager {
         for (Network network : networks.values()) {
             String path = "networks." + network.getName();
             newConfig.set(path + ".owner", network.getOwner().toString());
-            newConfig.set(path + ".chests", new ArrayList<>(network.getChestLocations()));
-            newConfig.set(path + ".terminals", new ArrayList<>(network.getTerminalLocations()));
+            
+            List<Map<String, Object>> serializedChests = new ArrayList<>();
+            for (Location loc : network.getChestLocations()) {
+                serializedChests.add(loc.serialize());
+            }
+            newConfig.set(path + ".chests", serializedChests);
+
+            List<Map<String, Object>> serializedTerminals = new ArrayList<>();
+            for (Location loc : network.getTerminalLocations()) {
+                serializedTerminals.add(loc.serialize());
+            }
+            newConfig.set(path + ".terminals", serializedTerminals);
+
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
+
+            // Save player stats
+            for (PlayerStat stat : network.getPlayerStats().values()) {
+                String statPath = path + ".stats." + stat.getPlayerUUID().toString();
+                newConfig.set(statPath + ".name", stat.getPlayerName());
+                newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
+                newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
+            }
         }
         try {
             newConfig.save(networksFile);

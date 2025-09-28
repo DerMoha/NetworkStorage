@@ -148,6 +148,7 @@ public class ChestInteractListener implements Listener {
             player.getInventory().setItem(playerSlot, remaining);
         }
 
+        plugin.getNetworkManager().saveNetworks();
         plugin.getServer().getScheduler().runTask(plugin, terminal::updateInventory);
     }
 

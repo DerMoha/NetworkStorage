@@ -61,7 +61,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (networkManager != null) {
-            // networkManager.saveNetworks();
+            networkManager.saveNetworks();
         }
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
@@ -70,9 +70,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         NamespacedKey key = new NamespacedKey(this, "wireless_terminal");
         ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
 
-        recipe.shape("CCC", "CSC", "CCC");
-        recipe.setIngredient('C', Material.RECOVERY_COMPASS);
+        recipe.shape("CCC", "CSC", "CDC");
+        recipe.setIngredient('C', Material.COMPASS);
         recipe.setIngredient('S', Material.NETHER_STAR);
+        recipe.setIngredient('D', Material.DIAMOND_BLOCK);
 
         getServer().addRecipe(recipe);
     }

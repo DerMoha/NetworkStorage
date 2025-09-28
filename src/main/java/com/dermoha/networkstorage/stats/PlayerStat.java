@@ -10,10 +10,14 @@ public class PlayerStat {
     private long itemsWithdrawn;
 
     public PlayerStat(UUID playerUUID, String playerName) {
+        this(playerUUID, playerName, 0, 0);
+    }
+
+    public PlayerStat(UUID playerUUID, String playerName, long itemsDeposited, long itemsWithdrawn) {
         this.playerUUID = playerUUID;
         this.playerName = playerName;
-        this.itemsDeposited = 0;
-        this.itemsWithdrawn = 0;
+        this.itemsDeposited = itemsDeposited;
+        this.itemsWithdrawn = itemsWithdrawn;
     }
 
     // Getters
