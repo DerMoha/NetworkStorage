@@ -12,8 +12,11 @@ import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.SearchManager;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import java.util.List;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -33,7 +36,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Initialize managers
         configManager = new ConfigManager(this);
-        languageManager = new LanguageManager(this, getConfig());
+        languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
 
         // Initialize listeners that need to be accessed
@@ -70,10 +73,33 @@ public class NetworkStoragePlugin extends JavaPlugin {
         NamespacedKey key = new NamespacedKey(this, "wireless_terminal");
         ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
 
-        recipe.shape("CCC", "CSC", "CDC");
-        recipe.setIngredient('C', Material.COMPASS);
-        recipe.setIngredient('S', Material.NETHER_STAR);
-        recipe.setIngredient('D', Material.DIAMOND_BLOCK);
+        List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
+        if (shape.isEmpty()) {
+            recipe.shape("CCC", "CSC", "CDC");
+        } else {
+            recipe.shape(shape.toArray(new String[0]));
+        }
+
+        ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
+        if (ingredients == null) {
+            recipe.setIngredient('C', Material.COMPASS);
+            recipe.setIngredient('S', Material.NETHER_STAR);
+            recipe.setIngredient('D', Material.DIAMOND_BLOCK);
+        } else {
+            for (String keyChar : ingredients.getKeys(false)) {
+                if (keyChar.length() == 1) {
+                    String materialName = ingredients.getString(keyChar);
+                    if (materialName != null) {
+                        try {
+                            Material ingredient = Material.valueOf(materialName.toUpperCase());
+                            recipe.setIngredient(keyChar.charAt(0), ingredient);
+                        } catch (IllegalArgumentException e) {
+                            getLogger().warning("Invalid material '" + materialName + "' in wireless terminal recipe.");
+                        }
+                    }
+                }
+            }
+        }
 
         getServer().addRecipe(recipe);
     }

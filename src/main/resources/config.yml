@@ -17,3 +17,13 @@ enable-permissions: true
 
 # Langauge for Plugin-messages (de or en)
 language: de
+
+wireless-terminal-recipe:
+  shape:
+    - "CCC"
+    - "CSC"
+    - "CDC"
+  ingredients:
+    C: "COMPASS"
+    S: "NETHER_STAR"
+    D: "DIAMOND_BLOCK"

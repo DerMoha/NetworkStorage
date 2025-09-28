@@ -43,25 +43,13 @@ public class ConfigManager {
         if (!config.contains("enable-permissions")) {
             config.set("enable-permissions", true);
         }
+
+        if (!config.contains("language")) {
+            config.set("language", "en");
+        }
         
         if (!config.contains("wireless-terminal-durability")) {
             config.set("wireless-terminal-durability", 100);
-        }
-        
-        if (!config.contains("messages.network-created")) {
-            config.set("messages.network-created", "&aStorage network created!");
-        }
-        
-        if (!config.contains("messages.chest-added")) {
-            config.set("messages.chest-added", "&aChest added to network! ({count} total)");
-        }
-        
-        if (!config.contains("messages.terminal-added")) {
-            config.set("messages.terminal-added", "&bTerminal added to network! ({count} total)");
-        }
-        
-        if (!config.contains("messages.no-permission")) {
-            config.set("messages.no-permission", "&cYou don't have permission to do that!");
         }
     }
     
@@ -88,10 +76,9 @@ public class ConfigManager {
     public int getAutoSaveInterval() {
         return config.getInt("auto-save-interval-minutes", 5);
     }
-    
-    public String getMessage(String key) {
-        String message = config.getString("messages." + key, "&cMessage not found: " + key);
-        return message.replace("&", "§");
+
+    public String getLanguage() {
+        return config.getString("language", "en");
     }
     
     public void reloadConfig() {
