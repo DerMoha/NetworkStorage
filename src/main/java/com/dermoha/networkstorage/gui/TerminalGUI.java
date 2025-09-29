@@ -4,9 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -55,18 +53,31 @@ public class TerminalGUI implements InventoryHolder {
 
         if (!searchFilter.isEmpty()) {
             sortedItems = sortedItems.stream()
-                    .filter(entry -> getItemDisplayName(entry.getKey())
-                            .toLowerCase().contains(searchFilter.toLowerCase()))
+                    .filter(entry -> {
+                        ItemStack item = entry.getKey();
+                        String lowerCaseFilter = searchFilter.toLowerCase();
+
+                        // Check custom display name
+                        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+                            if (item.getItemMeta().getDisplayName().toLowerCase().contains(lowerCaseFilter)) {
+                                return true;
+                            }
+                        }
+
+                        // Check internal material name (e.g., "diamond_sword")
+                        if (item.getType().getKey().getKey().toLowerCase().contains(lowerCaseFilter)) {
+                            return true;
+                        }
+
+                        // Fallback check for formatted English name
+                        return getItemDisplayName(item).toLowerCase().contains(lowerCaseFilter);
+                    })
                     .collect(Collectors.toList());
         }
 
         switch (sortType) {
             case ALPHABETICAL:
-                sortedItems.sort((a, b) -> {
-                    String nameA = getItemDisplayName(a.getKey());
-                    String nameB = getItemDisplayName(b.getKey());
-                    return nameA.compareToIgnoreCase(nameB);
-                });
+                sortedItems.sort(Comparator.comparing(a -> getItemDisplayName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
                 break;
             case COUNT_DESC:
                 sortedItems.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
@@ -129,7 +140,7 @@ public class TerminalGUI implements InventoryHolder {
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
 
-        int totalItems = network.getNetworkItems().values().stream().mapToInt(Integer::intValue).sum();
+        long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
         double capacity = network.getCapacityPercent();
 
@@ -181,8 +192,13 @@ public class TerminalGUI implements InventoryHolder {
         if (meta == null) {
             meta = Bukkit.getItemFactory().getItemMeta(display.getType());
         }
-        String itemName = getItemDisplayName(original);
-        meta.setDisplayName(String.format(lang.getMessage("terminal.item.display_name"), itemName));
+
+        // DO NOT set a display name if the item doesn't have a custom one.
+        // The client will handle localization. The clone operation preserves any existing custom name.
+        if (!original.hasItemMeta() || !original.getItemMeta().hasDisplayName()) {
+            meta.setDisplayName(null);
+        }
+
         List<String> lore = new ArrayList<>();
         lore.add(String.format(lang.getMessage("terminal.item.lore.total"), formatNumber(totalCount)));
         lore.add(String.format(lang.getMessage("terminal.item.lore.stacks"), totalCount / original.getMaxStackSize()));
@@ -209,18 +225,16 @@ public class TerminalGUI implements InventoryHolder {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             return item.getItemMeta().getDisplayName();
         }
-
+        // Fallback to a formatted material name for sorting and searching
         String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
         String[] words = materialName.split(" ");
         StringBuilder displayName = new StringBuilder();
-
         for (String word : words) {
             if (displayName.length() > 0) {
                 displayName.append(" ");
             }
-            displayName.append(word.substring(0, 1).toUpperCase()).append(word.substring(1));
+            displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         }
-
         return displayName.toString();
     }
 
