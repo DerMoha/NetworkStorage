@@ -4,83 +4,81 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import org.bukkit.configuration.file.FileConfiguration;
 
 public class ConfigManager {
-    
+
     private final NetworkStoragePlugin plugin;
     private FileConfiguration config;
-    
+
+    public enum NetworkMode {
+        PLAYER,
+        GLOBAL
+    }
+
     public ConfigManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         loadConfig();
     }
-    
+
     private void loadConfig() {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
         config = plugin.getConfig();
-        
-        // Set default values if they don't exist
         setDefaults();
         plugin.saveConfig();
     }
-    
-    private void setDefaults() {
-        if (!config.contains("max-chests-per-network")) {
-            config.set("max-chests-per-network", 100);
-        }
-        
-        if (!config.contains("max-terminals-per-network")) {
-            config.set("max-terminals-per-network", 10);
-        }
-        
-        if (!config.contains("allow-cross-world-networks")) {
-            config.set("allow-cross-world-networks", false);
-        }
-        
-        if (!config.contains("auto-save-interval-minutes")) {
-            config.set("auto-save-interval-minutes", 5);
-        }
-        
-        if (!config.contains("enable-permissions")) {
-            config.set("enable-permissions", true);
-        }
 
-        if (!config.contains("language")) {
-            config.set("language", "en");
-        }
-        
-        if (!config.contains("wireless-terminal-durability")) {
-            config.set("wireless-terminal-durability", 100);
+    private void setDefaults() {
+        config.addDefault("network-mode", "PLAYER");
+        config.addDefault("max-chests-per-network", 100);
+        config.addDefault("max-terminals-per-network", 100);
+        config.addDefault("allow-cross-world-networks", false);
+        config.addDefault("auto-save-interval-minutes", 5);
+        config.addDefault("enable-permissions", true);
+        config.addDefault("enable-trust-system", true);
+        config.addDefault("language", "en");
+        config.addDefault("wireless-terminal-durability", 100);
+        config.options().copyDefaults(true);
+    }
+
+    public NetworkMode getNetworkMode() {
+        try {
+            return NetworkMode.valueOf(config.getString("network-mode", "PLAYER").toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return NetworkMode.PLAYER;
         }
     }
-    
+
     public int getMaxChestsPerNetwork() {
-        return config.getInt("max-chests-per-network", 100);
+        return config.getInt("max-chests-per-network");
     }
-    
+
     public int getMaxTerminalsPerNetwork() {
-        return config.getInt("max-terminals-per-network", 10);
+        return config.getInt("max-terminals-per-network");
     }
-    
+
     public int getWirelessTerminalDurability() {
-        return config.getInt("wireless-terminal-durability", 100);
+        return config.getInt("wireless-terminal-durability");
     }
-    
+
     public boolean isPermissionsEnabled() {
-        return config.getBoolean("enable-permissions", true);
+        return config.getBoolean("enable-permissions");
     }
-    
+
+    public boolean isTrustSystemEnabled() {
+        return config.getBoolean("enable-trust-system");
+    }
+
     public boolean allowCrossWorldNetworks() {
-        return config.getBoolean("allow-cross-world-networks", false);
+        return config.getBoolean("allow-cross-world-networks");
     }
-    
+
     public int getAutoSaveInterval() {
-        return config.getInt("auto-save-interval-minutes", 5);
+        return config.getInt("auto-save-interval-minutes");
     }
 
     public String getLanguage() {
-        return config.getString("language", "en");
+        return config.getString("language");
     }
-    
+
     public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();

@@ -1,5 +1,7 @@
 package com.dermoha.networkstorage.storage;
 
+import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -94,6 +96,13 @@ public class Network {
     }
 
     public boolean canAccess(Player player) {
+        ConfigManager configManager = NetworkStoragePlugin.getInstance().getConfigManager();
+        if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return true;
+        }
+        if (!configManager.isTrustSystemEnabled()) {
+            return true;
+        }
         UUID playerUUID = player.getUniqueId();
         return playerUUID.equals(this.owner) || trustedPlayers.contains(playerUUID) || player.hasPermission("networkstorage.admin");
     }

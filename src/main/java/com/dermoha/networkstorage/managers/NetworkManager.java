@@ -19,6 +19,8 @@ public class NetworkManager {
     private final NetworkStoragePlugin plugin;
     private final Map<String, Network> networks = new HashMap<>();
     private final File networksFile;
+    private static final String GLOBAL_NETWORK_NAME = "Global";
+    private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     public NetworkManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -35,6 +37,12 @@ public class NetworkManager {
     }
 
     private void loadNetworks() {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            if (!networks.containsKey(GLOBAL_NETWORK_NAME)) {
+                Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+                networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
+            }
+        }
         FileConfiguration networksConfig = YamlConfiguration.loadConfiguration(networksFile);
         ConfigurationSection networksSection = networksConfig.getConfigurationSection("networks");
         if (networksSection != null) {
@@ -118,6 +126,10 @@ public class NetworkManager {
     }
 
     public void createNetwork(Player player, String networkName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage("Cannot create a network in GLOBAL mode.");
+            return;
+        }
         if (networks.containsKey(networkName)) {
             player.sendMessage("A network with that name already exists.");
             return;
@@ -129,6 +141,10 @@ public class NetworkManager {
     }
 
     public void editNetwork(Player player, String networkName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage("Cannot edit a network in GLOBAL mode.");
+            return;
+        }
         if (!networks.containsKey(networkName)) {
             player.sendMessage("Network '" + networkName + "' not found.");
             return;
@@ -137,6 +153,10 @@ public class NetworkManager {
     }
 
     public void renameNetwork(Player player, String oldName, String newName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage("Cannot rename a network in GLOBAL mode.");
+            return;
+        }
         if (!networks.containsKey(oldName)) {
             player.sendMessage("Network '" + oldName + "' not found.");
             return;
@@ -160,6 +180,9 @@ public class NetworkManager {
     }
 
     public Network getNetwork(String name) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return networks.get(GLOBAL_NETWORK_NAME);
+        }
         return networks.get(name);
     }
 
@@ -168,6 +191,13 @@ public class NetworkManager {
     }
 
     public Network getNetworkByLocation(Location location) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
+            if (globalNetwork != null && (globalNetwork.isChestInNetwork(location) || globalNetwork.isTerminalInNetwork(location))) {
+                return globalNetwork;
+            }
+            return null;
+        }
         for (Network network : networks.values()) {
             if (network.isChestInNetwork(location) || network.isTerminalInNetwork(location)) {
                 return network;
@@ -177,6 +207,9 @@ public class NetworkManager {
     }
 
     public Network getPlayerNetwork(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return networks.get(GLOBAL_NETWORK_NAME);
+        }
         for (Network network : networks.values()) {
             if (network.getOwner().equals(player.getUniqueId())) {
                 return network;
@@ -186,10 +219,12 @@ public class NetworkManager {
     }
 
     public Network getOrCreatePlayerNetwork(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return networks.get(GLOBAL_NETWORK_NAME);
+        }
         Network network = getPlayerNetwork(player);
         if (network == null) {
             String networkName = player.getName() + "'s Network";
-            // Avoid creating a new network if one with the default name already exists but is owned by someone else
             if (networks.containsKey(networkName) && !networks.get(networkName).getOwner().equals(player.getUniqueId())) {
                 player.sendMessage("A network with your default name already exists, but you are not the owner.");
                 return null;

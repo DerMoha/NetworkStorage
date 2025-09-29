@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.commands;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
+import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
@@ -91,6 +92,14 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleTrustCommand(Player player, String[] args) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage(lang.getMessage("trust.global_mode_disabled"));
+            return;
+        }
+        if (!plugin.getConfigManager().isTrustSystemEnabled()) {
+            player.sendMessage(lang.getMessage("trust.system_disabled"));
+            return;
+        }
         if (args.length < 2) {
             player.sendMessage(lang.getMessage("trust.usage"));
             return;
@@ -133,6 +142,14 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleUntrustCommand(Player player, String[] args) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage(lang.getMessage("trust.global_mode_disabled"));
+            return;
+        }
+        if (!plugin.getConfigManager().isTrustSystemEnabled()) {
+            player.sendMessage(lang.getMessage("trust.system_disabled"));
+            return;
+        }
         if (args.length < 2) {
             player.sendMessage(lang.getMessage("untrust.usage"));
             return;

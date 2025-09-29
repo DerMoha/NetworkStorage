@@ -1,5 +1,10 @@
 # NetworkStorage Plugin Configuration
 
+# The mode of operation for networks. Can be one of:
+# PLAYER: Each player has their own separate network.
+# GLOBAL: There is only one, server-wide network that all players share.
+network-mode: PLAYER
+
 # Maximum number of chests per network
 max-chests-per-network: 100
 
@@ -14,6 +19,9 @@ auto-save-interval-minutes: 5
 
 # Enable permissions system
 enable-permissions: true
+
+# Enable the trust system (only used in PLAYER mode). If false, anyone can access any network.
+enable-trust-system: true
 
 # Langauge for Plugin-messages (de or en)
 language: de
