@@ -20,13 +20,16 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class ChestInteractListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final Map<UUID, TerminalGUI> openTerminals;
+    private final Set<UUID> transitioningToStats = new HashSet<>();
     private final LanguageManager lang;
 
     public ChestInteractListener(NetworkStoragePlugin plugin) {
@@ -37,6 +40,10 @@ public class ChestInteractListener implements Listener {
 
     public void addOpenTerminal(UUID playerId, TerminalGUI gui) {
         openTerminals.put(playerId, gui);
+    }
+
+    public void setTransitioningToStats(UUID playerId) {
+        transitioningToStats.add(playerId);
     }
 
     @EventHandler
@@ -68,6 +75,11 @@ public class ChestInteractListener implements Listener {
                     return;
                 }
 
+                if (player.isSneaking() && itemInHand != null && itemInHand.getType() != Material.AIR) {
+                    handleQuickDeposit(player, network, itemInHand);
+                    return;
+                }
+
                 TerminalGUI gui = new TerminalGUI(player, network, plugin);
                 addOpenTerminal(player.getUniqueId(), gui);
                 gui.open();
@@ -75,6 +87,31 @@ public class ChestInteractListener implements Listener {
                 player.sendMessage(lang.getMessage("network.access"));
             }
         }
+    }
+    private void handleQuickDeposit(Player player, Network network, ItemStack itemInHand) {
+        int originalAmount = itemInHand.getAmount();
+        ItemStack remaining = network.addToNetwork(itemInHand.clone());
+
+        if (remaining == null || remaining.getAmount() == 0) {
+            player.getInventory().setItemInMainHand(null);
+            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, getItemDisplayName(itemInHand)));
+            network.recordItemsDeposited(player, originalAmount);
+        } else {
+            int depositedAmount = originalAmount - remaining.getAmount();
+            if (depositedAmount > 0) {
+                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, getItemDisplayName(itemInHand), remaining.getAmount()));
+                network.recordItemsDeposited(player, depositedAmount);
+            }
+            itemInHand.setAmount(remaining.getAmount());
+        }
+        plugin.getNetworkManager().saveNetworks();
+    }
+
+    private String getItemDisplayName(ItemStack item) {
+        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+            return item.getItemMeta().getDisplayName();
+        }
+        return item.getType().toString().replace('_', ' ').toLowerCase();
     }
 
     @EventHandler
@@ -160,11 +197,14 @@ public class ChestInteractListener implements Listener {
         Player player = (Player) event.getPlayer();
         InventoryHolder holder = event.getInventory().getHolder();
 
-        if (plugin.getSearchManager().isSearching(player) || holder instanceof StatsGUI) {
+        if (holder instanceof StatsGUI) {
             return;
         }
 
         if (holder instanceof TerminalGUI) {
+            if (plugin.getSearchManager().isSearching(player) || transitioningToStats.remove(player.getUniqueId())) {
+                return;
+            }
             openTerminals.remove(player.getUniqueId());
         }
     }

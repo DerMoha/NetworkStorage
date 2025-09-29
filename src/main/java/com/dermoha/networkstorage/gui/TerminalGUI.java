@@ -300,6 +300,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == 49) { // Stats button
+            plugin.getChestInteractListener().setTransitioningToStats(player.getUniqueId());
             StatsGUI statsGUI = new StatsGUI(player, network, plugin, this);
             statsGUI.open();
             return;
