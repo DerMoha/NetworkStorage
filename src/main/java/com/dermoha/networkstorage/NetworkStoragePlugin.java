@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage;
 
 import com.dermoha.networkstorage.commands.NetworkCommand;
+import com.dermoha.networkstorage.commands.NetworkStorageAdminCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
 import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
@@ -31,9 +32,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Save default config first to ensure it exists before being accessed.
-        saveDefaultConfig();
-
         // Initialize managers
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
@@ -48,6 +46,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getCommand("storage").setExecutor(storageCommand);
         getCommand("storage").setTabCompleter(storageCommand);
         getCommand("network").setExecutor(new NetworkCommand(this));
+        getCommand("networkstorage").setExecutor(new NetworkStorageAdminCommand(this));
 
         // Register event listeners
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
@@ -67,6 +66,16 @@ public class NetworkStoragePlugin extends JavaPlugin {
             networkManager.saveNetworks();
         }
         getLogger().info("NetworkStorage Plugin has been disabled!");
+    }
+
+    public void reload() {
+        // Save all data first
+        networkManager.saveNetworks();
+
+        // Reload managers
+        configManager = new ConfigManager(this);
+        languageManager = new LanguageManager(this, configManager.getLanguage());
+        networkManager = new NetworkManager(this);
     }
 
     private void registerRecipes() {
