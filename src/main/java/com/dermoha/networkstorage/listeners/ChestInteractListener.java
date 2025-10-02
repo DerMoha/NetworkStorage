@@ -7,6 +7,7 @@ import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -82,6 +83,7 @@ public class ChestInteractListener implements Listener {
 
                 TerminalGUI gui = new TerminalGUI(player, network, plugin);
                 addOpenTerminal(player.getUniqueId(), gui);
+                player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
                 gui.open();
 
                 player.sendMessage(lang.getMessage("network.access"));
@@ -116,22 +118,19 @@ public class ChestInteractListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player)) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
 
-        Player player = (Player) event.getWhoClicked();
         InventoryHolder holder = event.getInventory().getHolder();
 
-        if (holder instanceof StatsGUI) {
+        if (holder instanceof StatsGUI statsGUI) {
             event.setCancelled(true);
-            StatsGUI statsGUI = (StatsGUI) holder;
             statsGUI.handleClick(event.getSlot());
             return;
         }
 
-        if (holder instanceof TerminalGUI) {
-            TerminalGUI terminal = (TerminalGUI) holder;
+        if (holder instanceof TerminalGUI terminal) {
             if (!terminal.equals(openTerminals.get(player.getUniqueId()))) {
                 return;
             }
@@ -191,10 +190,9 @@ public class ChestInteractListener implements Listener {
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player)) {
+        if (!(event.getPlayer() instanceof Player player)) {
             return;
         }
-        Player player = (Player) event.getPlayer();
         InventoryHolder holder = event.getInventory().getHolder();
 
         if (holder instanceof StatsGUI) {

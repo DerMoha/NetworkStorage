@@ -5,6 +5,7 @@ import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -34,7 +35,7 @@ public class WirelessTerminalListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        if (item == null || !isWirelessTerminal(item, lang)) {
+        if (!isWirelessTerminal(item, lang)) {
             return;
         }
 
@@ -47,6 +48,9 @@ public class WirelessTerminalListener implements Listener {
             }
 
             List<String> lore = meta.getLore();
+            if (lore == null) {
+                return;
+            }
             int usesLineIndex = -1;
             int currentUses = -1;
             int maxUses = -1;
@@ -86,6 +90,7 @@ public class WirelessTerminalListener implements Listener {
 
             TerminalGUI gui = new TerminalGUI(player, network, plugin);
             plugin.getChestInteractListener().addOpenTerminal(player.getUniqueId(), gui);
+            player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
             gui.open();
         }
     }
