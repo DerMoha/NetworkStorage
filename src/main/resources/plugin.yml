@@ -1,5 +1,5 @@
 name: NetworkStorage
-version: 1.1.1
+version: 1.1.2
 main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
 author: DerMoha
@@ -9,11 +9,14 @@ commands:
   storage:
     description: Main command for NetworkStorage
     usage: /<command> [wand|info|reset|help|wireless]
-    aliases: [ns, netstorage, networkstorage]
+    aliases: [ns, netstorage]
   network:
     description: Manages networks
     usage: /<command> [create|edit|rename]
     aliases: [net]
+  networkstorage:
+    description: Admin commands for NetworkStorage
+    usage: /<command> [reload]
 
 permissions:
   networkstorage.*:
