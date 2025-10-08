@@ -67,6 +67,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Schedule repeating tasks
         startSenderChestTask();
+        startAutoSaveTask();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -133,8 +134,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 while (iterator.hasNext()) {
                     Location senderLoc = iterator.next();
 
-                    // Skip if chunk is not loaded to prevent forced chunk loading
-                    if (!senderLoc.getChunk().isLoaded()) {
+                    if (!senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
                         continue;
                     }
 
@@ -153,14 +153,23 @@ public class NetworkStoragePlugin extends JavaPlugin {
                             }
                         }
                     } else {
-                        // If the block is no longer a chest, remove it from the network
                         iterator.remove();
-                        networkManager.saveNetworks(); // Save changes after pruning
-                        getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from network.");
+                        getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from a network because it was no longer a chest.");
                     }
                 }
             }
-        }, 0L, interval);
+        }, 100L, interval);
+    }
+
+    private void startAutoSaveTask() {
+        int interval = configManager.getAutoSaveInterval() * 60 * 20; // Convert minutes to ticks
+        if (interval > 0) {
+            Bukkit.getScheduler().runTaskTimer(this, () -> {
+                getLogger().info("Auto-saving network data...");
+                networkManager.saveNetworks();
+                getLogger().info("Auto-save complete.");
+            }, interval, interval);
+        }
     }
 
     public static NetworkStoragePlugin getInstance() {
