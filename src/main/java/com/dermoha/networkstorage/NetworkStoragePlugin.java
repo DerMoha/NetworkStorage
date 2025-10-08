@@ -24,6 +24,8 @@ import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.Set;
+import java.util.Iterator;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -126,7 +128,16 @@ public class NetworkStoragePlugin extends JavaPlugin {
         int interval = configManager.getSenderChestTransferInterval() * 20; // Convert seconds to ticks
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             for (Network network : networkManager.getAllNetworks()) {
-                for (Location senderLoc : network.getSenderChestLocations()) {
+                Set<Location> senderChestLocations = network.getSenderChestLocations();
+                Iterator<Location> iterator = senderChestLocations.iterator();
+                while (iterator.hasNext()) {
+                    Location senderLoc = iterator.next();
+
+                    // Skip if chunk is not loaded to prevent forced chunk loading
+                    if (!senderLoc.getChunk().isLoaded()) {
+                        continue;
+                    }
+
                     if (senderLoc.getBlock().getState() instanceof Chest) {
                         Chest senderChest = (Chest) senderLoc.getBlock().getState();
                         Inventory senderInv = senderChest.getInventory();
@@ -134,13 +145,18 @@ public class NetworkStoragePlugin extends JavaPlugin {
                             ItemStack item = senderInv.getItem(i);
                             if (item != null && item.getType() != Material.AIR) {
                                 ItemStack remaining = network.addToNetwork(item.clone());
-                                if (remaining == null) {
+                                if (remaining == null || remaining.getAmount() == 0) {
                                     senderInv.setItem(i, null);
                                 } else {
                                     item.setAmount(remaining.getAmount());
                                 }
                             }
                         }
+                    } else {
+                        // If the block is no longer a chest, remove it from the network
+                        iterator.remove();
+                        networkManager.saveNetworks(); // Save changes after pruning
+                        getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from network.");
                     }
                 }
             }
