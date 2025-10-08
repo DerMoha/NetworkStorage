@@ -11,9 +11,15 @@ import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.SearchManager;
+import com.dermoha.networkstorage.storage.Network;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.block.Chest;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -56,6 +62,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Register recipes
         registerRecipes();
+
+        // Schedule repeating tasks
+        startSenderChestTask();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -111,6 +120,31 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
 
         getServer().addRecipe(recipe);
+    }
+
+    private void startSenderChestTask() {
+        int interval = configManager.getSenderChestTransferInterval() * 20; // Convert seconds to ticks
+        Bukkit.getScheduler().runTaskTimer(this, () -> {
+            for (Network network : networkManager.getAllNetworks()) {
+                for (Location senderLoc : network.getSenderChestLocations()) {
+                    if (senderLoc.getBlock().getState() instanceof Chest) {
+                        Chest senderChest = (Chest) senderLoc.getBlock().getState();
+                        Inventory senderInv = senderChest.getInventory();
+                        for (int i = 0; i < senderInv.getSize(); i++) {
+                            ItemStack item = senderInv.getItem(i);
+                            if (item != null && item.getType() != Material.AIR) {
+                                ItemStack remaining = network.addToNetwork(item.clone());
+                                if (remaining == null) {
+                                    senderInv.setItem(i, null);
+                                } else {
+                                    item.setAmount(remaining.getAmount());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }, 0L, interval);
     }
 
     public static NetworkStoragePlugin getInstance() {

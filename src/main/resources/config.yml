@@ -11,6 +11,13 @@ max-chests-per-network: 100
 # Maximum number of terminals per network
 max-terminals-per-network: 100
 
+# Maximum number of sender chests per network
+max-sender-chests-per-network: 100
+
+# The interval in seconds at which sender chests are checked and their contents moved to the main network.
+# Lower values mean faster transfers but may increase server load.
+sender-chest-transfer-interval-seconds: 5
+
 # Allow networks to span across multiple worlds
 allow-cross-world-networks: false
 

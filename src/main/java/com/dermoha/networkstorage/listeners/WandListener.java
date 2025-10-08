@@ -3,7 +3,6 @@ package com.dermoha.networkstorage.listeners;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -13,6 +12,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -64,28 +64,52 @@ public class WandListener implements Listener {
         Location normalizedLoc = network.getNormalizedLocation(chestBlock.getLocation());
 
         if (action == Action.LEFT_CLICK_BLOCK) {
-            if (network.isChestInNetwork(normalizedLoc)) {
-                player.sendMessage(lang.getMessage("wand.chest.already_in_network"));
-                return;
+            if (player.isSneaking()) {
+                if (network.isSenderChestInNetwork(normalizedLoc)) {
+                    player.sendMessage(lang.getMessage("wand.sender_chest.already"));
+                    return;
+                }
+
+                if (isOtherHalfInNetwork(chestBlock, network)) {
+                    player.sendMessage(lang.getMessage("wand.sender_chest.other_half"));
+                    player.sendMessage(lang.getMessage("wand.sender_chest.unit_hint"));
+                    return;
+                }
+
+                if (network.getSenderChestLocations().size() >= plugin.getConfigManager().getMaxSenderChestsPerNetwork()) {
+                    player.sendMessage(String.format(lang.getMessage("wand.sender_chest.limit_reached"), plugin.getConfigManager().getMaxSenderChestsPerNetwork()));
+                    return;
+                }
+
+                network.addSenderChest(normalizedLoc);
+                plugin.getNetworkManager().saveNetworks();
+
+                String chestType = getChestType(chestBlock);
+                player.sendMessage(String.format(lang.getMessage("wand.sender_chest.added"), chestType, network.getSenderChestLocations().size()));
+
+            } else {
+                if (network.isChestInNetwork(normalizedLoc)) {
+                    player.sendMessage(lang.getMessage("wand.chest.already_in_network"));
+                    return;
+                }
+
+                if (isOtherHalfInNetwork(chestBlock, network)) {
+                    player.sendMessage(lang.getMessage("wand.double_chest.other_half_in_network"));
+                    player.sendMessage(lang.getMessage("wand.double_chest.unit_hint"));
+                    return;
+                }
+
+                if (network.getChestLocations().size() >= plugin.getConfigManager().getMaxChestsPerNetwork()) {
+                    player.sendMessage(String.format(lang.getMessage("wand.chest.limit_reached"), plugin.getConfigManager().getMaxChestsPerNetwork()));
+                    return;
+                }
+
+                network.addChest(normalizedLoc);
+                plugin.getNetworkManager().saveNetworks();
+
+                String chestType = getChestType(chestBlock);
+                player.sendMessage(String.format(lang.getMessage("wand.chest.added"), chestType, network.getChestLocations().size()));
             }
-
-            if (isOtherHalfInNetwork(chestBlock, network)) {
-                player.sendMessage(lang.getMessage("wand.double_chest.other_half_in_network"));
-                player.sendMessage(lang.getMessage("wand.double_chest.unit_hint"));
-                return;
-            }
-
-            if (network.getChestLocations().size() >= plugin.getConfigManager().getMaxChestsPerNetwork()) {
-                player.sendMessage(String.format(lang.getMessage("wand.chest.limit_reached"), plugin.getConfigManager().getMaxChestsPerNetwork()));
-                return;
-            }
-
-            network.addChest(normalizedLoc);
-            plugin.getNetworkManager().saveNetworks();
-
-            String chestType = getChestType(chestBlock);
-            player.sendMessage(String.format(lang.getMessage("wand.chest.added"), chestType, network.getChestLocations().size()));
-
         } else if (action == Action.RIGHT_CLICK_BLOCK) {
             if (player.isSneaking()) {
                 if (network.isTerminalInNetwork(normalizedLoc)) {
@@ -93,7 +117,7 @@ public class WandListener implements Listener {
                     return;
                 }
 
-                if (isOtherHalfInNetwork(chestBlock, network, true)) {
+                if (isOtherHalfInNetwork(chestBlock, network)) {
                     player.sendMessage(lang.getMessage("wand.terminal.other_half"));
                     player.sendMessage(lang.getMessage("wand.terminal.unit_hint"));
                     return;
@@ -113,56 +137,47 @@ public class WandListener implements Listener {
             } else {
                 boolean wasChest = network.isChestInNetwork(normalizedLoc);
                 boolean wasTerminal = network.isTerminalInNetwork(normalizedLoc);
+                boolean wasSenderChest = network.isSenderChestInNetwork(normalizedLoc);
 
-                if (!wasChest && !wasTerminal) {
+                if (!wasChest && !wasTerminal && !wasSenderChest) {
                     player.sendMessage(lang.getMessage("wand.chest.not_in_network"));
                     return;
                 }
 
                 network.removeChest(normalizedLoc);
                 network.removeTerminal(normalizedLoc);
+                network.removeSenderChest(normalizedLoc);
                 plugin.getNetworkManager().saveNetworks();
 
                 String chestType = getChestType(chestBlock);
 
                 if (wasChest) {
                     player.sendMessage(String.format(lang.getMessage("wand.chest.removed"), chestType, network.getChestLocations().size()));
-                } else {
+                } else if (wasTerminal) {
                     player.sendMessage(String.format(lang.getMessage("wand.terminal.removed"), chestType, network.getTerminalLocations().size()));
+                } else {
+                    player.sendMessage(String.format(lang.getMessage("wand.sender_chest.removed"), chestType, network.getSenderChestLocations().size()));
                 }
             }
         }
     }
 
     private boolean isOtherHalfInNetwork(Block chestBlock, Network network) {
-        return isOtherHalfInNetwork(chestBlock, network, false);
-    }
-
-    private boolean isOtherHalfInNetwork(Block chestBlock, Network network, boolean checkTerminals) {
         if (!(chestBlock.getState() instanceof Chest)) {
             return false;
         }
+        Chest chest = (Chest) chestBlock.getState();
+        Inventory inventory = chest.getInventory();
 
-        Location[] adjacentLocs = {
-                chestBlock.getLocation().clone().add(1, 0, 0),
-                chestBlock.getLocation().clone().add(-1, 0, 0),
-                chestBlock.getLocation().clone().add(0, 0, 1),
-                chestBlock.getLocation().clone().add(0, 0, -1)
-        };
+        if (inventory.getHolder() instanceof org.bukkit.block.DoubleChest) {
+            org.bukkit.block.DoubleChest doubleChest = (org.bukkit.block.DoubleChest) inventory.getHolder();
+            Chest left = (Chest) doubleChest.getLeftSide();
+            Chest right = (Chest) doubleChest.getRightSide();
 
-        for (Location adjLoc : adjacentLocs) {
-            if (adjLoc.getBlock().getState() instanceof Chest) {
-                Location normalizedAdjLoc = network.getNormalizedLocation(adjLoc);
-                if (checkTerminals) {
-                    if (network.isTerminalInNetwork(normalizedAdjLoc)) {
-                        return true;
-                    }
-                } else {
-                    if (network.isChestInNetwork(normalizedAdjLoc)) {
-                        return true;
-                    }
-                }
-            }
+            Location otherHalfLocation = left.getLocation().equals(chestBlock.getLocation()) ? right.getLocation() : left.getLocation();
+            Location normalizedOtherHalfLoc = network.getNormalizedLocation(otherHalfLocation);
+
+            return network.isChestInNetwork(normalizedOtherHalfLoc) || network.isTerminalInNetwork(normalizedOtherHalfLoc) || network.isSenderChestInNetwork(normalizedOtherHalfLoc);
         }
 
         return false;
@@ -187,7 +202,8 @@ public class WandListener implements Listener {
             meta.setLore(Arrays.asList(
                     lang.getMessage("wand.lore1"),
                     lang.getMessage("wand.lore2"),
-                    lang.getMessage("wand.lore3")
+                    lang.getMessage("wand.lore3"),
+                    lang.getMessage("wand.lore4")
             ));
             wand.setItemMeta(meta);
         }

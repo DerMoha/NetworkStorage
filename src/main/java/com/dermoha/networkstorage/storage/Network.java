@@ -19,6 +19,7 @@ public class Network {
     private final UUID owner;
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
+    private final Set<Location> senderChestLocations;
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
 
@@ -27,6 +28,7 @@ public class Network {
         this.owner = owner;
         this.chestLocations = new HashSet<>();
         this.terminalLocations = new HashSet<>();
+        this.senderChestLocations = new HashSet<>();
         this.playerStats = new ConcurrentHashMap<>();
         this.trustedPlayers = new HashSet<>();
     }
@@ -49,6 +51,10 @@ public class Network {
 
     public Set<Location> getTerminalLocations() {
         return new HashSet<>(terminalLocations);
+    }
+
+    public Set<Location> getSenderChestLocations() {
+        return new HashSet<>(senderChestLocations);
     }
 
     public Map<UUID, PlayerStat> getPlayerStats() {
@@ -75,12 +81,24 @@ public class Network {
         terminalLocations.remove(location);
     }
 
+    public void addSenderChest(Location location) {
+        senderChestLocations.add(location);
+    }
+
+    public void removeSenderChest(Location location) {
+        senderChestLocations.remove(location);
+    }
+
     public boolean isChestInNetwork(Location location) {
         return chestLocations.contains(location);
     }
 
     public boolean isTerminalInNetwork(Location location) {
         return terminalLocations.contains(location);
+    }
+
+    public boolean isSenderChestInNetwork(Location location) {
+        return senderChestLocations.contains(location);
     }
 
     public PlayerStat getPlayerStat(Player player) {
@@ -121,7 +139,10 @@ public class Network {
 
     public Map<ItemStack, Integer> getNetworkItems() {
         Map<ItemStack, Integer> networkItems = new HashMap<>();
-        for (Location chestLoc : chestLocations) {
+        Set<Location> allChestLocations = new HashSet<>(chestLocations);
+        allChestLocations.addAll(senderChestLocations);
+
+        for (Location chestLoc : allChestLocations) {
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 for (ItemStack item : chest.getInventory().getContents()) {
@@ -148,7 +169,10 @@ public class Network {
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
         int remaining = amount;
-        for (Location chestLoc : chestLocations) {
+        Set<Location> allChestLocations = new HashSet<>(chestLocations);
+        allChestLocations.addAll(senderChestLocations);
+
+        for (Location chestLoc : allChestLocations) {
             if (remaining <= 0) break;
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
@@ -198,7 +222,9 @@ public class Network {
     public double getCapacityPercent() {
         int totalSlots = 0;
         int usedSlots = 0;
-        for (Location chestLoc : getChestLocations()) {
+        Set<Location> allChestLocations = new HashSet<>(getChestLocations());
+        allChestLocations.addAll(getSenderChestLocations());
+        for (Location chestLoc : allChestLocations) {
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 Inventory inv = chest.getInventory();

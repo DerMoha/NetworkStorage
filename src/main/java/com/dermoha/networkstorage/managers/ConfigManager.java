@@ -30,6 +30,8 @@ public class ConfigManager {
         config.addDefault("network-mode", "PLAYER");
         config.addDefault("max-chests-per-network", 100);
         config.addDefault("max-terminals-per-network", 100);
+        config.addDefault("max-sender-chests-per-network", 100);
+        config.addDefault("sender-chest-transfer-interval-seconds", 5);
         config.addDefault("allow-cross-world-networks", false);
         config.addDefault("auto-save-interval-minutes", 5);
         config.addDefault("enable-permissions", true);
@@ -53,6 +55,14 @@ public class ConfigManager {
 
     public int getMaxTerminalsPerNetwork() {
         return config.getInt("max-terminals-per-network");
+    }
+
+    public int getMaxSenderChestsPerNetwork() {
+        return config.getInt("max-sender-chests-per-network");
+    }
+
+    public int getSenderChestTransferInterval() {
+        return config.getInt("sender-chest-transfer-interval-seconds");
     }
 
     public int getWirelessTerminalDurability() {
