@@ -18,9 +18,6 @@ max-sender-chests-per-network: 100
 # Lower values mean faster transfers but may increase server load.
 sender-chest-transfer-interval-seconds: 5
 
-# Allow networks to span across multiple worlds
-allow-cross-world-networks: false
-
 # Auto-save interval in minutes
 auto-save-interval-minutes: 5
 

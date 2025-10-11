@@ -32,7 +32,6 @@ public class ConfigManager {
         config.addDefault("max-terminals-per-network", 100);
         config.addDefault("max-sender-chests-per-network", 100);
         config.addDefault("sender-chest-transfer-interval-seconds", 5);
-        config.addDefault("allow-cross-world-networks", false);
         config.addDefault("auto-save-interval-minutes", 5);
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
@@ -75,10 +74,6 @@ public class ConfigManager {
 
     public boolean isTrustSystemEnabled() {
         return config.getBoolean("enable-trust-system");
-    }
-
-    public boolean allowCrossWorldNetworks() {
-        return config.getBoolean("allow-cross-world-networks");
     }
 
     public int getAutoSaveInterval() {
