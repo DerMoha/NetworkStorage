@@ -63,6 +63,11 @@ public class NetworkManager {
                             network.addTerminal(Location.deserialize((Map<String, Object>) locMap));
                         }
 
+                        List<Map<?, ?>> senderChestLocationsMaps = netSection.getMapList("sender-chests");
+                        for (Map<?, ?> locMap : senderChestLocationsMaps) {
+                            network.addSenderChest(Location.deserialize((Map<String, Object>) locMap));
+                        }
+
                         List<String> trustedUuids = netSection.getStringList("trusted");
                         trustedUuids.stream().map(UUID::fromString).forEach(network::addTrustedPlayer);
 
@@ -94,7 +99,7 @@ public class NetworkManager {
         for (Network network : networks.values()) {
             String path = "networks." + network.getName();
             newConfig.set(path + ".owner", network.getOwner().toString());
-            
+
             List<Map<String, Object>> serializedChests = new ArrayList<>();
             for (Location loc : network.getChestLocations()) {
                 serializedChests.add(loc.serialize());
@@ -106,6 +111,12 @@ public class NetworkManager {
                 serializedTerminals.add(loc.serialize());
             }
             newConfig.set(path + ".terminals", serializedTerminals);
+
+            List<Map<String, Object>> serializedSenderChests = new ArrayList<>();
+            for (Location loc : network.getSenderChestLocations()) {
+                serializedSenderChests.add(loc.serialize());
+            }
+            newConfig.set(path + ".sender-chests", serializedSenderChests);
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
