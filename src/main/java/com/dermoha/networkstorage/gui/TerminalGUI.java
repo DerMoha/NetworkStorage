@@ -49,6 +49,7 @@ public class TerminalGUI implements InventoryHolder {
         inventory.clear();
 
         Map<ItemStack, Integer> networkItems = network.getNetworkItems();
+        long totalNetworkItems = networkItems.values().stream().mapToLong(Integer::longValue).sum();
         sortedItems = new ArrayList<>(networkItems.entrySet());
 
         if (!searchFilter.isEmpty()) {
@@ -94,7 +95,7 @@ public class TerminalGUI implements InventoryHolder {
         for (int i = startIndex; i < endIndex; i++) {
             int slot = i - startIndex;
             Map.Entry<ItemStack, Integer> entry = sortedItems.get(i);
-            ItemStack displayItem = createDisplayItem(entry.getKey(), entry.getValue());
+            ItemStack displayItem = createDisplayItem(entry.getKey(), entry.getValue(), totalNetworkItems);
             inventory.setItem(slot, displayItem);
         }
 
@@ -185,7 +186,7 @@ public class TerminalGUI implements InventoryHolder {
         }
     }
 
-    private ItemStack createDisplayItem(ItemStack original, int totalCount) {
+    private ItemStack createDisplayItem(ItemStack original, int totalCount, long totalNetworkItems) {
         ItemStack display = original.clone();
         display.setAmount(1);
         ItemMeta meta = display.getItemMeta();
@@ -193,14 +194,16 @@ public class TerminalGUI implements InventoryHolder {
             meta = Bukkit.getItemFactory().getItemMeta(display.getType());
         }
 
-        // DO NOT set a display name if the item doesn't have a custom one.
-        // The client will handle localization. The clone operation preserves any existing custom name.
         if (!original.hasItemMeta() || !original.getItemMeta().hasDisplayName()) {
             meta.setDisplayName(null);
         }
 
         List<String> lore = new ArrayList<>();
         lore.add(String.format(lang.getMessage("terminal.item.lore.total"), formatNumber(totalCount)));
+        if (totalNetworkItems > 0) {
+            double percentage = (double) totalCount / totalNetworkItems * 100.0;
+            lore.add(String.format(lang.getMessage("terminal.item.lore.capacity_percentage"), percentage));
+        }
         lore.add(String.format(lang.getMessage("terminal.item.lore.stacks"), totalCount / original.getMaxStackSize()));
         if (totalCount % original.getMaxStackSize() > 0) {
             lore.add(String.format(lang.getMessage("terminal.item.lore.partial"), totalCount % original.getMaxStackSize()));
@@ -225,7 +228,6 @@ public class TerminalGUI implements InventoryHolder {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             return item.getItemMeta().getDisplayName();
         }
-        // Fallback to a formatted material name for sorting and searching
         String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
         String[] words = materialName.split(" ");
         StringBuilder displayName = new StringBuilder();
