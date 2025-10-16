@@ -28,7 +28,7 @@ enable-permissions: true
 enable-trust-system: true
 
 # Langauge for Plugin-messages (de or en)
-language: de
+language: en
 
 wireless-terminal-recipe:
   shape:
