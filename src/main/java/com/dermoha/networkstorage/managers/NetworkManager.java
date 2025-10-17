@@ -71,7 +71,6 @@ public class NetworkManager {
                         List<String> trustedUuids = netSection.getStringList("trusted");
                         trustedUuids.stream().map(UUID::fromString).forEach(network::addTrustedPlayer);
 
-                        // Load player stats
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
                         if (statsSection != null) {
                             for (String uuidString : statsSection.getKeys(false)) {
@@ -86,6 +85,7 @@ public class NetworkManager {
                         }
 
                         networks.put(networkName, network);
+                        network.rebuildCache(); // Build the cache after loading
                     } catch (Exception e) {
                         plugin.getLogger().warning("Could not load network '" + networkName + "': " + e.getMessage());
                     }
@@ -120,7 +120,6 @@ public class NetworkManager {
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
-            // Save player stats
             for (PlayerStat stat : network.getPlayerStats().values()) {
                 String statPath = path + ".stats." + stat.getPlayerUUID().toString();
                 newConfig.set(statPath + ".name", stat.getPlayerName());

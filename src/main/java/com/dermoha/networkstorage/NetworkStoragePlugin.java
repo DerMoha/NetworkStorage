@@ -23,9 +23,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
-import java.util.Iterator;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -40,40 +40,36 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
 
-        // Initialize managers
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
 
-        // Initialize listeners that need to be accessed
         this.chestInteractListener = new ChestInteractListener(this);
         this.searchManager = new SearchManager(this);
 
-        // Register commands and tab completer
         StorageCommand storageCommand = new StorageCommand(this);
         getCommand("storage").setExecutor(storageCommand);
         getCommand("storage").setTabCompleter(storageCommand);
         getCommand("network").setExecutor(new NetworkCommand(this));
         getCommand("networkstorage").setExecutor(new NetworkStorageAdminCommand(this));
 
-        // Register event listeners
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
         getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
 
-        // Register recipes
         registerRecipes();
 
-        // Schedule repeating tasks
         startSenderChestTask();
         startAutoSaveTask();
+        startCacheResyncTask();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
 
     @Override
     public void onDisable() {
+        Bukkit.getScheduler().cancelTasks(this);
         if (networkManager != null) {
             networkManager.saveNetworks();
         }
@@ -81,13 +77,16 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     public void reload() {
-        // Save all data first
         networkManager.saveNetworks();
+        Bukkit.getScheduler().cancelTasks(this);
 
-        // Reload managers
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+
+        startSenderChestTask();
+        startAutoSaveTask();
+        startCacheResyncTask();
     }
 
     private void registerRecipes() {
@@ -95,11 +94,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
 
         List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
-        if (shape.isEmpty()) {
-            recipe.shape("CCC", "CSC", "CDC");
-        } else {
-            recipe.shape(shape.toArray(new String[0]));
-        }
+        recipe.shape(shape.isEmpty() ? new String[]{"CCC", "CSC", "CDC"} : shape.toArray(new String[0]));
 
         ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
         if (ingredients == null) {
@@ -112,8 +107,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     String materialName = ingredients.getString(keyChar);
                     if (materialName != null) {
                         try {
-                            Material ingredient = Material.valueOf(materialName.toUpperCase());
-                            recipe.setIngredient(keyChar.charAt(0), ingredient);
+                            recipe.setIngredient(keyChar.charAt(0), Material.valueOf(materialName.toUpperCase()));
                         } catch (IllegalArgumentException e) {
                             getLogger().warning("Invalid material '" + materialName + "' in wireless terminal recipe.");
                         }
@@ -121,20 +115,20 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 }
             }
         }
-
         getServer().addRecipe(recipe);
     }
 
     private void startSenderChestTask() {
-        int interval = configManager.getSenderChestTransferInterval() * 20; // Convert seconds to ticks
+        long interval = configManager.getSenderChestTransferInterval() * 20L;
+        if (interval <= 0) return;
+
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             for (Network network : networkManager.getAllNetworks()) {
                 Set<Location> senderChestLocations = network.getSenderChestLocations();
                 Iterator<Location> iterator = senderChestLocations.iterator();
                 while (iterator.hasNext()) {
                     Location senderLoc = iterator.next();
-
-                    if (!senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
+                    if (senderLoc.getWorld() == null || !senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
                         continue;
                     }
 
@@ -145,16 +139,12 @@ public class NetworkStoragePlugin extends JavaPlugin {
                             ItemStack item = senderInv.getItem(i);
                             if (item != null && item.getType() != Material.AIR) {
                                 ItemStack remaining = network.addToNetwork(item.clone());
-                                if (remaining == null || remaining.getAmount() == 0) {
-                                    senderInv.setItem(i, null);
-                                } else {
-                                    item.setAmount(remaining.getAmount());
-                                }
+                                senderInv.setItem(i, remaining);
                             }
                         }
                     } else {
                         iterator.remove();
-                        getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from a network because it was no longer a chest.");
+                        getLogger().info("Pruned non-chest block at " + senderLoc + " from a network because it was no longer a chest.");
                     }
                 }
             }
@@ -162,7 +152,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private void startAutoSaveTask() {
-        int interval = configManager.getAutoSaveInterval() * 60 * 20; // Convert minutes to ticks
+        long interval = configManager.getAutoSaveInterval() * 60 * 20L;
         if (interval > 0) {
             Bukkit.getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Auto-saving network data...");
@@ -172,27 +162,23 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
-    public static NetworkStoragePlugin getInstance() {
-        return instance;
+    private void startCacheResyncTask() {
+        long interval = configManager.getCacheResyncInterval() * 60 * 20L;
+        if (interval > 0) {
+            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+                getLogger().info("Starting periodic cache resynchronization...");
+                for (Network network : networkManager.getAllNetworks()) {
+                    network.rebuildCache();
+                }
+                getLogger().info("Cache resynchronization complete.");
+            }, interval, interval);
+        }
     }
 
-    public NetworkManager getNetworkManager() {
-        return networkManager;
-    }
-
-    public ConfigManager getConfigManager() {
-        return configManager;
-    }
-
-    public SearchManager getSearchManager() {
-        return searchManager;
-    }
-
-    public LanguageManager getLanguageManager() {
-        return languageManager;
-    }
-
-    public ChestInteractListener getChestInteractListener() {
-        return chestInteractListener;
-    }
+    public static NetworkStoragePlugin getInstance() { return instance; }
+    public NetworkManager getNetworkManager() { return networkManager; }
+    public ConfigManager getConfigManager() { return configManager; }
+    public SearchManager getSearchManager() { return searchManager; }
+    public LanguageManager getLanguageManager() { return languageManager; }
+    public ChestInteractListener getChestInteractListener() { return chestInteractListener; }
 }

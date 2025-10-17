@@ -9,8 +9,10 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -39,31 +41,20 @@ public class ChestInteractListener implements Listener {
         this.lang = plugin.getLanguageManager();
     }
 
-    public void addOpenTerminal(UUID playerId, TerminalGUI gui) {
-        openTerminals.put(playerId, gui);
-    }
-
-    public void setTransitioningToStats(UUID playerId) {
-        transitioningToStats.add(playerId);
-    }
+    public void addOpenTerminal(UUID playerId, TerminalGUI gui) { openTerminals.put(playerId, gui); }
+    public void setTransitioningToStats(UUID playerId) { transitioningToStats.add(playerId); }
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
 
         Player player = event.getPlayer();
         Block clickedBlock = event.getClickedBlock();
 
-        if (clickedBlock == null) {
-            return;
-        }
+        if (clickedBlock == null) return;
 
         ItemStack itemInHand = event.getItem();
-        if (WandListener.isStorageWand(itemInHand, lang)) {
-            return;
-        }
+        if (WandListener.isStorageWand(itemInHand, lang)) return;
 
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             Network network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
@@ -90,6 +81,7 @@ public class ChestInteractListener implements Listener {
             }
         }
     }
+
     private void handleQuickDeposit(Player player, Network network, ItemStack itemInHand) {
         int originalAmount = itemInHand.getAmount();
         ItemStack remaining = network.addToNetwork(itemInHand.clone());
@@ -106,7 +98,6 @@ public class ChestInteractListener implements Listener {
             }
             itemInHand.setAmount(remaining.getAmount());
         }
-        plugin.getNetworkManager().saveNetworks();
     }
 
     private String getItemDisplayName(ItemStack item) {
@@ -118,9 +109,7 @@ public class ChestInteractListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(event.getWhoClicked() instanceof Player player)) return;
 
         InventoryHolder holder = event.getInventory().getHolder();
 
@@ -131,9 +120,7 @@ public class ChestInteractListener implements Listener {
         }
 
         if (holder instanceof TerminalGUI terminal) {
-            if (!terminal.equals(openTerminals.get(player.getUniqueId()))) {
-                return;
-            }
+            if (!terminal.equals(openTerminals.get(player.getUniqueId()))) return;
 
             event.setCancelled(true);
 
@@ -158,15 +145,11 @@ public class ChestInteractListener implements Listener {
 
     private void handleShiftClickDeposit(InventoryClickEvent event, TerminalGUI terminal, Player player) {
         ItemStack clickedItem = event.getCurrentItem();
-        if (clickedItem == null || clickedItem.getType() == Material.AIR) {
-            return;
-        }
+        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
 
         int playerSlot = event.getSlot();
         ItemStack itemToDeposit = player.getInventory().getItem(playerSlot);
-        if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) {
-            return;
-        }
+        if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) return;
 
         int originalAmount = itemToDeposit.getAmount();
         ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
@@ -183,27 +166,26 @@ public class ChestInteractListener implements Listener {
             }
             player.getInventory().setItem(playerSlot, remaining);
         }
-
-        plugin.getNetworkManager().saveNetworks();
         plugin.getServer().getScheduler().runTask(plugin, terminal::updateInventory);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) {
-            return;
-        }
+        if (!(event.getPlayer() instanceof Player player)) return;
+        
         InventoryHolder holder = event.getInventory().getHolder();
-
-        if (holder instanceof StatsGUI) {
-            return;
-        }
 
         if (holder instanceof TerminalGUI) {
             if (plugin.getSearchManager().isSearching(player) || transitioningToStats.remove(player.getUniqueId())) {
                 return;
             }
             openTerminals.remove(player.getUniqueId());
+        } else if (holder instanceof Chest) {
+            Location chestLoc = ((Chest) holder).getLocation();
+            Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
+            if (network != null && network.isChestInNetwork(chestLoc)) {
+                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, network::rebuildCache);
+            }
         }
     }
 

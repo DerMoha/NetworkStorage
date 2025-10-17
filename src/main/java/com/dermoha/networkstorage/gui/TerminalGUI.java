@@ -58,34 +58,25 @@ public class TerminalGUI implements InventoryHolder {
                         ItemStack item = entry.getKey();
                         String lowerCaseFilter = searchFilter.toLowerCase();
 
-                        // Check custom display name
                         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
                             if (item.getItemMeta().getDisplayName().toLowerCase().contains(lowerCaseFilter)) {
                                 return true;
                             }
                         }
 
-                        // Check internal material name (e.g., "diamond_sword")
                         if (item.getType().getKey().getKey().toLowerCase().contains(lowerCaseFilter)) {
                             return true;
                         }
 
-                        // Fallback check for formatted English name
                         return getItemDisplayName(item).toLowerCase().contains(lowerCaseFilter);
                     })
                     .collect(Collectors.toList());
         }
 
         switch (sortType) {
-            case ALPHABETICAL:
-                sortedItems.sort(Comparator.comparing(a -> getItemDisplayName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
-                break;
-            case COUNT_DESC:
-                sortedItems.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
-                break;
-            case COUNT_ASC:
-                sortedItems.sort(Map.Entry.comparingByValue());
-                break;
+            case ALPHABETICAL -> sortedItems.sort(Comparator.comparing(a -> getItemDisplayName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
+            case COUNT_DESC -> sortedItems.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
+            case COUNT_ASC -> sortedItems.sort(Map.Entry.comparingByValue());
         }
 
         int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
@@ -116,17 +107,10 @@ public class TerminalGUI implements InventoryHolder {
         ItemMeta searchMeta = searchButton.getItemMeta();
         if (searchFilter.isEmpty()) {
             searchMeta.setDisplayName(lang.getMessage("terminal.search.title"));
-            searchMeta.setLore(Arrays.asList(
-                    lang.getMessage("terminal.search.lore1"),
-                    lang.getMessage("terminal.search.lore2")
-            ));
+            searchMeta.setLore(Arrays.asList(lang.getMessage("terminal.search.lore1"), lang.getMessage("terminal.search.lore2")));
         } else {
             searchMeta.setDisplayName(String.format(lang.getMessage("terminal.search.active"), searchFilter));
-            searchMeta.setLore(Arrays.asList(
-                    lang.getMessage("terminal.search.filtered"),
-                    lang.getMessage("terminal.search.change"),
-                    lang.getMessage("terminal.search.clear")
-            ));
+            searchMeta.setLore(Arrays.asList(lang.getMessage("terminal.search.filtered"), lang.getMessage("terminal.search.change"), lang.getMessage("terminal.search.clear")));
         }
         searchButton.setItemMeta(searchMeta);
         inventory.setItem(46, searchButton);
@@ -134,10 +118,7 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
         sortMeta.setDisplayName(String.format(lang.getMessage("terminal.sort.title"), getSortDisplayName()));
-        sortMeta.setLore(Arrays.asList(
-                lang.getMessage("terminal.sort.lore1"),
-                String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())
-        ));
+        sortMeta.setLore(Arrays.asList(lang.getMessage("terminal.sort.lore1"), String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())));
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
 
@@ -190,13 +171,9 @@ public class TerminalGUI implements InventoryHolder {
         ItemStack display = original.clone();
         display.setAmount(1);
         ItemMeta meta = display.getItemMeta();
-        if (meta == null) {
-            meta = Bukkit.getItemFactory().getItemMeta(display.getType());
-        }
+        if (meta == null) meta = Bukkit.getItemFactory().getItemMeta(display.getType());
 
-        if (!original.hasItemMeta() || !original.getItemMeta().hasDisplayName()) {
-            meta.setDisplayName(null);
-        }
+        if (!original.hasItemMeta() || !original.getItemMeta().hasDisplayName()) meta.setDisplayName(null);
 
         List<String> lore = new ArrayList<>();
         lore.add(String.format(lang.getMessage("terminal.item.lore.total"), formatNumber(totalCount)));
@@ -215,9 +192,7 @@ public class TerminalGUI implements InventoryHolder {
         if (original.hasItemMeta() && original.getItemMeta().hasLore()) {
             lore.add("");
             lore.add(lang.getMessage("terminal.item.lore.properties"));
-            if (original.getItemMeta().getLore() != null) {
-                lore.addAll(original.getItemMeta().getLore());
-            }
+            if (original.getItemMeta().getLore() != null) lore.addAll(original.getItemMeta().getLore());
         }
         meta.setLore(lore);
         display.setItemMeta(meta);
@@ -225,42 +200,29 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public String getItemDisplayName(ItemStack item) {
-        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-            return item.getItemMeta().getDisplayName();
-        }
+        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) return item.getItemMeta().getDisplayName();
         String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
         String[] words = materialName.split(" ");
         StringBuilder displayName = new StringBuilder();
         for (String word : words) {
-            if (displayName.length() > 0) {
-                displayName.append(" ");
-            }
+            if (displayName.length() > 0) displayName.append(" ");
             displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         }
         return displayName.toString();
     }
 
     private String getSortDisplayName() {
-        switch (sortType) {
-            case ALPHABETICAL:
-                return lang.getMessage("terminal.sort.alpha");
-            case COUNT_DESC:
-                return lang.getMessage("terminal.sort.desc");
-            case COUNT_ASC:
-                return lang.getMessage("terminal.sort.asc");
-            default:
-                return lang.getMessage("terminal.sort.unknown");
-        }
+        return switch (sortType) {
+            case ALPHABETICAL -> lang.getMessage("terminal.sort.alpha");
+            case COUNT_DESC -> lang.getMessage("terminal.sort.desc");
+            case COUNT_ASC -> lang.getMessage("terminal.sort.asc");
+        };
     }
 
     public String formatNumber(long number) {
-        if (number >= 1000000) {
-            return String.format("%.1fM", number / 1000000.0);
-        } else if (number >= 1000) {
-            return String.format("%.1fK", number / 1000.0);
-        } else {
-            return String.valueOf(number);
-        }
+        if (number >= 1000000) return String.format("%.1fM", number / 1000000.0);
+        if (number >= 1000) return String.format("%.1fK", number / 1000.0);
+        return String.valueOf(number);
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
@@ -303,8 +265,7 @@ public class TerminalGUI implements InventoryHolder {
 
         if (slot == 49) { // Stats button
             plugin.getChestInteractListener().setTransitioningToStats(player.getUniqueId());
-            StatsGUI statsGUI = new StatsGUI(player, network, plugin, this);
-            statsGUI.open();
+            new StatsGUI(player, network, plugin, this).open();
             return;
         }
 
@@ -322,13 +283,9 @@ public class TerminalGUI implements InventoryHolder {
                 int availableAmount = entry.getValue();
                 int amountToTake = 0;
 
-                if (isLeftClick && !isShiftClick) { // Left-click: take 1
-                    amountToTake = 1;
-                } else if (isRightClick && !isShiftClick) { // Right-click: take stack
-                    amountToTake = originalItem.getMaxStackSize();
-                } else if (isRightClick && isShiftClick) { // Shift-right-click: take half stack
-                    amountToTake = Math.max(1, originalItem.getMaxStackSize() / 2);
-                }
+                if (isLeftClick && !isShiftClick) amountToTake = 1;
+                else if (isRightClick && !isShiftClick) amountToTake = originalItem.getMaxStackSize();
+                else if (isRightClick && isShiftClick) amountToTake = Math.max(1, originalItem.getMaxStackSize() / 2);
 
                 if (amountToTake > 0) {
                     handleItemExtraction(originalItem, availableAmount, amountToTake);
@@ -346,27 +303,32 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         ItemStack removedItem = network.removeFromNetwork(itemType, finalAmount);
+        int amountActuallyRemoved = (removedItem != null) ? removedItem.getAmount() : 0;
 
-        if (removedItem != null && removedItem.getAmount() > 0) {
-            network.recordItemsWithdrawn(player, removedItem.getAmount());
-            plugin.getNetworkManager().saveNetworks();
+        if (amountActuallyRemoved > 0) {
+            network.recordItemsWithdrawn(player, amountActuallyRemoved);
 
-            HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(removedItem);
+            HashMap<Integer, ItemStack> remainingInInventory = player.getInventory().addItem(removedItem);
 
-            if (!remaining.isEmpty()) {
-                for (ItemStack leftover : remaining.values()) {
-                    ItemStack stillRemaining = network.addToNetwork(leftover);
-                    if (stillRemaining != null && stillRemaining.getAmount() > 0) {
-                        player.getWorld().dropItemNaturally(player.getLocation(), stillRemaining);
+            if (!remainingInInventory.isEmpty()) {
+                for (ItemStack leftover : remainingInInventory.values()) {
+                    ItemStack stillRemainingInNetwork = network.addToNetwork(leftover);
+                    if (stillRemainingInNetwork != null && stillRemainingInNetwork.getAmount() > 0) {
+                        player.getWorld().dropItemNaturally(player.getLocation(), stillRemainingInNetwork);
                         player.sendMessage(lang.getMessage("terminal.items_dropped"));
                     }
                 }
             }
-            player.sendMessage(String.format(lang.getMessage("terminal.took_items"), removedItem.getAmount(), getItemDisplayName(itemType)));
+            player.sendMessage(String.format(lang.getMessage("terminal.took_items"), amountActuallyRemoved, getItemDisplayName(itemType)));
+
+            if (amountActuallyRemoved < finalAmount) {
+                player.sendMessage(lang.getMessage("network.item_no_longer_available"));
+            }
 
             plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
         } else {
-            player.sendMessage(lang.getMessage("terminal.could_not_remove"));
+            player.sendMessage(lang.getMessage("network.item_no_longer_available"));
+            plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
         }
     }
 
@@ -381,20 +343,8 @@ public class TerminalGUI implements InventoryHolder {
         updateInventory();
     }
 
-    public void open() {
-        player.openInventory(inventory);
-    }
-
-    @Override
-    public Inventory getInventory() {
-        return inventory;
-    }
-
-    public Player getPlayer() {
-        return player;
-    }
-
-    public Network getNetwork() {
-        return network;
-    }
+    public void open() { player.openInventory(inventory); }
+    @Override public Inventory getInventory() { return inventory; }
+    public Player getPlayer() { return player; }
+    public Network getNetwork() { return network; }
 }

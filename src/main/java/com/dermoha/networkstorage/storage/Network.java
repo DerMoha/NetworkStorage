@@ -22,6 +22,7 @@ public class Network {
     private final Set<Location> senderChestLocations;
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
+    private Map<ItemStack, Integer> itemCache;
 
     public Network(String name, UUID owner) {
         this.name = name;
@@ -31,197 +32,193 @@ public class Network {
         this.senderChestLocations = new HashSet<>();
         this.playerStats = new ConcurrentHashMap<>();
         this.trustedPlayers = new HashSet<>();
+        this.itemCache = new ConcurrentHashMap<>();
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public UUID getOwner() {
-        return owner;
-    }
-
-    public Set<Location> getChestLocations() {
-        return new HashSet<>(chestLocations);
-    }
-
-    public Set<Location> getTerminalLocations() {
-        return new HashSet<>(terminalLocations);
-    }
-
-    public Set<Location> getSenderChestLocations() {
-        return new HashSet<>(senderChestLocations);
-    }
-
-    public Map<UUID, PlayerStat> getPlayerStats() {
-        return playerStats;
-    }
-
-    public Set<UUID> getTrustedPlayers() {
-        return trustedPlayers;
-    }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public UUID getOwner() { return owner; }
+    public Set<Location> getChestLocations() { return new HashSet<>(chestLocations); }
+    public Set<Location> getTerminalLocations() { return new HashSet<>(terminalLocations); }
+    public Set<Location> getSenderChestLocations() { return new HashSet<>(senderChestLocations); }
+    public Map<UUID, PlayerStat> getPlayerStats() { return playerStats; }
+    public Set<UUID> getTrustedPlayers() { return trustedPlayers; }
 
     public void addChest(Location location) {
-        chestLocations.add(location);
+        if (chestLocations.add(location)) {
+            rebuildCache();
+        }
     }
 
     public void removeChest(Location location) {
-        chestLocations.remove(location);
+        if (chestLocations.remove(location)) {
+            rebuildCache();
+        }
     }
 
-    public void addTerminal(Location location) {
-        terminalLocations.add(location);
-    }
-
-    public void removeTerminal(Location location) {
-        terminalLocations.remove(location);
-    }
+    public void addTerminal(Location location) { terminalLocations.add(location); }
+    public void removeTerminal(Location location) { terminalLocations.remove(location); }
 
     public void addSenderChest(Location location) {
-        senderChestLocations.add(location);
+        if (senderChestLocations.add(location)) {
+            rebuildCache();
+        }
     }
 
     public void removeSenderChest(Location location) {
-        senderChestLocations.remove(location);
+        if (senderChestLocations.remove(location)) {
+            rebuildCache();
+        }
     }
 
-    public boolean isChestInNetwork(Location location) {
-        return chestLocations.contains(location);
-    }
-
-    public boolean isTerminalInNetwork(Location location) {
-        return terminalLocations.contains(location);
-    }
-
-    public boolean isSenderChestInNetwork(Location location) {
-        return senderChestLocations.contains(location);
-    }
-
-    public PlayerStat getPlayerStat(Player player) {
-        return playerStats.computeIfAbsent(player.getUniqueId(), k -> new PlayerStat(player.getUniqueId(), player.getName()));
-    }
-
-    public void recordItemsDeposited(Player player, int amount) {
-        getPlayerStat(player).addItemsDeposited(amount);
-    }
-
-    public void recordItemsWithdrawn(Player player, int amount) {
-        getPlayerStat(player).addItemsWithdrawn(amount);
-    }
+    public boolean isChestInNetwork(Location location) { return chestLocations.contains(location); }
+    public boolean isTerminalInNetwork(Location location) { return terminalLocations.contains(location); }
+    public boolean isSenderChestInNetwork(Location location) { return senderChestLocations.contains(location); }
+    public PlayerStat getPlayerStat(Player player) { return playerStats.computeIfAbsent(player.getUniqueId(), k -> new PlayerStat(player.getUniqueId(), player.getName())); }
+    public void recordItemsDeposited(Player player, int amount) { getPlayerStat(player).addItemsDeposited(amount); }
+    public void recordItemsWithdrawn(Player player, int amount) { getPlayerStat(player).addItemsWithdrawn(amount); }
 
     public boolean canAccess(Player player) {
         ConfigManager configManager = NetworkStoragePlugin.getInstance().getConfigManager();
-        if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            return true;
-        }
-        if (!configManager.isTrustSystemEnabled()) {
-            return true;
-        }
+        if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) return true;
+        if (!configManager.isTrustSystemEnabled()) return true;
         UUID playerUUID = player.getUniqueId();
         return playerUUID.equals(this.owner) || trustedPlayers.contains(playerUUID) || player.hasPermission("networkstorage.admin");
     }
 
-    public boolean isTrusted(UUID playerUUID) {
-        return trustedPlayers.contains(playerUUID);
-    }
-
-    public void addTrustedPlayer(UUID playerUUID) {
-        trustedPlayers.add(playerUUID);
-    }
-
-    public void removeTrustedPlayer(UUID playerUUID) {
-        trustedPlayers.remove(playerUUID);
-    }
+    public boolean isTrusted(UUID playerUUID) { return trustedPlayers.contains(playerUUID); }
+    public void addTrustedPlayer(UUID playerUUID) { trustedPlayers.add(playerUUID); }
+    public void removeTrustedPlayer(UUID playerUUID) { trustedPlayers.remove(playerUUID); }
 
     public Map<ItemStack, Integer> getNetworkItems() {
-        Map<ItemStack, Integer> networkItems = new HashMap<>();
+        return new HashMap<>(itemCache);
+    }
+
+    public void rebuildCache() {
+        Map<ItemStack, Integer> newCache = new HashMap<>();
         Set<Location> allChestLocations = new HashSet<>(chestLocations);
         allChestLocations.addAll(senderChestLocations);
 
         for (Location chestLoc : allChestLocations) {
+            if (chestLoc.getWorld() == null || !chestLoc.getWorld().isChunkLoaded(chestLoc.getBlockX() >> 4, chestLoc.getBlockZ() >> 4)) {
+                continue;
+            }
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 for (ItemStack item : chest.getInventory().getContents()) {
                     if (item != null && item.getType() != Material.AIR) {
-                        addToNetworkMap(networkItems, item);
+                        updateCache(newCache, item, item.getAmount());
                     }
                 }
             }
         }
-        return networkItems;
+        this.itemCache = new ConcurrentHashMap<>(newCache);
     }
-
-    private void addToNetworkMap(Map<ItemStack, Integer> map, ItemStack item) {
-        for (Map.Entry<ItemStack, Integer> entry : map.entrySet()) {
-            if (entry.getKey().isSimilar(item)) {
-                try {
-                    map.put(entry.getKey(), Math.addExact(entry.getValue(), item.getAmount()));
-                } catch (ArithmeticException e) {
-                    map.put(entry.getKey(), Integer.MAX_VALUE);
-                }
-                return;
+    
+    private void updateCache(Map<ItemStack, Integer> cache, ItemStack item, int amount) {
+        ItemStack key = null;
+        for (ItemStack existingKey : cache.keySet()) {
+            if (existingKey.isSimilar(item)) {
+                key = existingKey;
+                break;
             }
         }
-        ItemStack keyItem = item.clone();
-        keyItem.setAmount(1);
-        map.put(keyItem, item.getAmount());
+
+        if (key != null) {
+            long newAmount = (long) cache.getOrDefault(key, 0) + amount;
+            if (newAmount > 0) {
+                cache.put(key, (int) Math.min(newAmount, Integer.MAX_VALUE));
+            } else {
+                cache.remove(key);
+            }
+        } else if (amount > 0) {
+            ItemStack newKey = item.clone();
+            newKey.setAmount(1);
+            cache.put(newKey, Math.min(amount, Integer.MAX_VALUE));
+        }
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
-        int remaining = amount;
+        int amountToActuallyRemove = Math.min(amount, getAmountInCache(itemToRemove));
+        if (amountToActuallyRemove <= 0) {
+            ItemStack result = itemToRemove.clone();
+            result.setAmount(0);
+            return result;
+        }
+
+        int remainingToRemove = amountToActuallyRemove;
         Set<Location> allChestLocations = new HashSet<>(chestLocations);
         allChestLocations.addAll(senderChestLocations);
 
         for (Location chestLoc : allChestLocations) {
-            if (remaining <= 0) break;
-            if (chestLoc.getBlock().getState() instanceof Chest) {
+            if (remainingToRemove <= 0) break;
+            if (chestLoc.getWorld() != null && chestLoc.getWorld().isChunkLoaded(chestLoc.getBlockX() >> 4, chestLoc.getBlockZ() >> 4) && chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 Inventory inv = chest.getInventory();
-                for (int i = 0; i < inv.getSize() && remaining > 0; i++) {
+                for (int i = 0; i < inv.getSize() && remainingToRemove > 0; i++) {
                     ItemStack item = inv.getItem(i);
                     if (item != null && item.isSimilar(itemToRemove)) {
-                        int toRemove = Math.min(remaining, item.getAmount());
+                        int toRemove = Math.min(remainingToRemove, item.getAmount());
                         if (item.getAmount() <= toRemove) {
                             inv.setItem(i, null);
                         } else {
                             item.setAmount(item.getAmount() - toRemove);
                         }
-                        remaining -= toRemove;
+                        remainingToRemove -= toRemove;
                     }
                 }
             }
         }
+
+        int totalRemoved = amountToActuallyRemove - remainingToRemove;
+        if (totalRemoved > 0) {
+            updateCache(this.itemCache, itemToRemove, -totalRemoved);
+        }
+
         ItemStack result = itemToRemove.clone();
-        result.setAmount(amount - remaining);
+        result.setAmount(totalRemoved);
         return result;
+    }
+
+    private int getAmountInCache(ItemStack item) {
+        for (Map.Entry<ItemStack, Integer> entry : itemCache.entrySet()) {
+            if (entry.getKey().isSimilar(item)) {
+                return entry.getValue();
+            }
+        }
+        return 0;
     }
 
     public ItemStack addToNetwork(ItemStack itemToAdd) {
         if (itemToAdd == null || itemToAdd.getType() == Material.AIR) return null;
+        
         ItemStack remaining = itemToAdd.clone();
+        int originalAmount = remaining.getAmount();
+
         for (Location chestLoc : chestLocations) {
             if (remaining.getAmount() <= 0) break;
-            if (chestLoc.getBlock().getState() instanceof Chest) {
+            if (chestLoc.getWorld() != null && chestLoc.getWorld().isChunkLoaded(chestLoc.getBlockX() >> 4, chestLoc.getBlockZ() >> 4) && chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
-                HashMap<Integer, ItemStack> result = chest.getInventory().addItem(remaining);
+                HashMap<Integer, ItemStack> result = chest.getInventory().addItem(remaining.clone());
                 if (result.isEmpty()) {
-                    remaining = null;
-                    break;
+                    remaining.setAmount(0);
                 } else {
                     remaining = result.get(0);
                 }
             }
         }
-        return remaining;
+
+        int amountAdded = originalAmount - remaining.getAmount();
+        if (amountAdded > 0) {
+            ItemStack addedItem = itemToAdd.clone();
+            addedItem.setAmount(amountAdded);
+            updateCache(this.itemCache, addedItem, addedItem.getAmount());
+        }
+
+        return remaining.getAmount() > 0 ? remaining : null;
     }
 
-    public Location getNormalizedLocation(Location location) {
-        return location;
-    }
+    public Location getNormalizedLocation(Location location) { return location; }
 
     public double getCapacityPercent() {
         int totalSlots = 0;
@@ -229,7 +226,7 @@ public class Network {
         Set<Location> allChestLocations = new HashSet<>(getChestLocations());
         allChestLocations.addAll(getSenderChestLocations());
         for (Location chestLoc : allChestLocations) {
-            if (chestLoc.getBlock().getState() instanceof Chest) {
+            if (chestLoc.getWorld() != null && chestLoc.getWorld().isChunkLoaded(chestLoc.getBlockX() >> 4, chestLoc.getBlockZ() >> 4) && chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 Inventory inv = chest.getInventory();
                 totalSlots += inv.getSize();

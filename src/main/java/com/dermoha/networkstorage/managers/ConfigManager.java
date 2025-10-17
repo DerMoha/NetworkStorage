@@ -33,6 +33,7 @@ public class ConfigManager {
         config.addDefault("max-sender-chests-per-network", 100);
         config.addDefault("sender-chest-transfer-interval-seconds", 5);
         config.addDefault("auto-save-interval-minutes", 5);
+        config.addDefault("cache-resync-interval-minutes", 10);
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
         config.addDefault("language", "en");
@@ -48,41 +49,16 @@ public class ConfigManager {
         }
     }
 
-    public int getMaxChestsPerNetwork() {
-        return config.getInt("max-chests-per-network");
-    }
-
-    public int getMaxTerminalsPerNetwork() {
-        return config.getInt("max-terminals-per-network");
-    }
-
-    public int getMaxSenderChestsPerNetwork() {
-        return config.getInt("max-sender-chests-per-network");
-    }
-
-    public int getSenderChestTransferInterval() {
-        return config.getInt("sender-chest-transfer-interval-seconds");
-    }
-
-    public int getWirelessTerminalDurability() {
-        return config.getInt("wireless-terminal-durability");
-    }
-
-    public boolean isPermissionsEnabled() {
-        return config.getBoolean("enable-permissions");
-    }
-
-    public boolean isTrustSystemEnabled() {
-        return config.getBoolean("enable-trust-system");
-    }
-
-    public int getAutoSaveInterval() {
-        return config.getInt("auto-save-interval-minutes");
-    }
-
-    public String getLanguage() {
-        return config.getString("language");
-    }
+    public int getMaxChestsPerNetwork() { return config.getInt("max-chests-per-network"); }
+    public int getMaxTerminalsPerNetwork() { return config.getInt("max-terminals-per-network"); }
+    public int getMaxSenderChestsPerNetwork() { return config.getInt("max-sender-chests-per-network"); }
+    public int getSenderChestTransferInterval() { return config.getInt("sender-chest-transfer-interval-seconds"); }
+    public int getWirelessTerminalDurability() { return config.getInt("wireless-terminal-durability"); }
+    public boolean isPermissionsEnabled() { return config.getBoolean("enable-permissions"); }
+    public boolean isTrustSystemEnabled() { return config.getBoolean("enable-trust-system"); }
+    public int getAutoSaveInterval() { return config.getInt("auto-save-interval-minutes"); }
+    public int getCacheResyncInterval() { return config.getInt("cache-resync-interval-minutes"); }
+    public String getLanguage() { return config.getString("language"); }
 
     public void reloadConfig() {
         plugin.reloadConfig();
