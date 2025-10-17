@@ -158,7 +158,11 @@ public class Network {
     private void addToNetworkMap(Map<ItemStack, Integer> map, ItemStack item) {
         for (Map.Entry<ItemStack, Integer> entry : map.entrySet()) {
             if (entry.getKey().isSimilar(item)) {
-                map.put(entry.getKey(), entry.getValue() + item.getAmount());
+                try {
+                    map.put(entry.getKey(), Math.addExact(entry.getValue(), item.getAmount()));
+                } catch (ArithmeticException e) {
+                    map.put(entry.getKey(), Integer.MAX_VALUE);
+                }
                 return;
             }
         }
