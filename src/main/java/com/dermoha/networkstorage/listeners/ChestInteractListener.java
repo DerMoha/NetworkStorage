@@ -184,7 +184,8 @@ public class ChestInteractListener implements Listener {
             Location chestLoc = ((Chest) holder).getLocation();
             Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
             if (network != null && network.isChestInNetwork(chestLoc)) {
-                plugin.getServer().getScheduler().runTaskAsynchronously(plugin, network::rebuildCache);
+                // Run synchronously on next tick - rebuildCache is now thread-safe internally
+                plugin.getServer().getScheduler().runTask(plugin, network::rebuildCache);
             }
         }
     }

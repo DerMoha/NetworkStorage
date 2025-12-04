@@ -3,7 +3,9 @@ package com.dermoha.networkstorage.managers;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -19,6 +21,7 @@ public class NetworkManager {
     private final NetworkStoragePlugin plugin;
     private final Map<String, Network> networks = new HashMap<>();
     private final File networksFile;
+    private boolean dirty = false;
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
@@ -40,6 +43,7 @@ public class NetworkManager {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             if (!networks.containsKey(GLOBAL_NETWORK_NAME)) {
                 Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+                globalNetwork.setNetworkManager(this);
                 networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
             }
         }
@@ -52,6 +56,7 @@ public class NetworkManager {
                     try {
                         UUID owner = UUID.fromString(netSection.getString("owner"));
                         Network network = new Network(networkName, owner);
+                        network.setNetworkManager(this);
 
                         List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
                         for (Map<?, ?> locMap : chestLocationsMaps) {
@@ -76,6 +81,16 @@ public class NetworkManager {
                             for (String uuidString : statsSection.getKeys(false)) {
                                 UUID playerUUID = UUID.fromString(uuidString);
                                 String name = statsSection.getString(uuidString + ".name");
+
+                                if (name == null || name.isEmpty()) {
+                                    OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerUUID);
+                                    if (offlinePlayer != null && offlinePlayer.getName() != null) {
+                                        name = offlinePlayer.getName();
+                                    } else {
+                                        name = "Unknown Player";
+                                    }
+                                }
+
                                 long deposited = statsSection.getLong(uuidString + ".deposited");
                                 long withdrawn = statsSection.getLong(uuidString + ".withdrawn");
 
@@ -95,6 +110,9 @@ public class NetworkManager {
     }
 
     public void saveNetworks() {
+        if (!dirty) {
+            return;
+        }
         FileConfiguration newConfig = new YamlConfiguration();
         for (Network network : networks.values()) {
             String path = "networks." + network.getName();
@@ -129,10 +147,15 @@ public class NetworkManager {
         }
         try {
             newConfig.save(networksFile);
+            dirty = false;
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save networks to " + networksFile);
             e.printStackTrace();
         }
+    }
+
+    public void markDirty() {
+        this.dirty = true;
     }
 
     public void createNetwork(Player player, String networkName) {
@@ -145,8 +168,9 @@ public class NetworkManager {
             return;
         }
         Network network = new Network(networkName, player.getUniqueId());
+        network.setNetworkManager(this);
         networks.put(networkName, network);
-        saveNetworks();
+        markDirty();
         player.sendMessage("Network '" + networkName + "' created successfully.");
     }
 
@@ -185,7 +209,7 @@ public class NetworkManager {
         networks.remove(oldName);
         network.setName(newName);
         networks.put(newName, network);
-        saveNetworks();
+        markDirty();
         player.sendMessage("Network '" + oldName + "' has been renamed to '" + newName + "'.");
     }
 
@@ -240,8 +264,9 @@ public class NetworkManager {
                 return null;
             }
             network = new Network(networkName, player.getUniqueId());
+            network.setNetworkManager(this);
             networks.put(networkName, network);
-            saveNetworks();
+            markDirty();
         }
         return network;
     }

@@ -71,13 +71,17 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
         if (networkManager != null) {
+            getLogger().info("Saving network data before shutdown...");
             networkManager.saveNetworks();
+            getLogger().info("Network data saved.");
         }
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
 
     public void reload() {
-        networkManager.saveNetworks();
+        if (networkManager != null) {
+            networkManager.saveNetworks();
+        }
         Bukkit.getScheduler().cancelTasks(this);
 
         configManager = new ConfigManager(this);
@@ -155,9 +159,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
         long interval = configManager.getAutoSaveInterval() * 60 * 20L;
         if (interval > 0) {
             Bukkit.getScheduler().runTaskTimer(this, () -> {
-                getLogger().info("Auto-saving network data...");
+                getLogger().info("[NetworkStorage] Auto-saving network data...");
                 networkManager.saveNetworks();
-                getLogger().info("Auto-save complete.");
+                getLogger().info("[NetworkStorage] Auto-save complete.");
             }, interval, interval);
         }
     }
