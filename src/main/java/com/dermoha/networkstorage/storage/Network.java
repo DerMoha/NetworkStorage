@@ -26,6 +26,7 @@ public class Network {
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
     private Map<ItemStack, Integer> cachedNetworkItems;
+    private Material iconMaterial; // Visual icon for the network
 
     // Thread safety: ReadWriteLock allows multiple concurrent reads but exclusive writes
     private final ReadWriteLock cacheLock = new ReentrantReadWriteLock();
@@ -40,6 +41,7 @@ public class Network {
         this.playerStats = new ConcurrentHashMap<>();
         this.trustedPlayers = new HashSet<>();
         this.cachedNetworkItems = new ConcurrentHashMap<>(); // Use ConcurrentHashMap for thread safety
+        this.iconMaterial = Material.CHEST; // Default icon
     }
 
     /**
@@ -64,6 +66,16 @@ public class Network {
 
     public void setName(String name) {
         this.name = name;
+        markDirty();
+    }
+
+    public Material getIconMaterial() {
+        return iconMaterial != null ? iconMaterial : Material.CHEST;
+    }
+
+    public void setIconMaterial(Material iconMaterial) {
+        this.iconMaterial = iconMaterial;
+        markDirty();
     }
 
     public UUID getOwner() {

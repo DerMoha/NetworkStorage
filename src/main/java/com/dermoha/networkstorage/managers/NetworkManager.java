@@ -25,6 +25,9 @@ public class NetworkManager {
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
+    // Track which network each player is currently using
+    private final Map<UUID, String> activeNetworks = new HashMap<>();
+
     public NetworkManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
@@ -163,13 +166,31 @@ public class NetworkManager {
             player.sendMessage("Cannot create a network in GLOBAL mode.");
             return;
         }
+
+        // Check max networks limit
+        int maxNetworks = plugin.getConfigManager().getMaxNetworksPerPlayer();
+        if (maxNetworks > 0) {
+            List<Network> playerNetworks = getPlayerNetworks(player);
+            if (playerNetworks.size() >= maxNetworks) {
+                player.sendMessage("You have reached the maximum number of networks (" + maxNetworks + ").");
+                return;
+            }
+        }
+
         if (networks.containsKey(networkName)) {
             player.sendMessage("A network with that name already exists.");
             return;
         }
+
         Network network = new Network(networkName, player.getUniqueId());
         network.setNetworkManager(this);
         networks.put(networkName, network);
+
+        // Set as active if this is their first network
+        if (getPlayerNetworks(player).size() == 1) {
+            activeNetworks.put(player.getUniqueId(), networkName);
+        }
+
         markDirty();
         player.sendMessage("Network '" + networkName + "' created successfully.");
     }
@@ -184,33 +205,6 @@ public class NetworkManager {
             return;
         }
         player.sendMessage("Network editing is not yet implemented.");
-    }
-
-    public void renameNetwork(Player player, String oldName, String newName) {
-        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            player.sendMessage("Cannot rename a network in GLOBAL mode.");
-            return;
-        }
-        if (!networks.containsKey(oldName)) {
-            player.sendMessage("Network '" + oldName + "' not found.");
-            return;
-        }
-        if (networks.containsKey(newName)) {
-            player.sendMessage("A network with the name '" + newName + "' already exists.");
-            return;
-        }
-        Network network = networks.get(oldName);
-
-        if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
-             player.sendMessage("You do not have permission to rename this network.");
-             return;
-        }
-
-        networks.remove(oldName);
-        network.setName(newName);
-        networks.put(newName, network);
-        markDirty();
-        player.sendMessage("Network '" + oldName + "' has been renamed to '" + newName + "'.");
     }
 
     public Network getNetwork(String name) {
@@ -240,16 +234,143 @@ public class NetworkManager {
         return null;
     }
 
+    /**
+     * Get all networks owned by a player
+     */
+    public List<Network> getPlayerNetworks(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return Collections.singletonList(networks.get(GLOBAL_NETWORK_NAME));
+        }
+        List<Network> playerNetworks = new ArrayList<>();
+        for (Network network : networks.values()) {
+            if (network.getOwner().equals(player.getUniqueId())) {
+                playerNetworks.add(network);
+            }
+        }
+        return playerNetworks;
+    }
+
+    /**
+     * Get the player's currently active network
+     * If no active network is set, returns their first network or null
+     */
     public Network getPlayerNetwork(Player player) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             return networks.get(GLOBAL_NETWORK_NAME);
         }
+
+        // Check if player has an active network set
+        String activeNetworkName = activeNetworks.get(player.getUniqueId());
+        if (activeNetworkName != null) {
+            Network activeNetwork = networks.get(activeNetworkName);
+            if (activeNetwork != null && activeNetwork.getOwner().equals(player.getUniqueId())) {
+                return activeNetwork;
+            }
+        }
+
+        // No active network or it's invalid, return first owned network
         for (Network network : networks.values()) {
             if (network.getOwner().equals(player.getUniqueId())) {
+                // Set this as active for next time
+                activeNetworks.put(player.getUniqueId(), network.getName());
                 return network;
             }
         }
         return null;
+    }
+
+    /**
+     * Set a player's active network
+     */
+    public boolean setActiveNetwork(Player player, String networkName) {
+        Network network = networks.get(networkName);
+        if (network == null) {
+            return false;
+        }
+        if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
+            return false;
+        }
+        activeNetworks.put(player.getUniqueId(), networkName);
+        return true;
+    }
+
+    /**
+     * Get a specific network by name (if player owns it)
+     */
+    public Network getPlayerNetworkByName(Player player, String networkName) {
+        Network network = networks.get(networkName);
+        if (network != null && network.getOwner().equals(player.getUniqueId())) {
+            return network;
+        }
+        return null;
+    }
+
+    /**
+     * Delete a network (if player owns it)
+     */
+    public boolean deleteNetwork(Player player, String networkName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return false;
+        }
+
+        Network network = networks.get(networkName);
+        if (network == null) {
+            return false;
+        }
+
+        if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
+            return false;
+        }
+
+        // Remove from networks
+        networks.remove(networkName);
+
+        // If this was the active network, clear it
+        if (networkName.equals(activeNetworks.get(player.getUniqueId()))) {
+            activeNetworks.remove(player.getUniqueId());
+        }
+
+        markDirty();
+        return true;
+    }
+
+    /**
+     * Rename a network (if player owns it)
+     */
+    public boolean renameNetwork(Player player, String oldName, String newName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return false;
+        }
+
+        // Check if new name already exists
+        if (networks.containsKey(newName)) {
+            player.sendMessage(plugin.getLanguageManager().getMessage("network.rename.already_exists").replace("%s", newName));
+            return false;
+        }
+
+        Network network = networks.get(oldName);
+        if (network == null) {
+            return false;
+        }
+
+        if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
+            return false;
+        }
+
+        // Update the network name internally
+        network.setName(newName);
+
+        // Remove old entry and add new one
+        networks.remove(oldName);
+        networks.put(newName, network);
+
+        // Update active network reference if this was active
+        if (oldName.equals(activeNetworks.get(player.getUniqueId()))) {
+            activeNetworks.put(player.getUniqueId(), newName);
+        }
+
+        markDirty();
+        return true;
     }
 
     public Network getOrCreatePlayerNetwork(Player player) {
@@ -266,6 +387,10 @@ public class NetworkManager {
             network = new Network(networkName, player.getUniqueId());
             network.setNetworkManager(this);
             networks.put(networkName, network);
+
+            // Set as active network
+            activeNetworks.put(player.getUniqueId(), networkName);
+
             markDirty();
         }
         return network;
