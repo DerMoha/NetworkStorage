@@ -1,11 +1,15 @@
 package com.dermoha.networkstorage.commands;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.NetworkSelectorGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+
+import java.util.List;
 
 public class NetworkCommand implements CommandExecutor {
 
@@ -27,7 +31,7 @@ public class NetworkCommand implements CommandExecutor {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            // TODO: Send help message
+            sendHelpMessage(player);
             return true;
         }
 
@@ -35,31 +39,131 @@ public class NetworkCommand implements CommandExecutor {
 
         switch (subCommand) {
             case "create":
-                if (args.length < 2) {
-                    player.sendMessage(lang.getMessage("network.create.usage"));
-                    return true;
-                }
-                plugin.getNetworkManager().createNetwork(player, args[1]);
+                handleCreate(player, args);
                 break;
-            case "edit":
-                if (args.length < 2) {
-                    player.sendMessage(lang.getMessage("network.edit.usage"));
-                    return true;
-                }
-                plugin.getNetworkManager().editNetwork(player, args[1]);
+            case "delete":
+            case "remove":
+                handleDelete(player, args);
+                break;
+            case "list":
+                handleList(player);
+                break;
+            case "switch":
+            case "select":
+                handleSwitch(player, args);
+                break;
+            case "gui":
+            case "menu":
+                handleGUI(player);
                 break;
             case "rename":
-                if (args.length < 3) {
-                    player.sendMessage(lang.getMessage("network.rename.usage"));
-                    return true;
-                }
-                plugin.getNetworkManager().renameNetwork(player, args[1], args[2]);
+                handleRename(player, args);
+                break;
+            case "help":
+                sendHelpMessage(player);
                 break;
             default:
-                // TODO: Send help message
+                player.sendMessage(lang.getMessage("unknown_subcommand").replace("%s", subCommand));
+                sendHelpMessage(player);
                 break;
         }
 
         return true;
+    }
+
+    private void handleCreate(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.getMessage("network.create.usage"));
+            return;
+        }
+        plugin.getNetworkManager().createNetwork(player, args[1]);
+    }
+
+    private void handleDelete(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.getMessage("network.delete.usage"));
+            return;
+        }
+
+        String networkName = args[1];
+        List<Network> playerNetworks = plugin.getNetworkManager().getPlayerNetworks(player);
+
+        if (playerNetworks.size() <= 1) {
+            player.sendMessage(lang.getMessage("network.cannot_delete_last"));
+            return;
+        }
+
+        Network network = plugin.getNetworkManager().getPlayerNetworkByName(player, networkName);
+        if (network == null) {
+            player.sendMessage(lang.getMessage("network.not_found").replace("%s", networkName));
+            return;
+        }
+
+        player.sendMessage(lang.getMessage("network.delete.confirm1").replace("%s", networkName));
+        player.sendMessage(lang.getMessage("network.delete.confirm2")
+            .replace("%chests%", String.valueOf(network.getChestLocations().size()))
+            .replace("%terminals%", String.valueOf(network.getTerminalLocations().size())));
+        player.sendMessage(lang.getMessage("network.delete.confirm3").replace("%s", networkName));
+
+        plugin.getSearchManager().startDeletingNetwork(player, networkName);
+    }
+
+    private void handleList(Player player) {
+        List<Network> playerNetworks = plugin.getNetworkManager().getPlayerNetworks(player);
+        Network activeNetwork = plugin.getNetworkManager().getPlayerNetwork(player);
+
+        if (playerNetworks.isEmpty()) {
+            player.sendMessage(lang.getMessage("network.no_networks"));
+            return;
+        }
+
+        player.sendMessage(lang.getMessage("network.list.title"));
+        for (Network network : playerNetworks) {
+            boolean isActive = activeNetwork != null && activeNetwork.getName().equals(network.getName());
+            String prefix = isActive ? lang.getMessage("network.list.active_prefix") : "  ";
+
+            player.sendMessage(prefix + "§e" + network.getName() + " §7- " +
+                network.getChestLocations().size() + " chests, " +
+                network.getTerminalLocations().size() + " terminals");
+        }
+        player.sendMessage(lang.getMessage("network.list.footer"));
+    }
+
+    private void handleSwitch(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.getMessage("network.switch.usage"));
+            return;
+        }
+
+        String networkName = args[1];
+        if (plugin.getNetworkManager().setActiveNetwork(player, networkName)) {
+            player.sendMessage(lang.getMessage("network.switched").replace("%s", networkName));
+        } else {
+            player.sendMessage(lang.getMessage("network.not_found").replace("%s", networkName));
+        }
+    }
+
+    private void handleGUI(Player player) {
+        NetworkSelectorGUI gui = new NetworkSelectorGUI(player, plugin);
+        gui.open();
+    }
+
+    private void handleRename(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage(lang.getMessage("network.rename.usage"));
+            return;
+        }
+        plugin.getNetworkManager().renameNetwork(player, args[1], args[2]);
+    }
+
+    private void sendHelpMessage(Player player) {
+        player.sendMessage(lang.getMessage("network.help.title"));
+        player.sendMessage(lang.getMessage("network.help.create"));
+        player.sendMessage(lang.getMessage("network.help.delete"));
+        player.sendMessage(lang.getMessage("network.help.list"));
+        player.sendMessage(lang.getMessage("network.help.switch"));
+        player.sendMessage(lang.getMessage("network.help.gui"));
+        player.sendMessage(lang.getMessage("network.help.rename"));
+        player.sendMessage(lang.getMessage("network.help.help"));
     }
 }

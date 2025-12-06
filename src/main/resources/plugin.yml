@@ -4,6 +4,7 @@ main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
 author: DerMoha
 description: A networked storage system for Minecraft servers, make sharing storage easy!
+softdepend: [WorldGuard, Towny, GriefPrevention, Lands]
 
 commands:
   storage:
@@ -25,8 +26,10 @@ permissions:
     children:
       networkstorage.use: true
       networkstorage.wand: true
+      networkstorage.wireless: true
       networkstorage.reset: true
       networkstorage.access.all: true
+      networkstorage.bypass.protection: true
       networkstorage.admin: true
 
   networkstorage.use:
@@ -49,6 +52,10 @@ permissions:
     description: Allows accessing any storage network
     default: op
 
+  networkstorage.bypass.protection:
+    description: Bypass protection plugin checks when adding chests to networks
+    default: op
+
   networkstorage.admin:
     description: Administrative permissions for NetworkStorage
     default: op
@@ -56,11 +63,14 @@ permissions:
       networkstorage.network.create: true
       networkstorage.network.edit: true
       networkstorage.network.rename: true
+      networkstorage.network.delete: true
       networkstorage.wireless: true
+      networkstorage.bypass.protection: true
+      networkstorage.reload: true
 
   networkstorage.network.create:
     description: Allows creating new networks
-    default: op
+    default: true
 
   networkstorage.network.edit:
     description: Allows editing existing networks
@@ -68,4 +78,12 @@ permissions:
 
   networkstorage.network.rename:
     description: Allows renaming existing networks
+    default: op
+
+  networkstorage.network.delete:
+    description: Allows deleting networks
+    default: true
+
+  networkstorage.reload:
+    description: Allows reloading the plugin configuration
     default: op

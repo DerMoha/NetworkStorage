@@ -56,6 +56,15 @@ public class WandListener implements Listener {
     }
 
     private void handleChestClick(Player player, Block chestBlock, Action action) {
+        // Check if protection is enabled and if player can modify this block
+        if (plugin.getProtectionManager().isProtectionCheckEnabled()) {
+            if (!plugin.getProtectionManager().canModifyBlock(player, chestBlock)) {
+                String message = plugin.getProtectionManager().getProtectionMessage(player, chestBlock);
+                player.sendMessage(message);
+                return;
+            }
+        }
+
         Network network = plugin.getNetworkManager().getOrCreatePlayerNetwork(player);
         if (network == null) {
             player.sendMessage(lang.getMessage("network.error.create"));
