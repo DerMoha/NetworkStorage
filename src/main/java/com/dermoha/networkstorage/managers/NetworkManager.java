@@ -5,6 +5,7 @@ import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -79,6 +80,16 @@ public class NetworkManager {
                         List<String> trustedUuids = netSection.getStringList("trusted");
                         trustedUuids.stream().map(UUID::fromString).forEach(network::addTrustedPlayer);
 
+                        // Load icon material (with backward compatibility)
+                        String iconMaterialName = netSection.getString("iconMaterial");
+                        if (iconMaterialName != null) {
+                            try {
+                                network.setIconMaterial(Material.valueOf(iconMaterialName));
+                            } catch (IllegalArgumentException e) {
+                                plugin.getLogger().warning("Invalid icon material '" + iconMaterialName + "' for network '" + networkName + "', using default");
+                            }
+                        }
+
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
                         if (statsSection != null) {
                             for (String uuidString : statsSection.getKeys(false)) {
@@ -140,6 +151,9 @@ public class NetworkManager {
             newConfig.set(path + ".sender-chests", serializedSenderChests);
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
+
+            // Save icon material
+            newConfig.set(path + ".iconMaterial", network.getIconMaterial().name());
 
             for (PlayerStat stat : network.getPlayerStats().values()) {
                 String statPath = path + ".stats." + stat.getPlayerUUID().toString();
