@@ -31,11 +31,14 @@ public class ConfigManager {
         config.addDefault("max-chests-per-network", 100);
         config.addDefault("max-terminals-per-network", 100);
         config.addDefault("max-sender-chests-per-network", 100);
+        config.addDefault("max-networks-per-player", 1);
         config.addDefault("sender-chest-transfer-interval-seconds", 5);
         config.addDefault("auto-save-interval-minutes", 5);
         config.addDefault("cache-resync-interval-minutes", 10);
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
+        config.addDefault("enable-protection-check", true);
+        config.addDefault("enable-wireless-terminals", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
         config.options().copyDefaults(true);
@@ -52,10 +55,13 @@ public class ConfigManager {
     public int getMaxChestsPerNetwork() { return config.getInt("max-chests-per-network"); }
     public int getMaxTerminalsPerNetwork() { return config.getInt("max-terminals-per-network"); }
     public int getMaxSenderChestsPerNetwork() { return config.getInt("max-sender-chests-per-network"); }
+    public int getMaxNetworksPerPlayer() { return config.getInt("max-networks-per-player"); }
     public int getSenderChestTransferInterval() { return config.getInt("sender-chest-transfer-interval-seconds"); }
     public int getWirelessTerminalDurability() { return config.getInt("wireless-terminal-durability"); }
     public boolean isPermissionsEnabled() { return config.getBoolean("enable-permissions"); }
     public boolean isTrustSystemEnabled() { return config.getBoolean("enable-trust-system"); }
+    public boolean isProtectionCheckEnabled() { return config.getBoolean("enable-protection-check"); }
+    public boolean isWirelessTerminalsEnabled() { return config.getBoolean("enable-wireless-terminals"); }
     public int getAutoSaveInterval() { return config.getInt("auto-save-interval-minutes"); }
     public int getCacheResyncInterval() { return config.getInt("cache-resync-interval-minutes"); }
     public String getLanguage() { return config.getString("language"); }

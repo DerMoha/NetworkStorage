@@ -1,35 +1,113 @@
-# NetworkStorage Plugin Configuration
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║                    NetworkStorage Configuration                           ║
+# ║                           Version 2.0.0                                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
 
-# The mode of operation for networks. Can be one of:
-# PLAYER: Each player has their own separate network.
-# GLOBAL: There is only one, server-wide network that all players share.
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                          GENERAL SETTINGS                               │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# Language for plugin messages
+# Available: en (English), de (German)
+language: en
+
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                          NETWORK MODE                                   │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# Network operation mode:
+#   PLAYER: Each player can have multiple separate networks (recommended)
+#   GLOBAL: One server-wide network shared by all players
 network-mode: PLAYER
 
-# Maximum number of chests per network
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                          NETWORK LIMITS                                 │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# Maximum number of networks each player can create
+# Only applies when network-mode is PLAYER
+# Set to 0 for unlimited networks
+max-networks-per-player: 1
+
+# Maximum number of storage chests per network
+# These are the chests where items are actually stored
 max-chests-per-network: 100
 
-# Maximum number of terminals per network
+# Maximum number of access terminals per network
+# Terminals allow players to view and retrieve items
 max-terminals-per-network: 100
 
 # Maximum number of sender chests per network
+# Sender chests automatically transfer their contents to the network
 max-sender-chests-per-network: 100
 
-# The interval in seconds at which sender chests are checked and their contents moved to the main network.
-# Lower values mean faster transfers but may increase server load.
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                       PERFORMANCE SETTINGS                              │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# How often sender chests check and transfer items (in seconds)
+# Lower values = faster transfers but more server load
+# Recommended: 5-10 seconds
 sender-chest-transfer-interval-seconds: 5
 
-# Auto-save interval in minutes
+# How often to auto-save network data to disk (in minutes)
+# Lower values = more frequent saves but more disk writes
+# Recommended: 5-10 minutes
 auto-save-interval-minutes: 5
 
-# Enable permissions system
+# How often to rebuild item cache from physical chests (in minutes)
+# This ensures cache stays in sync with actual chest contents
+# Lower values = more accurate but more CPU usage
+# Recommended: 10-30 minutes
+cache-resync-interval-minutes: 10
+
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                       PERMISSION SETTINGS                               │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# Enable the permission system
+# When true, players need specific permissions to use features
+# When false, all players can use all features
 enable-permissions: true
 
-# Enable the trust system (only used in PLAYER mode). If false, anyone can access any network.
+# Enable the trust system (PLAYER mode only)
+# When true, players must trust others to access their networks
+# When false, anyone can access any network
 enable-trust-system: true
 
-# Langauge for Plugin-messages (de or en)
-language: en
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                       PROTECTION SETTINGS                               │
+# └─────────────────────────────────────────────────────────────────────────┘
 
+# Enable protection plugin integration
+# Checks if players have permission to modify blocks before adding to networks
+# Supported plugins: WorldGuard, Towny, GriefPrevention, Lands
+#
+# When enabled:
+#   - Players can only add chests they own/have permission for
+#   - Prevents unauthorized chest additions in protected regions
+#   - Respects all protection plugin rules
+#
+# When disabled:
+#   - No protection checks (use with caution!)
+#   - Players can add any chest they can access
+#
+# Permission bypass: networkstorage.bypass.protection
+enable-protection-check: true
+
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │                       WIRELESS TERMINAL SETTINGS                         │
+# └─────────────────────────────────────────────────────────────────────────┘
+
+# Enable wireless terminals
+# When true: Players can craft and use wireless terminals to access networks remotely
+# When false: Wireless terminals are disabled (crafting and usage blocked)
+enable-wireless-terminals: true
+
+# Crafting recipe for wireless network terminals
+# Only used if enable-wireless-terminals is true
+# Shape uses a 3x3 grid pattern
+# Ingredients specify what each letter represents
 wireless-terminal-recipe:
   shape:
     - "CCC"
@@ -39,3 +117,7 @@ wireless-terminal-recipe:
     C: "COMPASS"
     S: "NETHER_STAR"
     D: "DIAMOND_BLOCK"
+
+# Maximum uses for wireless terminals
+# Set to 0 for unlimited uses
+wireless-terminal-durability: 100

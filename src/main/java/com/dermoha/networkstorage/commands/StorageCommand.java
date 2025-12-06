@@ -59,6 +59,9 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             case "reset":
                 handleResetCommand(player);
                 break;
+            case "confirm-reset":
+                handleConfirmResetCommand(player);
+                break;
             case "trust":
                 handleTrustCommand(player, args);
                 break;
@@ -199,6 +202,12 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleWirelessCommand(Player player) {
+        // Check if wireless terminals are enabled
+        if (!plugin.getConfigManager().isWirelessTerminalsEnabled()) {
+            player.sendMessage(lang.getMessage("wireless_terminal.disabled"));
+            return;
+        }
+
         if (!player.hasPermission("networkstorage.wireless")) {
             player.sendMessage(lang.getMessage("no_permission_wireless"));
             return;
@@ -247,6 +256,41 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("reset_confirm_1"));
         player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(), network.getTerminalLocations().size()));
         player.sendMessage(lang.getMessage("reset_confirm_3"));
+
+        // Mark player as pending reset confirmation
+        plugin.getSearchManager().startResettingNetwork(player, network.getName());
+    }
+
+    private void handleConfirmResetCommand(Player player) {
+        if (!player.hasPermission("networkstorage.reset")) {
+            player.sendMessage(lang.getMessage("no_permission_reset"));
+            return;
+        }
+
+        // Check if player has a pending reset
+        if (!plugin.getSearchManager().isResettingNetwork(player.getUniqueId())) {
+            player.sendMessage(lang.getMessage("reset_no_pending"));
+            return;
+        }
+
+        Network network = plugin.getNetworkManager().getPlayerNetwork(player);
+        if (network == null) {
+            plugin.getSearchManager().cancelResettingNetwork(player.getUniqueId());
+            player.sendMessage(lang.getMessage("no_network_reset"));
+            return;
+        }
+
+        // Clear the pending reset
+        plugin.getSearchManager().cancelResettingNetwork(player.getUniqueId());
+
+        // Reset the network
+        network.getChestLocations().clear();
+        network.getTerminalLocations().clear();
+        network.getSenderChestLocations().clear();
+        network.rebuildCache();
+        plugin.getNetworkManager().saveNetworks();
+
+        player.sendMessage(lang.getMessage("reset_success"));
     }
 
     private void sendHelpMessage(Player player) {
@@ -256,7 +300,12 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("help_reset"));
         player.sendMessage(lang.getMessage("help_trust"));
         player.sendMessage(lang.getMessage("help_untrust"));
-        player.sendMessage(lang.getMessage("help_wireless"));
+
+        // Only show wireless terminal command if enabled
+        if (plugin.getConfigManager().isWirelessTerminalsEnabled()) {
+            player.sendMessage(lang.getMessage("help_wireless"));
+        }
+
         player.sendMessage(lang.getMessage("help_help"));
         player.sendMessage("");
         player.sendMessage(lang.getMessage("help_usage"));
@@ -265,6 +314,13 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("help_step3"));
         player.sendMessage(lang.getMessage("help_step4"));
         player.sendMessage(lang.getMessage("help_step5"));
+
+        // Only show multi-network hint if enabled (not in GLOBAL mode)
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.PLAYER
+            && plugin.getConfigManager().getMaxNetworksPerPlayer() != 1) {
+            player.sendMessage("");
+            player.sendMessage(lang.getMessage("help_network_hint"));
+        }
     }
 
     private String formatNumber(long number) {
