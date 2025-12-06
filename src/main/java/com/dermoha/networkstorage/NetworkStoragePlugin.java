@@ -10,8 +10,12 @@ import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
+import com.dermoha.networkstorage.managers.ProtectionManager;
 import com.dermoha.networkstorage.managers.SearchManager;
 import com.dermoha.networkstorage.storage.Network;
+import org.bstats.bukkit.Metrics;
+import org.bstats.charts.SimplePie;
+import org.bstats.charts.SingleLineChart;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -34,6 +38,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private ConfigManager configManager;
     private SearchManager searchManager;
     private LanguageManager languageManager;
+    private ProtectionManager protectionManager;
     private ChestInteractListener chestInteractListener;
 
     @Override
@@ -43,6 +48,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+        protectionManager = new ProtectionManager(this);
 
         this.chestInteractListener = new ChestInteractListener(this);
         this.searchManager = new SearchManager(this);
@@ -58,11 +64,89 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
         getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
 
-        registerRecipes();
+        if (configManager.isWirelessTerminalsEnabled()) {
+            registerRecipes();
+        }
 
         startSenderChestTask();
         startAutoSaveTask();
         startCacheResyncTask();
+
+        // Initialize bStats metrics
+        // Plugin ID: You need to replace 23891 with your actual bStats plugin ID
+        // Get your ID from: https://bstats.org/what-is-my-plugin-id
+        int pluginId = 23891; // Replace with your actual bStats plugin ID
+        Metrics metrics = new Metrics(this, pluginId);
+
+        // Add custom charts
+        metrics.addCustomChart(new SimplePie("network_mode", () ->
+            configManager.getNetworkMode().name()
+        ));
+
+        metrics.addCustomChart(new SimplePie("language", () ->
+            configManager.getLanguage()
+        ));
+
+        metrics.addCustomChart(new SimplePie("wireless_terminals_enabled", () ->
+            configManager.isWirelessTerminalsEnabled() ? "Enabled" : "Disabled"
+        ));
+
+        metrics.addCustomChart(new SimplePie("protection_check_enabled", () ->
+            configManager.isProtectionCheckEnabled() ? "Enabled" : "Disabled"
+        ));
+
+        // Track total number of networks
+        metrics.addCustomChart(new SingleLineChart("total_networks", () ->
+            networkManager.getAllNetworks().size()
+        ));
+
+        // Track total number of chests across all networks
+        metrics.addCustomChart(new SingleLineChart("total_chests", () -> {
+            int totalChests = 0;
+            for (Network network : networkManager.getAllNetworks()) {
+                totalChests += network.getChestLocations().size();
+            }
+            return totalChests;
+        }));
+
+        // Track total number of terminals across all networks
+        metrics.addCustomChart(new SingleLineChart("total_terminals", () -> {
+            int totalTerminals = 0;
+            for (Network network : networkManager.getAllNetworks()) {
+                totalTerminals += network.getTerminalLocations().size();
+            }
+            return totalTerminals;
+        }));
+
+        // Track total number of sender chests across all networks
+        metrics.addCustomChart(new SingleLineChart("total_sender_chests", () -> {
+            int totalSenderChests = 0;
+            for (Network network : networkManager.getAllNetworks()) {
+                totalSenderChests += network.getSenderChestLocations().size();
+            }
+            return totalSenderChests;
+        }));
+
+        // Track average chests per network (categorized)
+        metrics.addCustomChart(new SimplePie("average_chests_per_network", () -> {
+            int totalNetworks = networkManager.getAllNetworks().size();
+            if (totalNetworks == 0) return "0";
+
+            int totalChests = 0;
+            for (Network network : networkManager.getAllNetworks()) {
+                totalChests += network.getChestLocations().size();
+            }
+
+            int average = totalChests / totalNetworks;
+
+            if (average == 0) return "0";
+            if (average <= 5) return "1-5";
+            if (average <= 10) return "6-10";
+            if (average <= 25) return "11-25";
+            if (average <= 50) return "26-50";
+            if (average <= 100) return "51-100";
+            return "100+";
+        }));
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -84,9 +168,18 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
         Bukkit.getScheduler().cancelTasks(this);
 
+        // Unregister wireless terminal recipe
+        NamespacedKey wirelessKey = new NamespacedKey(this, "wireless_terminal");
+        Bukkit.removeRecipe(wirelessKey);
+
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+
+        // Re-register recipe if wireless terminals are enabled
+        if (configManager.isWirelessTerminalsEnabled()) {
+            registerRecipes();
+        }
 
         startSenderChestTask();
         startAutoSaveTask();
@@ -183,6 +276,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public NetworkManager getNetworkManager() { return networkManager; }
     public ConfigManager getConfigManager() { return configManager; }
     public SearchManager getSearchManager() { return searchManager; }
+    public ProtectionManager getProtectionManager() { return protectionManager; }
     public LanguageManager getLanguageManager() { return languageManager; }
     public ChestInteractListener getChestInteractListener() { return chestInteractListener; }
 }
