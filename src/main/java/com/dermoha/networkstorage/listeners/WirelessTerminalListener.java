@@ -39,6 +39,13 @@ public class WirelessTerminalListener implements Listener {
             return;
         }
 
+        // Check if wireless terminals are enabled
+        if (!plugin.getConfigManager().isWirelessTerminalsEnabled()) {
+            event.setCancelled(true);
+            player.sendMessage(lang.getMessage("wireless_terminal.disabled"));
+            return;
+        }
+
         if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
 
