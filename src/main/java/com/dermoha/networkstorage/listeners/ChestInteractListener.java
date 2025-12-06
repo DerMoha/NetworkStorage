@@ -1,8 +1,12 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.IconPickerGUI;
+import com.dermoha.networkstorage.gui.NetworkConfigGUI;
+import com.dermoha.networkstorage.gui.NetworkSelectorGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.gui.TrustManagementGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
@@ -116,6 +120,30 @@ public class ChestInteractListener implements Listener {
         if (holder instanceof StatsGUI statsGUI) {
             event.setCancelled(true);
             statsGUI.handleClick(event.getSlot());
+            return;
+        }
+
+        if (holder instanceof NetworkSelectorGUI networkSelectorGUI) {
+            event.setCancelled(true);
+            networkSelectorGUI.handleClick(event.getSlot(), event.getClick());
+            return;
+        }
+
+        if (holder instanceof TrustManagementGUI trustGUI) {
+            event.setCancelled(true);
+            trustGUI.handleClick(event.getSlot());
+            return;
+        }
+
+        if (holder instanceof IconPickerGUI iconPickerGUI) {
+            event.setCancelled(true);
+            iconPickerGUI.handleClick(event.getSlot());
+            return;
+        }
+
+        if (holder instanceof NetworkConfigGUI configGUI) {
+            event.setCancelled(true);
+            configGUI.handleClick(event.getSlot());
             return;
         }
 
