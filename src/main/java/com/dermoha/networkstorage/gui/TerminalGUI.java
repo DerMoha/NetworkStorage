@@ -49,6 +49,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         this.inventory = Bukkit.createInventory(this, GUI_SIZE, title);
+        network.rebuildCache();
         updateInventory();
     }
 
@@ -277,6 +278,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == 52) {
+            network.rebuildCache();
             updateInventory();
             player.sendMessage(lang.getMessage("terminal.refreshed"));
             return;
