@@ -12,7 +12,8 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
 /**
- * Manages protection plugin integration to ensure players can only add blocks they have permission to modify
+ * Manages protection plugin integration to ensure players can only add blocks
+ * they have permission to modify
  * Supports: WorldGuard, Towny, GriefPrevention, Lands
  */
 public class ProtectionManager {
@@ -33,9 +34,6 @@ public class ProtectionManager {
         checkProtectionPlugins();
     }
 
-    /**
-     * Check which protection plugins are available
-     */
     private void checkProtectionPlugins() {
         // Check for WorldGuard
         if (plugin.getServer().getPluginManager().getPlugin("WorldGuard") != null) {
@@ -82,7 +80,7 @@ public class ProtectionManager {
      * 5. Bukkit permissions
      *
      * @param player The player attempting to modify the block
-     * @param block The block to check
+     * @param block  The block to check
      * @return true if the player has permission, false otherwise
      */
     public boolean canModifyBlock(Player player, Block block) {
@@ -121,9 +119,6 @@ public class ProtectionManager {
         return true;
     }
 
-    /**
-     * Check WorldGuard permissions
-     */
     private boolean canModifyBlockWorldGuard(Player player, Location location) {
         try {
             LocalPlayer localPlayer = WorldGuardPlugin.inst().wrapPlayer(player);
@@ -149,14 +144,15 @@ public class ProtectionManager {
             return true;
         } catch (Exception e) {
             plugin.getLogger().warning("WorldGuard permission check failed: " + e.getMessage());
-            // If check fails, allow it (fail-open) to avoid breaking functionality
-            return true;
+            // If check fails, fail closed for security
+            return false;
         }
     }
 
     /**
      * Check Towny, GriefPrevention, and Lands permissions
-     * Uses Bukkit's event system - these plugins will cancel BlockBreakEvent/BlockPlaceEvent
+     * Uses Bukkit's event system - these plugins will cancel
+     * BlockBreakEvent/BlockPlaceEvent
      * This is a universal approach that works for any protection plugin
      */
     private boolean canModifyBlockTowny(Player player, Location location) {
@@ -183,18 +179,31 @@ public class ProtectionManager {
     /**
      * Check if player can build at location using Bukkit's protection system
      */
+    /**
+     * Check if player can build at location using Bukkit's event system
+     * This is a "safe" way to check many protection plugins without direct
+     * dependencies
+     */
     private boolean canBuildAtLocation(Player player, Block block) {
-        // Check if the chunk is loaded and accessible
-        if (!block.getWorld().isChunkLoaded(block.getChunk())) {
-            return false;
-        }
-
         // Operators always have permission
         if (player.isOp()) {
             return true;
         }
 
-        return true;
+        // Fire a dummy BlockPlaceEvent (not cancelled by default)
+        // Many protection plugins (Towny, GP, Lands) will cancel this if the player
+        // can't build here
+        org.bukkit.event.block.BlockPlaceEvent dummyEvent = new org.bukkit.event.block.BlockPlaceEvent(
+                block,
+                block.getState(),
+                block.getRelative(org.bukkit.block.BlockFace.DOWN),
+                new org.bukkit.inventory.ItemStack(org.bukkit.Material.CHEST),
+                player,
+                true,
+                org.bukkit.inventory.EquipmentSlot.HAND);
+
+        plugin.getServer().getPluginManager().callEvent(dummyEvent);
+        return !dummyEvent.isCancelled();
     }
 
     /**
@@ -238,9 +247,6 @@ public class ProtectionManager {
         return plugin.getLanguageManager().getMessage("protection.cannot_modify");
     }
 
-    /**
-     * Check if protection checks are enabled in config
-     */
     public boolean isProtectionCheckEnabled() {
         return plugin.getConfigManager().isProtectionCheckEnabled();
     }

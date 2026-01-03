@@ -72,35 +72,21 @@ public class NetworkStoragePlugin extends JavaPlugin {
         startAutoSaveTask();
         startCacheResyncTask();
 
-        // Initialize bStats metrics
-        // Plugin ID: You need to replace 23891 with your actual bStats plugin ID
-        // Get your ID from: https://bstats.org/what-is-my-plugin-id
-        int pluginId = 23891; // Replace with your actual bStats plugin ID
+        int pluginId = 28228; // Replace with your actual bStats plugin ID
         Metrics metrics = new Metrics(this, pluginId);
 
-        // Add custom charts
-        metrics.addCustomChart(new SimplePie("network_mode", () ->
-            configManager.getNetworkMode().name()
-        ));
+        metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name()));
 
-        metrics.addCustomChart(new SimplePie("language", () ->
-            configManager.getLanguage()
-        ));
+        metrics.addCustomChart(new SimplePie("language", () -> configManager.getLanguage()));
 
-        metrics.addCustomChart(new SimplePie("wireless_terminals_enabled", () ->
-            configManager.isWirelessTerminalsEnabled() ? "Enabled" : "Disabled"
-        ));
+        metrics.addCustomChart(new SimplePie("wireless_terminals_enabled",
+                () -> configManager.isWirelessTerminalsEnabled() ? "Enabled" : "Disabled"));
 
-        metrics.addCustomChart(new SimplePie("protection_check_enabled", () ->
-            configManager.isProtectionCheckEnabled() ? "Enabled" : "Disabled"
-        ));
+        metrics.addCustomChart(new SimplePie("protection_check_enabled",
+                () -> configManager.isProtectionCheckEnabled() ? "Enabled" : "Disabled"));
 
-        // Track total number of networks
-        metrics.addCustomChart(new SingleLineChart("total_networks", () ->
-            networkManager.getAllNetworks().size()
-        ));
+        metrics.addCustomChart(new SingleLineChart("total_networks", () -> networkManager.getAllNetworks().size()));
 
-        // Track total number of chests across all networks
         metrics.addCustomChart(new SingleLineChart("total_chests", () -> {
             int totalChests = 0;
             for (Network network : networkManager.getAllNetworks()) {
@@ -109,7 +95,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
             return totalChests;
         }));
 
-        // Track total number of terminals across all networks
         metrics.addCustomChart(new SingleLineChart("total_terminals", () -> {
             int totalTerminals = 0;
             for (Network network : networkManager.getAllNetworks()) {
@@ -118,7 +103,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
             return totalTerminals;
         }));
 
-        // Track total number of sender chests across all networks
         metrics.addCustomChart(new SingleLineChart("total_sender_chests", () -> {
             int totalSenderChests = 0;
             for (Network network : networkManager.getAllNetworks()) {
@@ -127,10 +111,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
             return totalSenderChests;
         }));
 
-        // Track average chests per network (categorized)
         metrics.addCustomChart(new SimplePie("average_chests_per_network", () -> {
             int totalNetworks = networkManager.getAllNetworks().size();
-            if (totalNetworks == 0) return "0";
+            if (totalNetworks == 0)
+                return "0";
 
             int totalChests = 0;
             for (Network network : networkManager.getAllNetworks()) {
@@ -139,15 +123,20 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
             int average = totalChests / totalNetworks;
 
-            if (average == 0) return "0";
-            if (average <= 5) return "1-5";
-            if (average <= 10) return "6-10";
-            if (average <= 25) return "11-25";
-            if (average <= 50) return "26-50";
-            if (average <= 100) return "51-100";
+            if (average == 0)
+                return "0";
+            if (average <= 5)
+                return "1-5";
+            if (average <= 10)
+                return "6-10";
+            if (average <= 25)
+                return "11-25";
+            if (average <= 50)
+                return "26-50";
+            if (average <= 100)
+                return "51-100";
             return "100+";
         }));
-
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
 
@@ -168,7 +157,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
         Bukkit.getScheduler().cancelTasks(this);
 
-        // Unregister wireless terminal recipe
         NamespacedKey wirelessKey = new NamespacedKey(this, "wireless_terminal");
         Bukkit.removeRecipe(wirelessKey);
 
@@ -176,7 +164,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
 
-        // Re-register recipe if wireless terminals are enabled
         if (configManager.isWirelessTerminalsEnabled()) {
             registerRecipes();
         }
@@ -191,7 +178,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
 
         List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
-        recipe.shape(shape.isEmpty() ? new String[]{"CCC", "CSC", "CDC"} : shape.toArray(new String[0]));
+        recipe.shape(shape.isEmpty() ? new String[] { "CCC", "CSC", "CDC" } : shape.toArray(new String[0]));
 
         ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
         if (ingredients == null) {
@@ -217,7 +204,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private void startSenderChestTask() {
         long interval = configManager.getSenderChestTransferInterval() * 20L;
-        if (interval <= 0) return;
+        if (interval <= 0)
+            return;
 
         Bukkit.getScheduler().runTaskTimer(this, () -> {
             for (Network network : networkManager.getAllNetworks()) {
@@ -225,7 +213,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 Iterator<Location> iterator = senderChestLocations.iterator();
                 while (iterator.hasNext()) {
                     Location senderLoc = iterator.next();
-                    if (senderLoc.getWorld() == null || !senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
+                    if (senderLoc.getWorld() == null || !senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4,
+                            senderLoc.getBlockZ() >> 4)) {
                         continue;
                     }
 
@@ -241,7 +230,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
                         }
                     } else {
                         iterator.remove();
-                        getLogger().info("Pruned non-chest block at " + senderLoc + " from a network because it was no longer a chest.");
+                        getLogger().info("Pruned non-chest block at " + senderLoc
+                                + " from a network because it was no longer a chest.");
                     }
                 }
             }
@@ -262,7 +252,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private void startCacheResyncTask() {
         long interval = configManager.getCacheResyncInterval() * 60 * 20L;
         if (interval > 0) {
-            Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+            Bukkit.getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Starting periodic cache resynchronization...");
                 for (Network network : networkManager.getAllNetworks()) {
                     network.rebuildCache();
@@ -272,11 +262,31 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
-    public static NetworkStoragePlugin getInstance() { return instance; }
-    public NetworkManager getNetworkManager() { return networkManager; }
-    public ConfigManager getConfigManager() { return configManager; }
-    public SearchManager getSearchManager() { return searchManager; }
-    public ProtectionManager getProtectionManager() { return protectionManager; }
-    public LanguageManager getLanguageManager() { return languageManager; }
-    public ChestInteractListener getChestInteractListener() { return chestInteractListener; }
+    public static NetworkStoragePlugin getInstance() {
+        return instance;
+    }
+
+    public NetworkManager getNetworkManager() {
+        return networkManager;
+    }
+
+    public ConfigManager getConfigManager() {
+        return configManager;
+    }
+
+    public SearchManager getSearchManager() {
+        return searchManager;
+    }
+
+    public ProtectionManager getProtectionManager() {
+        return protectionManager;
+    }
+
+    public LanguageManager getLanguageManager() {
+        return languageManager;
+    }
+
+    public ChestInteractListener getChestInteractListener() {
+        return chestInteractListener;
+    }
 }
