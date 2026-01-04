@@ -29,6 +29,7 @@ public class Network {
     private Material iconMaterial;
 
     private final ReadWriteLock cacheLock = new ReentrantReadWriteLock();
+    private volatile boolean cacheDirty = false;
     private NetworkManager networkManager;
 
     public Network(String name, UUID owner) {
@@ -182,6 +183,9 @@ public class Network {
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {
+        if (cacheDirty) {
+            rebuildCache();
+        }
         cacheLock.readLock().lock();
         try {
             Map<ItemStack, Integer> result = new HashMap<>();
@@ -194,9 +198,17 @@ public class Network {
         }
     }
 
+    public void markCacheDirty() {
+        this.cacheDirty = true;
+    }
+
     public void rebuildCache() {
         cacheLock.writeLock().lock();
         try {
+            if (!cacheDirty && !cachedNetworkItems.isEmpty()) {
+                // Skip if not dirty, unless it's the first build
+                return;
+            }
             // Build new cache in temporary map to avoid exposing empty/partial cache
             Map<NetworkItemKey, Integer> newCache = new ConcurrentHashMap<>();
             Set<Location> allChestLocations = new HashSet<>(chestLocations);
@@ -218,6 +230,7 @@ public class Network {
             }
 
             cachedNetworkItems = newCache;
+            cacheDirty = false;
         } finally {
             cacheLock.writeLock().unlock();
         }
@@ -242,6 +255,9 @@ public class Network {
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
+        if (cacheDirty) {
+            rebuildCache();
+        }
         cacheLock.writeLock().lock();
         try {
             // Check cache first - only remove what we have

@@ -15,19 +15,20 @@ import org.bukkit.entity.Player;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class NetworkManager {
 
     private final NetworkStoragePlugin plugin;
-    private final Map<String, Network> networks = new HashMap<>();
+    private final Map<String, Network> networks = new ConcurrentHashMap<>();
     private final File networksFile;
     private boolean dirty = false;
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     // Track which network each player is currently using
-    private final Map<UUID, String> activeNetworks = new HashMap<>();
+    private final Map<UUID, String> activeNetworks = new ConcurrentHashMap<>();
 
     public NetworkManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -86,7 +87,8 @@ public class NetworkManager {
                             try {
                                 network.setIconMaterial(Material.valueOf(iconMaterialName));
                             } catch (IllegalArgumentException e) {
-                                plugin.getLogger().warning("Invalid icon material '" + iconMaterialName + "' for network '" + networkName + "', using default");
+                                plugin.getLogger().warning("Invalid icon material '" + iconMaterialName
+                                        + "' for network '" + networkName + "', using default");
                             }
                         }
 
@@ -121,6 +123,21 @@ public class NetworkManager {
                 }
             }
         }
+
+        // Load active networks
+        ConfigurationSection playersSection = networksConfig.getConfigurationSection("players");
+        if (playersSection != null) {
+            for (String uuidString : playersSection.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(uuidString);
+                    String networkName = playersSection.getString(uuidString + ".activeNetwork");
+                    if (networkName != null && networks.containsKey(networkName)) {
+                        activeNetworks.put(uuid, networkName);
+                    }
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+        }
     }
 
     public void saveNetworks() {
@@ -150,7 +167,8 @@ public class NetworkManager {
             }
             newConfig.set(path + ".sender-chests", serializedSenderChests);
 
-            newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
+            newConfig.set(path + ".trusted",
+                    network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
             // Save icon material
             newConfig.set(path + ".iconMaterial", network.getIconMaterial().name());
@@ -161,6 +179,11 @@ public class NetworkManager {
                 newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
                 newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
             }
+        }
+
+        // Save active networks
+        for (Map.Entry<UUID, String> entry : activeNetworks.entrySet()) {
+            newConfig.set("players." + entry.getKey().toString() + ".activeNetwork", entry.getValue());
         }
         try {
             newConfig.save(networksFile);
@@ -235,7 +258,8 @@ public class NetworkManager {
     public Network getNetworkByLocation(Location location) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
-            if (globalNetwork != null && (globalNetwork.isChestInNetwork(location) || globalNetwork.isTerminalInNetwork(location))) {
+            if (globalNetwork != null
+                    && (globalNetwork.isChestInNetwork(location) || globalNetwork.isTerminalInNetwork(location))) {
                 return globalNetwork;
             }
             return null;
@@ -358,7 +382,8 @@ public class NetworkManager {
 
         // Check if new name already exists
         if (networks.containsKey(newName)) {
-            player.sendMessage(plugin.getLanguageManager().getMessage("network.rename.already_exists").replace("%s", newName));
+            player.sendMessage(
+                    plugin.getLanguageManager().getMessage("network.rename.already_exists").replace("%s", newName));
             return false;
         }
 
@@ -378,9 +403,11 @@ public class NetworkManager {
         networks.remove(oldName);
         networks.put(newName, network);
 
-        // Update active network reference if this was active
-        if (oldName.equals(activeNetworks.get(player.getUniqueId()))) {
-            activeNetworks.put(player.getUniqueId(), newName);
+        // Update active network reference for ALL players
+        for (Map.Entry<UUID, String> entry : activeNetworks.entrySet()) {
+            if (entry.getValue().equals(oldName)) {
+                activeNetworks.put(entry.getKey(), newName);
+            }
         }
 
         markDirty();
@@ -394,7 +421,8 @@ public class NetworkManager {
         Network network = getPlayerNetwork(player);
         if (network == null) {
             String networkName = player.getName() + "'s Network";
-            if (networks.containsKey(networkName) && !networks.get(networkName).getOwner().equals(player.getUniqueId())) {
+            if (networks.containsKey(networkName)
+                    && !networks.get(networkName).getOwner().equals(player.getUniqueId())) {
                 player.sendMessage("A network with your default name already exists, but you are not the owner.");
                 return null;
             }

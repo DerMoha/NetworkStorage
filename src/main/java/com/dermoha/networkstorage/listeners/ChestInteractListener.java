@@ -23,6 +23,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
@@ -45,25 +46,34 @@ public class ChestInteractListener implements Listener {
         this.lang = plugin.getLanguageManager();
     }
 
-    public void addOpenTerminal(UUID playerId, TerminalGUI gui) { openTerminals.put(playerId, gui); }
-    public void setTransitioningToStats(UUID playerId) { transitioningToStats.add(playerId); }
+    public void addOpenTerminal(UUID playerId, TerminalGUI gui) {
+        openTerminals.put(playerId, gui);
+    }
+
+    public void setTransitioningToStats(UUID playerId) {
+        transitioningToStats.add(playerId);
+    }
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK)
+            return;
 
         Player player = event.getPlayer();
         Block clickedBlock = event.getClickedBlock();
 
-        if (clickedBlock == null) return;
+        if (clickedBlock == null)
+            return;
 
         ItemStack itemInHand = event.getItem();
-        if (WandListener.isStorageWand(itemInHand, lang)) return;
+        if (WandListener.isStorageWand(itemInHand, lang))
+            return;
 
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             Network network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
 
-            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) || network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
+            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation())
+                    || network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
                 event.setCancelled(true);
 
                 if (!network.canAccess(player)) {
@@ -92,12 +102,14 @@ public class ChestInteractListener implements Listener {
 
         if (remaining == null || remaining.getAmount() == 0) {
             player.getInventory().setItemInMainHand(null);
-            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, getItemDisplayName(itemInHand)));
+            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount,
+                    getItemDisplayName(itemInHand)));
             network.recordItemsDeposited(player, originalAmount);
         } else {
             int depositedAmount = originalAmount - remaining.getAmount();
             if (depositedAmount > 0) {
-                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, getItemDisplayName(itemInHand), remaining.getAmount()));
+                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount,
+                        getItemDisplayName(itemInHand), remaining.getAmount()));
                 network.recordItemsDeposited(player, depositedAmount);
             }
             itemInHand.setAmount(remaining.getAmount());
@@ -113,7 +125,8 @@ public class ChestInteractListener implements Listener {
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!(event.getWhoClicked() instanceof Player player))
+            return;
 
         InventoryHolder holder = event.getInventory().getHolder();
 
@@ -148,7 +161,8 @@ public class ChestInteractListener implements Listener {
         }
 
         if (holder instanceof TerminalGUI terminal) {
-            if (!terminal.equals(openTerminals.get(player.getUniqueId()))) return;
+            if (!terminal.equals(openTerminals.get(player.getUniqueId())))
+                return;
 
             event.setCancelled(true);
 
@@ -173,23 +187,27 @@ public class ChestInteractListener implements Listener {
 
     private void handleShiftClickDeposit(InventoryClickEvent event, TerminalGUI terminal, Player player) {
         ItemStack clickedItem = event.getCurrentItem();
-        if (clickedItem == null || clickedItem.getType() == Material.AIR) return;
+        if (clickedItem == null || clickedItem.getType() == Material.AIR)
+            return;
 
         int playerSlot = event.getSlot();
         ItemStack itemToDeposit = player.getInventory().getItem(playerSlot);
-        if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) return;
+        if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR)
+            return;
 
         int originalAmount = itemToDeposit.getAmount();
         ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
 
         if (remaining == null || remaining.getAmount() == 0) {
             player.getInventory().setItem(playerSlot, null);
-            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, terminal.getItemDisplayName(itemToDeposit)));
+            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount,
+                    terminal.getItemDisplayName(itemToDeposit)));
             terminal.getNetwork().recordItemsDeposited(player, originalAmount);
         } else {
             int depositedAmount = originalAmount - remaining.getAmount();
             if (depositedAmount > 0) {
-                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, terminal.getItemDisplayName(itemToDeposit), remaining.getAmount()));
+                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount,
+                        terminal.getItemDisplayName(itemToDeposit), remaining.getAmount()));
                 terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
             }
             player.getInventory().setItem(playerSlot, remaining);
@@ -199,8 +217,9 @@ public class ChestInteractListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) return;
-        
+        if (!(event.getPlayer() instanceof Player player))
+            return;
+
         InventoryHolder holder = event.getInventory().getHolder();
 
         if (holder instanceof TerminalGUI) {
@@ -212,10 +231,16 @@ public class ChestInteractListener implements Listener {
             Location chestLoc = ((Chest) holder).getLocation();
             Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
             if (network != null && network.isChestInNetwork(chestLoc)) {
-                // Run synchronously on next tick - rebuildCache is now thread-safe internally
-                plugin.getServer().getScheduler().runTask(plugin, network::rebuildCache);
+                network.markCacheDirty();
             }
         }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        openTerminals.remove(uuid);
+        transitioningToStats.remove(uuid);
     }
 
     @EventHandler
@@ -244,7 +269,7 @@ public class ChestInteractListener implements Listener {
                     network.removeTerminal(normalizedLoc);
                     changed = true;
                 }
-                if(changed) {
+                if (changed) {
                     plugin.getNetworkManager().saveNetworks();
                 }
             }
