@@ -143,6 +143,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
+        if (searchManager != null) {
+            searchManager.cleanup();
+        }
         if (networkManager != null) {
             getLogger().info("Saving network data before shutdown...");
             networkManager.saveNetworks();

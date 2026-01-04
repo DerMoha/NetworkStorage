@@ -78,7 +78,11 @@ public class StatsGUI implements InventoryHolder {
 
     public void handleClick(int slot) {
         if (slot == 49) { // Back button
-            previousGUI.open();
+            if (previousGUI != null) {
+                previousGUI.open();
+            } else {
+                player.closeInventory();
+            }
         }
     }
 

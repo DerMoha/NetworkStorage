@@ -7,11 +7,20 @@ import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
-public class NetworkCommand implements CommandExecutor {
+public class NetworkCommand implements CommandExecutor, TabCompleter {
+
+    private static final List<String> SUBCOMMANDS = Arrays.asList(
+            "create", "delete", "remove", "list", "switch", "select", "gui", "menu", "rename", "help");
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
@@ -101,8 +110,8 @@ public class NetworkCommand implements CommandExecutor {
 
         player.sendMessage(lang.getMessage("network.delete.confirm1").replace("%s", networkName));
         player.sendMessage(lang.getMessage("network.delete.confirm2")
-            .replace("%chests%", String.valueOf(network.getChestLocations().size()))
-            .replace("%terminals%", String.valueOf(network.getTerminalLocations().size())));
+                .replace("%chests%", String.valueOf(network.getChestLocations().size()))
+                .replace("%terminals%", String.valueOf(network.getTerminalLocations().size())));
         player.sendMessage(lang.getMessage("network.delete.confirm3").replace("%s", networkName));
 
         plugin.getSearchManager().startDeletingNetwork(player, networkName);
@@ -123,8 +132,8 @@ public class NetworkCommand implements CommandExecutor {
             String prefix = isActive ? lang.getMessage("network.list.active_prefix") : "  ";
 
             player.sendMessage(prefix + "§e" + network.getName() + " §7- " +
-                network.getChestLocations().size() + " chests, " +
-                network.getTerminalLocations().size() + " terminals");
+                    network.getChestLocations().size() + " chests, " +
+                    network.getTerminalLocations().size() + " terminals");
         }
         player.sendMessage(lang.getMessage("network.list.footer"));
     }
@@ -165,5 +174,32 @@ public class NetworkCommand implements CommandExecutor {
         player.sendMessage(lang.getMessage("network.help.gui"));
         player.sendMessage(lang.getMessage("network.help.rename"));
         player.sendMessage(lang.getMessage("network.help.help"));
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return Collections.emptyList();
+        }
+
+        if (args.length == 1) {
+            return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
+        }
+
+        // For commands that need a network name as second argument
+        if (args.length == 2) {
+            String subCommand = args[0].toLowerCase();
+            if (subCommand.equals("delete") || subCommand.equals("remove") ||
+                    subCommand.equals("switch") || subCommand.equals("select") ||
+                    subCommand.equals("rename")) {
+                List<String> networkNames = plugin.getNetworkManager().getPlayerNetworks(player)
+                        .stream()
+                        .map(Network::getName)
+                        .collect(Collectors.toList());
+                return StringUtil.copyPartialMatches(args[1], networkNames, new ArrayList<>());
+            }
+        }
+
+        return Collections.emptyList();
     }
 }

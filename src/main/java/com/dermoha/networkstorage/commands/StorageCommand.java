@@ -19,14 +19,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class StorageCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust", "wireless");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust",
+            "wireless");
 
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -254,7 +254,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(lang.getMessage("reset_confirm_1"));
-        player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(), network.getTerminalLocations().size()));
+        player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(),
+                network.getTerminalLocations().size()));
         player.sendMessage(lang.getMessage("reset_confirm_3"));
 
         // Mark player as pending reset confirmation
@@ -317,7 +318,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
 
         // Only show multi-network hint if enabled (not in GLOBAL mode)
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.PLAYER
-            && plugin.getConfigManager().getMaxNetworksPerPlayer() != 1) {
+                && plugin.getConfigManager().getMaxNetworksPerPlayer() != 1) {
             player.sendMessage("");
             player.sendMessage(lang.getMessage("help_network_hint"));
         }
