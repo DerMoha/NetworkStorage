@@ -131,9 +131,9 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             boolean isActive = activeNetwork != null && activeNetwork.getName().equals(network.getName());
             String prefix = isActive ? lang.getMessage("network.list.active_prefix") : "  ";
 
-            player.sendMessage(prefix + "§e" + network.getName() + " §7- " +
-                    network.getChestLocations().size() + " chests, " +
-                    network.getTerminalLocations().size() + " terminals");
+            player.sendMessage(prefix + String.format(lang.getMessage("network.list.entry"),
+                    network.getName(), network.getChestLocations().size(),
+                    network.getTerminalLocations().size()));
         }
         player.sendMessage(lang.getMessage("network.list.footer"));
     }

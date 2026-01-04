@@ -23,7 +23,7 @@ public class NetworkStorageAdminCommand implements CommandExecutor {
             return true;
         }
 
-        sender.sendMessage("§cUsage: /networkstorage reload");
+        sender.sendMessage(lang.getMessage("admin.usage"));
         return true;
     }
 

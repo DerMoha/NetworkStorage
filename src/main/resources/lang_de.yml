@@ -261,3 +261,11 @@ protection.lands.no_permission: "§cDu hast in diesem Land keine Berechtigung!"
 protection.lands.no_container_access: "§cDu kannst in diesem Land nicht auf Container zugreifen!"
 protection.bypass_permission: "networkstorage.bypass.protection"
 network.item_no_longer_available: "§cDieses Item ist nicht mehr verfügbar. Das Inventar wurde aktualisiert."
+
+# Terminal und Netzwerk-Anzeige
+terminal.title.suffix: " §7- §f%s"
+network.list.entry: "§e%s §7- %s Kisten, %s Terminals"
+network.trust.player_name: "§e%s"
+network.trust.click_to_untrust: "§7Klicke, um diesem Spieler das Vertrauen zu entziehen"
+network.trust.untrusted_success: "§a%s wurde das Vertrauen entzogen."
+admin.usage: "§cBenutzung: /networkstorage reload"

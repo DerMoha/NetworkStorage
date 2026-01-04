@@ -37,7 +37,7 @@ public class TrustManagementGUI implements InventoryHolder {
         this.parentGUI = parentGUI;
         this.trustedPlayers = new ArrayList<>(network.getTrustedPlayers());
         this.inventory = Bukkit.createInventory(this, GUI_SIZE,
-            lang.getMessage("network.trust.title").replace("%s", network.getName()));
+                lang.getMessage("network.trust.title").replace("%s", network.getName()));
         updateInventory();
     }
 
@@ -52,10 +52,10 @@ public class TrustManagementGUI implements InventoryHolder {
             ItemStack head = new ItemStack(Material.PLAYER_HEAD);
             SkullMeta meta = (SkullMeta) head.getItemMeta();
             meta.setOwningPlayer(trustedPlayer);
-            meta.setDisplayName("§e" + trustedPlayer.getName());
+            meta.setDisplayName(String.format(lang.getMessage("network.trust.player_name"), trustedPlayer.getName()));
 
             List<String> lore = new ArrayList<>();
-            lore.add("§7Click to untrust this player");
+            lore.add(lang.getMessage("network.trust.click_to_untrust"));
             meta.setLore(lore);
 
             head.setItemMeta(meta);
@@ -89,7 +89,8 @@ public class TrustManagementGUI implements InventoryHolder {
             OfflinePlayer trustedPlayer = Bukkit.getOfflinePlayer(trustedUUID);
 
             network.removeTrustedPlayer(trustedUUID);
-            player.sendMessage("§a" + trustedPlayer.getName() + " has been untrusted.");
+            player.sendMessage(
+                    String.format(lang.getMessage("network.trust.untrusted_success"), trustedPlayer.getName()));
 
             // Refresh GUI
             trustedPlayers.remove(slot);

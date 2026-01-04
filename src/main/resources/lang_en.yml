@@ -262,3 +262,11 @@ protection.griefprevention.claim_owner: "§cThis chest belongs to another player
 protection.lands.no_permission: "§cYou don't have permission in this Land!"
 protection.lands.no_container_access: "§cYou cannot access containers in this Land!"
 protection.bypass_permission: "networkstorage.bypass.protection"
+
+# Terminal and Network Display
+terminal.title.suffix: " §7- §f%s"
+network.list.entry: "§e%s §7- %s chests, %s terminals"
+network.trust.player_name: "§e%s"
+network.trust.click_to_untrust: "§7Click to untrust this player"
+network.trust.untrusted_success: "§a%s has been untrusted."
+admin.usage: "§cUsage: /networkstorage reload"

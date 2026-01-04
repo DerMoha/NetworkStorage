@@ -46,7 +46,7 @@ public class TerminalGUI implements InventoryHolder {
         String title = lang.getMessage("terminal.title");
         if (plugin.getConfigManager()
                 .getNetworkMode() == com.dermoha.networkstorage.managers.ConfigManager.NetworkMode.PLAYER) {
-            title = title + " §7- §f" + network.getName();
+            title = title + String.format(lang.getMessage("terminal.title.suffix"), network.getName());
         }
 
         this.inventory = Bukkit.createInventory(this, GUI_SIZE, title);
