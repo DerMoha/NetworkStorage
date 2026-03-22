@@ -10,7 +10,14 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 
 /**
- * Handles automatic insertion of items into storage networks when chests are closed
+ * Validates that chest inventory closes are permitted for network chests.
+ *
+ * <p>Design note: items stored in network chests are <b>already part of the network</b>
+ * because {@link Network#getNetworkItems()} reads chest contents directly at render time.
+ * No explicit "insertion" step is needed — items placed in a network chest are
+ * immediately accessible through any terminal. This listener exists to enforce
+ * permission checks and guard against future changes that might introduce a
+ * separate insertion step.</p>
  */
 public class AutoInsertListener implements Listener {
 
@@ -60,7 +67,5 @@ public class AutoInsertListener implements Listener {
             return;
         }
 
-        // This is a network chest, items are automatically part of the network
-        // No action needed as items are already accessible through terminals
     }
 }
