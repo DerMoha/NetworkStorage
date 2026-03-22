@@ -174,10 +174,12 @@ public class WandListener implements Listener {
             Chest left = (Chest) doubleChest.getLeftSide();
             Chest right = (Chest) doubleChest.getRightSide();
 
-            Location otherHalfLocation = left.getLocation().equals(chestBlock.getLocation()) ? right.getLocation() : left.getLocation();
-            Location normalizedOtherHalfLoc = network.getNormalizedLocation(otherHalfLocation);
+            Location otherHalf = left.getLocation().equals(chestBlock.getLocation()) ? right.getLocation() : left.getLocation();
+            Location normalizedOtherHalf = network.getNormalizedLocation(otherHalf);
 
-            return network.isChestInNetwork(normalizedOtherHalfLoc) || network.isTerminalInNetwork(normalizedOtherHalfLoc) || network.isSenderChestInNetwork(normalizedOtherHalfLoc);
+            return network.isChestInNetwork(normalizedOtherHalf) 
+                    || network.isTerminalInNetwork(normalizedOtherHalf) 
+                    || network.isSenderChestInNetwork(normalizedOtherHalf);
         }
 
         return false;
