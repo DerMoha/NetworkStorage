@@ -5,6 +5,7 @@ import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -96,23 +97,16 @@ public class ChestInteractListener implements Listener {
 
         if (remaining == null || remaining.getAmount() == 0) {
             player.getInventory().setItemInMainHand(null);
-            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, getItemDisplayName(itemInHand)));
+            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, ItemUtils.getItemDisplayName(itemInHand)));
             network.recordItemsDeposited(player, originalAmount);
         } else {
             int depositedAmount = originalAmount - remaining.getAmount();
             if (depositedAmount > 0) {
-                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, getItemDisplayName(itemInHand), remaining.getAmount()));
+                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, ItemUtils.getItemDisplayName(itemInHand), remaining.getAmount()));
                 network.recordItemsDeposited(player, depositedAmount);
             }
             itemInHand.setAmount(remaining.getAmount());
         }
-    }
-
-    private String getItemDisplayName(ItemStack item) {
-        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-            return item.getItemMeta().getDisplayName();
-        }
-        return item.getType().toString().replace('_', ' ').toLowerCase();
     }
 
     @EventHandler

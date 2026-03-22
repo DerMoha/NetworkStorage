@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.gui;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -222,20 +223,8 @@ public class TerminalGUI implements InventoryHolder {
         return display;
     }
 
-    public String getItemDisplayName(ItemStack item) {
-        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-            return item.getItemMeta().getDisplayName();
-        }
-        String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
-        String[] words = materialName.split(" ");
-        StringBuilder displayName = new StringBuilder();
-        for (String word : words) {
-            if (displayName.length() > 0) {
-                displayName.append(" ");
-            }
-            displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
-        }
-        return displayName.toString();
+    public static String getItemDisplayName(ItemStack item) {
+        return ItemUtils.getItemDisplayName(item);
     }
 
     private String getSortDisplayName() {
