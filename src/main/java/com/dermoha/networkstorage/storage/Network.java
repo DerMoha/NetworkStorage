@@ -24,6 +24,10 @@ public class Network {
     private final Set<UUID> trustedPlayers;
     private transient boolean dirty = false;
 
+    private transient Map<ItemStack, Integer> itemCache;
+    private transient long itemCacheTime;
+    private static final long ITEM_CACHE_TTL_MS = 500;
+
     public Network(String name, UUID owner) {
         this.name = name;
         this.owner = owner;
@@ -78,11 +82,13 @@ public class Network {
     public void addChest(Location location) {
         chestLocations.add(location);
         this.dirty = true;
+        invalidateItemCache();
     }
 
     public void removeChest(Location location) {
         chestLocations.remove(location);
         this.dirty = true;
+        invalidateItemCache();
     }
 
     public void addTerminal(Location location) {
@@ -98,11 +104,13 @@ public class Network {
     public void addSenderChest(Location location) {
         senderChestLocations.add(location);
         this.dirty = true;
+        invalidateItemCache();
     }
 
     public void removeSenderChest(Location location) {
         senderChestLocations.remove(location);
         this.dirty = true;
+        invalidateItemCache();
     }
 
     public boolean isChestInNetwork(Location location) {
@@ -136,11 +144,17 @@ public class Network {
         if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             return true;
         }
-        if (!configManager.isTrustSystemEnabled()) {
+        UUID playerUUID = player.getUniqueId();
+        if (playerUUID.equals(this.owner) || player.hasPermission("networkstorage.admin")) {
             return true;
         }
-        UUID playerUUID = player.getUniqueId();
-        return playerUUID.equals(this.owner) || trustedPlayers.contains(playerUUID) || player.hasPermission("networkstorage.admin");
+        if (player.hasPermission("networkstorage.access.all")) {
+            return true;
+        }
+        if (configManager.isTrustSystemEnabled()) {
+            return trustedPlayers.contains(playerUUID);
+        }
+        return false;
     }
 
     public boolean isTrusted(UUID playerUUID) {
@@ -158,6 +172,11 @@ public class Network {
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {
+        long now = System.currentTimeMillis();
+        if (itemCache != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
+            return new HashMap<>(itemCache);
+        }
+
         Map<ItemStack, Integer> networkItems = new HashMap<>();
         Set<Location> allChestLocations = new HashSet<>(chestLocations);
         allChestLocations.addAll(senderChestLocations);
@@ -172,19 +191,25 @@ public class Network {
                 }
             }
         }
+
+        itemCache = new HashMap<>(networkItems);
+        itemCacheTime = now;
         return networkItems;
     }
 
     private void addToNetworkMap(Map<ItemStack, Integer> map, ItemStack item) {
-        for (Map.Entry<ItemStack, Integer> entry : map.entrySet()) {
-            if (entry.getKey().isSimilar(item)) {
-                map.put(entry.getKey(), entry.getValue() + item.getAmount());
-                return;
-            }
-        }
         ItemStack keyItem = item.clone();
         keyItem.setAmount(1);
-        map.put(keyItem, item.getAmount());
+        Integer existing = map.get(keyItem);
+        if (existing != null) {
+            map.put(keyItem, existing + item.getAmount());
+        } else {
+            map.put(keyItem, item.getAmount());
+        }
+    }
+
+    public void invalidateItemCache() {
+        this.itemCache = null;
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
@@ -214,6 +239,7 @@ public class Network {
                 }
             }
         }
+        invalidateItemCache();
         ItemStack result = itemToRemove.clone();
         result.setAmount(amount - remaining);
         return result;
@@ -235,10 +261,21 @@ public class Network {
                 }
             }
         }
+        invalidateItemCache();
         return remaining;
     }
 
     public Location getNormalizedLocation(Location location) {
+        if (location.getBlock().getState() instanceof Chest) {
+            Chest chest = (Chest) location.getBlock().getState();
+            if (chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest) {
+                org.bukkit.block.DoubleChest doubleChest = (org.bukkit.block.DoubleChest) chest.getInventory().getHolder();
+                Chest left = (Chest) doubleChest.getLeftSide();
+                if (left != null) {
+                    return left.getLocation();
+                }
+            }
+        }
         return location;
     }
 

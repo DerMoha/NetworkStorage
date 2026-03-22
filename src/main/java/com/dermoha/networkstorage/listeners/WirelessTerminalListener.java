@@ -59,8 +59,13 @@ public class WirelessTerminalListener implements Listener {
                 Matcher matcher = USES_PATTERN.matcher(lore.get(i));
                 if (matcher.find()) {
                     usesLineIndex = i;
-                    currentUses = Integer.parseInt(matcher.group(1));
-                    maxUses = Integer.parseInt(matcher.group(2));
+                    try {
+                        currentUses = Integer.parseInt(matcher.group(1));
+                        maxUses = Integer.parseInt(matcher.group(2));
+                    } catch (NumberFormatException e) {
+                        player.sendMessage(lang.getMessage("wireless_terminal.broken"));
+                        return;
+                    }
                     break;
                 }
             }

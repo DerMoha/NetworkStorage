@@ -23,15 +23,10 @@ permissions:
     description: All NetworkStorage permissions
     default: op
     children:
-      networkstorage.use: true
       networkstorage.wand: true
       networkstorage.reset: true
       networkstorage.access.all: true
       networkstorage.admin: true
-
-  networkstorage.use:
-    description: Allows basic use of storage networks
-    default: true
 
   networkstorage.wand:
     description: Allows getting and using storage wands
