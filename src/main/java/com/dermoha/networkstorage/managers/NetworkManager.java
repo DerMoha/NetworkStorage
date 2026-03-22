@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 public class NetworkManager {
 
     private final NetworkStoragePlugin plugin;
+    private final LanguageManager lang;
     private final Map<String, Network> networks = new HashMap<>();
     private final Map<Location, Network> locationIndex = new HashMap<>();
     private final File networksFile;
@@ -25,6 +26,7 @@ public class NetworkManager {
 
     public NetworkManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
+        this.lang = plugin.getLanguageManager();
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
         if (!networksFile.exists()) {
             try {
@@ -180,49 +182,49 @@ public class NetworkManager {
 
     public void createNetwork(Player player, String networkName) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            player.sendMessage("Cannot create a network in GLOBAL mode.");
+            player.sendMessage(lang.getMessage("network.create.global_mode"));
             return;
         }
         if (networks.containsKey(networkName)) {
-            player.sendMessage("A network with that name already exists.");
+            player.sendMessage(lang.getMessage("network.create.exists"));
             return;
         }
         Network network = new Network(networkName, player.getUniqueId());
         networks.put(networkName, network);
         network.setDirty(true);
         saveNetworks();
-        player.sendMessage("Network '" + networkName + "' created successfully.");
+        player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
 
     public void editNetwork(Player player, String networkName) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            player.sendMessage("Cannot edit a network in GLOBAL mode.");
+            player.sendMessage(lang.getMessage("network.edit.global_mode"));
             return;
         }
         if (!networks.containsKey(networkName)) {
-            player.sendMessage("Network '" + networkName + "' not found.");
+            player.sendMessage(String.format(lang.getMessage("network.edit.not_found"), networkName));
             return;
         }
-        player.sendMessage("Network editing is not yet implemented.");
+        player.sendMessage(lang.getMessage("network.edit.not_implemented"));
     }
 
     public void renameNetwork(Player player, String oldName, String newName) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            player.sendMessage("Cannot rename a network in GLOBAL mode.");
+            player.sendMessage(lang.getMessage("network.rename.global_mode"));
             return;
         }
         if (!networks.containsKey(oldName)) {
-            player.sendMessage("Network '" + oldName + "' not found.");
+            player.sendMessage(String.format(lang.getMessage("network.rename.not_found"), oldName));
             return;
         }
         if (networks.containsKey(newName)) {
-            player.sendMessage("A network with the name '" + newName + "' already exists.");
+            player.sendMessage(String.format(lang.getMessage("network.rename.exists"), newName));
             return;
         }
         Network network = networks.get(oldName);
 
         if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
-             player.sendMessage("You do not have permission to rename this network.");
+             player.sendMessage(lang.getMessage("network.rename.permission"));
              return;
         }
 
@@ -230,7 +232,7 @@ public class NetworkManager {
         network.setName(newName);
         networks.put(newName, network);
         saveNetworks();
-        player.sendMessage("Network '" + oldName + "' has been renamed to '" + newName + "'.");
+        player.sendMessage(String.format(lang.getMessage("network.rename.success"), oldName, newName));
     }
 
     public Network getNetwork(String name) {
@@ -284,7 +286,7 @@ public class NetworkManager {
         if (network == null) {
             String networkName = player.getName() + "'s Network";
             if (networks.containsKey(networkName) && !networks.get(networkName).getOwner().equals(player.getUniqueId())) {
-                player.sendMessage("A network with your default name already exists, but you are not the owner.");
+                player.sendMessage(lang.getMessage("network.orcreate.exists"));
                 return null;
             }
             network = new Network(networkName, player.getUniqueId());
