@@ -31,6 +31,14 @@ public class TerminalGUI implements InventoryHolder {
     private static final int ITEMS_PER_PAGE = 45;
     private static final int GUI_SIZE = 54;
 
+    private static final int SLOT_PREV_PAGE = 45;
+    private static final int SLOT_SEARCH = 46;
+    private static final int SLOT_SORT = 47;
+    private static final int SLOT_INFO = 48;
+    private static final int SLOT_STATS = 49;
+    private static final int SLOT_REFRESH = 52;
+    private static final int SLOT_NEXT_PAGE = 53;
+
     public enum SortType {
         ALPHABETICAL,
         COUNT_DESC,
@@ -112,7 +120,7 @@ public class TerminalGUI implements InventoryHolder {
             meta.setDisplayName(lang.getMessage("terminal.prev_page"));
             meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 1, Math.max(1, totalPages))));
             prevButton.setItemMeta(meta);
-            inventory.setItem(45, prevButton);
+            inventory.setItem(SLOT_PREV_PAGE, prevButton);
         }
 
         ItemStack searchButton = new ItemStack(Material.SPYGLASS);
@@ -132,7 +140,7 @@ public class TerminalGUI implements InventoryHolder {
             ));
         }
         searchButton.setItemMeta(searchMeta);
-        inventory.setItem(46, searchButton);
+        inventory.setItem(SLOT_SEARCH, searchButton);
 
         ItemStack sortButton = new ItemStack(Material.COMPARATOR);
         ItemMeta sortMeta = sortButton.getItemMeta();
@@ -142,7 +150,7 @@ public class TerminalGUI implements InventoryHolder {
                 String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())
         ));
         sortButton.setItemMeta(sortMeta);
-        inventory.setItem(47, sortButton);
+        inventory.setItem(SLOT_SORT, sortButton);
 
         ItemStack infoButton = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = infoButton.getItemMeta();
@@ -159,21 +167,21 @@ public class TerminalGUI implements InventoryHolder {
                 lang.getMessage("terminal.info.lore3")
         ));
         infoButton.setItemMeta(infoMeta);
-        inventory.setItem(48, infoButton);
+        inventory.setItem(SLOT_INFO, infoButton);
 
         ItemStack statsButton = new ItemStack(Material.EMERALD);
         ItemMeta statsMeta = statsButton.getItemMeta();
         statsMeta.setDisplayName(lang.getMessage("terminal.stats.title"));
         statsMeta.setLore(Collections.singletonList(lang.getMessage("terminal.stats.lore")));
         statsButton.setItemMeta(statsMeta);
-        inventory.setItem(49, statsButton);
+        inventory.setItem(SLOT_STATS, statsButton);
 
         ItemStack refreshButton = new ItemStack(Material.CLOCK);
         ItemMeta refreshMeta = refreshButton.getItemMeta();
         refreshMeta.setDisplayName(lang.getMessage("terminal.refresh.title"));
         refreshMeta.setLore(Collections.singletonList(lang.getMessage("terminal.refresh.lore")));
         refreshButton.setItemMeta(refreshMeta);
-        inventory.setItem(52, refreshButton);
+        inventory.setItem(SLOT_REFRESH, refreshButton);
 
         if (page < totalPages - 1) {
             ItemStack nextButton = new ItemStack(Material.ARROW);
@@ -181,7 +189,7 @@ public class TerminalGUI implements InventoryHolder {
             meta.setDisplayName(lang.getMessage("terminal.next_page"));
             meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 2, totalPages)));
             nextButton.setItemMeta(meta);
-            inventory.setItem(53, nextButton);
+            inventory.setItem(SLOT_NEXT_PAGE, nextButton);
         }
     }
 
@@ -251,13 +259,13 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
-        if (slot == 45 && currentPage > 0) {
+        if (slot == SLOT_PREV_PAGE && currentPage > 0) {
             currentPage--;
             updateInventory();
             return;
         }
 
-        if (slot == 53) {
+        if (slot == SLOT_NEXT_PAGE) {
             int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
             if (currentPage < totalPages - 1) {
                 currentPage++;
@@ -266,7 +274,7 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        if (slot == 46) {
+        if (slot == SLOT_SEARCH) {
             if (isRightClick && !searchFilter.isEmpty()) {
                 searchFilter = "";
                 currentPage = 0;
@@ -281,21 +289,21 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        if (slot == 47) {
+        if (slot == SLOT_SORT) {
             cycleSortType();
             currentPage = 0;
             updateInventory();
             return;
         }
 
-        if (slot == 49) { // Stats button
+        if (slot == SLOT_STATS) {
             plugin.getChestInteractListener().setTransitioningToStats(player.getUniqueId());
             StatsGUI statsGUI = new StatsGUI(player, network, plugin, this);
             statsGUI.open();
             return;
         }
 
-        if (slot == 52) {
+        if (slot == SLOT_REFRESH) {
             updateInventory();
             player.sendMessage(lang.getMessage("terminal.refreshed"));
             return;
