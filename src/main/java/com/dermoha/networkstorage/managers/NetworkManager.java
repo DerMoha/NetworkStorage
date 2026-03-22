@@ -95,8 +95,21 @@ public class NetworkManager {
     }
 
     public void saveNetworks() {
+        Set<Network> dirtyNetworks = networks.values().stream()
+                .filter(Network::isDirty)
+                .collect(Collectors.toSet());
+        if (dirtyNetworks.isEmpty()) {
+            return;
+        }
+        saveNetworks(dirtyNetworks);
+    }
+
+    public void saveNetworks(Set<Network> networksToSave) {
+        if (networksToSave.isEmpty()) {
+            return;
+        }
         FileConfiguration newConfig = new YamlConfiguration();
-        for (Network network : networks.values()) {
+        for (Network network : networksToSave) {
             String path = "networks." + network.getName();
             newConfig.set(path + ".owner", network.getOwner().toString());
 
@@ -120,13 +133,13 @@ public class NetworkManager {
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
-            // Save player stats
             for (PlayerStat stat : network.getPlayerStats().values()) {
                 String statPath = path + ".stats." + stat.getPlayerUUID().toString();
                 newConfig.set(statPath + ".name", stat.getPlayerName());
                 newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
                 newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
             }
+            network.setDirty(false);
         }
         try {
             newConfig.save(networksFile);
@@ -134,6 +147,10 @@ public class NetworkManager {
             plugin.getLogger().severe("Could not save networks to " + networksFile);
             e.printStackTrace();
         }
+    }
+
+    public void saveAllNetworks() {
+        saveNetworks(new HashSet<>(networks.values()));
     }
 
     public void createNetwork(Player player, String networkName) {
@@ -147,6 +164,7 @@ public class NetworkManager {
         }
         Network network = new Network(networkName, player.getUniqueId());
         networks.put(networkName, network);
+        network.setDirty(true);
         saveNetworks();
         player.sendMessage("Network '" + networkName + "' created successfully.");
     }
@@ -229,7 +247,7 @@ public class NetworkManager {
         return null;
     }
 
-    public Network getOrCreatePlayerNetwork(Player player) {
+    public synchronized Network getOrCreatePlayerNetwork(Player player) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             return networks.get(GLOBAL_NETWORK_NAME);
         }
@@ -242,7 +260,7 @@ public class NetworkManager {
             }
             network = new Network(networkName, player.getUniqueId());
             networks.put(networkName, network);
-            saveNetworks();
+            network.setDirty(true);
         }
         return network;
     }

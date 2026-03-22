@@ -133,7 +133,6 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         network.addTrustedPlayer(target.getUniqueId());
-        plugin.getNetworkManager().saveNetworks();
         player.sendMessage(String.format(lang.getMessage("trust.success"), target.getName()));
 
         if (target.isOnline()) {
@@ -178,7 +177,6 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         network.removeTrustedPlayer(target.getUniqueId());
-        plugin.getNetworkManager().saveNetworks();
         player.sendMessage(String.format(lang.getMessage("untrust.success"), target.getName()));
 
         if (target.isOnline()) {

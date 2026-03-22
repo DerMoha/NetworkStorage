@@ -22,6 +22,7 @@ public class Network {
     private final Set<Location> senderChestLocations;
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
+    private transient boolean dirty = false;
 
     public Network(String name, UUID owner) {
         this.name = name;
@@ -39,6 +40,7 @@ public class Network {
 
     public void setName(String name) {
         this.name = name;
+        this.dirty = true;
     }
 
     public UUID getOwner() {
@@ -65,28 +67,42 @@ public class Network {
         return trustedPlayers;
     }
 
+    public boolean isDirty() {
+        return dirty;
+    }
+
+    public void setDirty(boolean dirty) {
+        this.dirty = dirty;
+    }
+
     public void addChest(Location location) {
         chestLocations.add(location);
+        this.dirty = true;
     }
 
     public void removeChest(Location location) {
         chestLocations.remove(location);
+        this.dirty = true;
     }
 
     public void addTerminal(Location location) {
         terminalLocations.add(location);
+        this.dirty = true;
     }
 
     public void removeTerminal(Location location) {
         terminalLocations.remove(location);
+        this.dirty = true;
     }
 
     public void addSenderChest(Location location) {
         senderChestLocations.add(location);
+        this.dirty = true;
     }
 
     public void removeSenderChest(Location location) {
         senderChestLocations.remove(location);
+        this.dirty = true;
     }
 
     public boolean isChestInNetwork(Location location) {
@@ -107,10 +123,12 @@ public class Network {
 
     public void recordItemsDeposited(Player player, int amount) {
         getPlayerStat(player).addItemsDeposited(amount);
+        this.dirty = true;
     }
 
     public void recordItemsWithdrawn(Player player, int amount) {
         getPlayerStat(player).addItemsWithdrawn(amount);
+        this.dirty = true;
     }
 
     public boolean canAccess(Player player) {
@@ -131,10 +149,12 @@ public class Network {
 
     public void addTrustedPlayer(UUID playerUUID) {
         trustedPlayers.add(playerUUID);
+        this.dirty = true;
     }
 
     public void removeTrustedPlayer(UUID playerUUID) {
         trustedPlayers.remove(playerUUID);
+        this.dirty = true;
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {

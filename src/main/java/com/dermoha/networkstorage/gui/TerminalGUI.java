@@ -349,7 +349,6 @@ public class TerminalGUI implements InventoryHolder {
 
         if (removedItem != null && removedItem.getAmount() > 0) {
             network.recordItemsWithdrawn(player, removedItem.getAmount());
-            plugin.getNetworkManager().saveNetworks();
 
             HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(removedItem);
 

@@ -7,9 +7,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Manages search functionality for terminal GUIs
@@ -22,7 +22,7 @@ public class SearchManager implements Listener {
 
     public SearchManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
-        this.searchingPlayers = new HashMap<>();
+        this.searchingPlayers = new ConcurrentHashMap<>();
         this.lang = plugin.getLanguageManager();
 
         // Register this as an event listener

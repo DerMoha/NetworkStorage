@@ -106,7 +106,6 @@ public class ChestInteractListener implements Listener {
             }
             itemInHand.setAmount(remaining.getAmount());
         }
-        plugin.getNetworkManager().saveNetworks();
     }
 
     private String getItemDisplayName(ItemStack item) {
@@ -184,7 +183,6 @@ public class ChestInteractListener implements Listener {
             player.getInventory().setItem(playerSlot, remaining);
         }
 
-        plugin.getNetworkManager().saveNetworks();
         plugin.getServer().getScheduler().runTask(plugin, terminal::updateInventory);
     }
 
