@@ -35,6 +35,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private SearchManager searchManager;
     private LanguageManager languageManager;
     private ChestInteractListener chestInteractListener;
+    private int senderChestTaskId = -1;
+    private int autoSaveTaskId = -1;
 
     @Override
     public void onEnable() {
@@ -75,19 +77,36 @@ public class NetworkStoragePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (networkManager != null) {
-            networkManager.saveNetworks();
+            networkManager.saveAllNetworks();
         }
+        cancelScheduledTasks();
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
 
     public void reload() {
         // Save all data first
-        networkManager.saveNetworks();
+        networkManager.saveAllNetworks();
+        cancelScheduledTasks();
 
         // Reload managers
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+
+        // Restart scheduled tasks
+        startSenderChestTask();
+        startAutoSaveTask();
+    }
+
+    private void cancelScheduledTasks() {
+        if (senderChestTaskId != -1) {
+            getServer().getScheduler().cancelTask(senderChestTaskId);
+            senderChestTaskId = -1;
+        }
+        if (autoSaveTaskId != -1) {
+            getServer().getScheduler().cancelTask(autoSaveTaskId);
+            autoSaveTaskId = -1;
+        }
     }
 
     private void registerRecipes() {
@@ -126,8 +145,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private void startSenderChestTask() {
-        int interval = configManager.getSenderChestTransferInterval() * 20; // Convert seconds to ticks
-        Bukkit.getScheduler().runTaskTimer(this, () -> {
+        int interval = configManager.getSenderChestTransferInterval() * 20;
+        senderChestTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
             for (Network network : networkManager.getAllNetworks()) {
                 Set<Location> senderChestLocations = network.getSenderChestLocations();
                 Iterator<Location> iterator = senderChestLocations.iterator();
@@ -154,21 +173,22 @@ public class NetworkStoragePlugin extends JavaPlugin {
                         }
                     } else {
                         iterator.remove();
+                        network.setDirty(true);
                         getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from a network because it was no longer a chest.");
                     }
                 }
             }
-        }, 100L, interval);
+        }, 100L, interval).getTaskId();
     }
 
     private void startAutoSaveTask() {
-        int interval = configManager.getAutoSaveInterval() * 60 * 20; // Convert minutes to ticks
+        int interval = configManager.getAutoSaveInterval() * 60 * 20;
         if (interval > 0) {
-            Bukkit.getScheduler().runTaskTimer(this, () -> {
+            autoSaveTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Auto-saving network data...");
-                networkManager.saveNetworks();
+                networkManager.saveAllNetworks();
                 getLogger().info("Auto-save complete.");
-            }, interval, interval);
+            }, interval, interval).getTaskId();
         }
     }
 
