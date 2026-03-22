@@ -218,18 +218,22 @@ public class ChestInteractListener implements Listener {
                 boolean changed = false;
                 if (network.isChestInNetwork(chestLoc)) {
                     network.removeChest(chestLoc);
+                    plugin.getNetworkManager().removeFromLocationIndex(chestLoc);
                     changed = true;
                 }
                 if (network.isChestInNetwork(normalizedLoc)) {
                     network.removeChest(normalizedLoc);
+                    plugin.getNetworkManager().removeFromLocationIndex(normalizedLoc);
                     changed = true;
                 }
                 if (network.isTerminalInNetwork(chestLoc)) {
                     network.removeTerminal(chestLoc);
+                    plugin.getNetworkManager().removeFromLocationIndex(chestLoc);
                     changed = true;
                 }
                 if (network.isTerminalInNetwork(normalizedLoc)) {
                     network.removeTerminal(normalizedLoc);
+                    plugin.getNetworkManager().removeFromLocationIndex(normalizedLoc);
                     changed = true;
                 }
                 if(changed) {

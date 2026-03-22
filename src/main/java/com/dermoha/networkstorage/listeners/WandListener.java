@@ -82,6 +82,7 @@ public class WandListener implements Listener {
                 }
 
                 network.addSenderChest(normalizedLoc);
+                plugin.getNetworkManager().addToLocationIndex(normalizedLoc, network);
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.sender_chest.added"), chestType, network.getSenderChestLocations().size()));
@@ -104,6 +105,7 @@ public class WandListener implements Listener {
                 }
 
                 network.addChest(normalizedLoc);
+                plugin.getNetworkManager().addToLocationIndex(normalizedLoc, network);
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.chest.added"), chestType, network.getChestLocations().size()));
@@ -127,6 +129,7 @@ public class WandListener implements Listener {
                 }
 
                 network.addTerminal(normalizedLoc);
+                plugin.getNetworkManager().addToLocationIndex(normalizedLoc, network);
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.terminal.added"), chestType, network.getTerminalLocations().size()));
@@ -144,6 +147,7 @@ public class WandListener implements Listener {
                 network.removeChest(normalizedLoc);
                 network.removeTerminal(normalizedLoc);
                 network.removeSenderChest(normalizedLoc);
+                plugin.getNetworkManager().removeFromLocationIndex(normalizedLoc);
 
                 String chestType = getChestType(chestBlock);
 

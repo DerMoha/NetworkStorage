@@ -50,6 +50,8 @@ public class TerminalGUI implements InventoryHolder {
 
         Map<ItemStack, Integer> networkItems = network.getNetworkItems();
         long totalNetworkItems = networkItems.values().stream().mapToLong(Integer::longValue).sum();
+        int uniqueTypes = networkItems.size();
+        double capacity = network.getCapacityPercent();
         sortedItems = new ArrayList<>(networkItems.entrySet());
 
         if (!searchFilter.isEmpty()) {
@@ -99,10 +101,10 @@ public class TerminalGUI implements InventoryHolder {
             inventory.setItem(slot, displayItem);
         }
 
-        addControlButtons(currentPage, totalPages);
+        addControlButtons(currentPage, totalPages, totalNetworkItems, uniqueTypes, capacity);
     }
 
-    private void addControlButtons(int page, int totalPages) {
+    private void addControlButtons(int page, int totalPages, long totalItems, int uniqueTypes, double capacity) {
         if (page > 0) {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta meta = prevButton.getItemMeta();
@@ -140,10 +142,6 @@ public class TerminalGUI implements InventoryHolder {
         ));
         sortButton.setItemMeta(sortMeta);
         inventory.setItem(47, sortButton);
-
-        long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
-        int uniqueTypes = network.getNetworkItems().size();
-        double capacity = network.getCapacityPercent();
 
         ItemStack infoButton = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = infoButton.getItemMeta();

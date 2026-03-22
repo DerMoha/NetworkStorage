@@ -18,6 +18,7 @@ public class NetworkManager {
 
     private final NetworkStoragePlugin plugin;
     private final Map<String, Network> networks = new HashMap<>();
+    private final Map<Location, Network> locationIndex = new HashMap<>();
     private final File networksFile;
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -92,6 +93,22 @@ public class NetworkManager {
                 }
             }
         }
+        rebuildLocationIndex();
+    }
+
+    private void rebuildLocationIndex() {
+        locationIndex.clear();
+        for (Network network : networks.values()) {
+            for (Location loc : network.getChestLocations()) {
+                locationIndex.put(loc, network);
+            }
+            for (Location loc : network.getTerminalLocations()) {
+                locationIndex.put(loc, network);
+            }
+            for (Location loc : network.getSenderChestLocations()) {
+                locationIndex.put(loc, network);
+            }
+        }
     }
 
     public void saveNetworks() {
@@ -151,6 +168,14 @@ public class NetworkManager {
 
     public void saveAllNetworks() {
         saveNetworks(new HashSet<>(networks.values()));
+    }
+
+    public void addToLocationIndex(Location loc, Network network) {
+        locationIndex.put(loc, network);
+    }
+
+    public void removeFromLocationIndex(Location loc) {
+        locationIndex.remove(loc);
     }
 
     public void createNetwork(Player player, String networkName) {
@@ -226,6 +251,10 @@ public class NetworkManager {
                 return globalNetwork;
             }
             return null;
+        }
+        Network indexed = locationIndex.get(location);
+        if (indexed != null) {
+            return indexed;
         }
         for (Network network : networks.values()) {
             if (network.isChestInNetwork(location) || network.isTerminalInNetwork(location)) {
