@@ -7,12 +7,15 @@ import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.StringUtil;
 
 import java.util.ArrayList;
@@ -190,7 +193,24 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        player.getInventory().addItem(WandListener.createStorageWand(plugin.getLanguageManager()));
+        ItemStack wand = WandListener.createStorageWand(plugin.getLanguageManager());
+        String wandName = wand.getItemMeta().getDisplayName();
+
+        for (int i = 0; i < player.getInventory().getSize(); i++) {
+            ItemStack slot = player.getInventory().getItem(i);
+            if (slot != null && slot.getType() == Material.BLAZE_ROD) {
+                ItemMeta meta = slot.getItemMeta();
+                if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(wandName)) {
+                    player.getInventory().setItem(i, wand);
+                    player.sendMessage(lang.getMessage("received_wand"));
+                    player.sendMessage(lang.getMessage("wand_left_click"));
+                    player.sendMessage(lang.getMessage("wand_right_click"));
+                    return;
+                }
+            }
+        }
+
+        player.getInventory().addItem(wand);
         player.sendMessage(lang.getMessage("received_wand"));
         player.sendMessage(lang.getMessage("wand_left_click"));
         player.sendMessage(lang.getMessage("wand_right_click"));

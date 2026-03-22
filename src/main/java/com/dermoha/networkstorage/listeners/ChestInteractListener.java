@@ -192,7 +192,10 @@ public class ChestInteractListener implements Listener {
         }
 
         if (holder instanceof TerminalGUI) {
-            if (plugin.getSearchManager().isSearching(player) || transitioningToStats.remove(player.getUniqueId())) {
+            if (plugin.getSearchManager().isSearching(player)) {
+                plugin.getSearchManager().cancelSearch(player);
+            }
+            if (transitioningToStats.remove(player.getUniqueId())) {
                 openTerminals.remove(player.getUniqueId());
                 return;
             }

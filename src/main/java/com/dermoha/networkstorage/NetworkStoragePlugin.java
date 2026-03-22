@@ -3,7 +3,6 @@ package com.dermoha.networkstorage;
 import com.dermoha.networkstorage.commands.NetworkCommand;
 import com.dermoha.networkstorage.commands.NetworkStorageAdminCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
-import com.dermoha.networkstorage.listeners.AutoInsertListener;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
@@ -61,7 +60,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         // Register event listeners
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
-        getServer().getPluginManager().registerEvents(new AutoInsertListener(this), this);
         getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
 
         // Register recipes
