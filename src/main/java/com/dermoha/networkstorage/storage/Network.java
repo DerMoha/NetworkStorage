@@ -188,6 +188,9 @@ public class Network {
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Amount cannot be negative: " + amount);
+        }
         int remaining = amount;
         Set<Location> allChestLocations = new HashSet<>(chestLocations);
         allChestLocations.addAll(senderChestLocations);
