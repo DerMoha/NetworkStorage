@@ -84,16 +84,15 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     public void reload() {
-        // Save all data first
         networkManager.saveAllNetworks();
         cancelScheduledTasks();
 
-        // Reload managers
+        searchManager.cleanup();
+
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
 
-        // Restart scheduled tasks
         startSenderChestTask();
         startAutoSaveTask();
     }

@@ -208,6 +208,15 @@ public class ChestInteractListener implements Listener {
             Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
 
             if (network != null) {
+                Player breaker = event.getPlayer();
+                boolean isOwner = network.getOwner().equals(breaker.getUniqueId());
+                boolean isAdmin = breaker.hasPermission("networkstorage.admin");
+
+                if (!isOwner && !isAdmin) {
+                    event.setCancelled(true);
+                    return;
+                }
+
                 Location normalizedLoc = network.getNormalizedLocation(chestLoc);
                 boolean changed = false;
                 if (network.isChestInNetwork(chestLoc)) {
