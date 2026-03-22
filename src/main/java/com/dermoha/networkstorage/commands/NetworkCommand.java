@@ -27,7 +27,10 @@ public class NetworkCommand implements CommandExecutor {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            // TODO: Send help message
+            player.sendMessage(lang.getMessage("network.help.title"));
+            player.sendMessage(lang.getMessage("network.help.create"));
+            player.sendMessage(lang.getMessage("network.help.edit"));
+            player.sendMessage(lang.getMessage("network.help.rename"));
             return true;
         }
 
@@ -56,7 +59,11 @@ public class NetworkCommand implements CommandExecutor {
                 plugin.getNetworkManager().renameNetwork(player, args[1], args[2]);
                 break;
             default:
-                // TODO: Send help message
+                player.sendMessage(String.format(lang.getMessage("unknown_subcommand"), subCommand));
+                player.sendMessage(lang.getMessage("network.help.title"));
+                player.sendMessage(lang.getMessage("network.help.create"));
+                player.sendMessage(lang.getMessage("network.help.edit"));
+                player.sendMessage(lang.getMessage("network.help.rename"));
                 break;
         }
 
