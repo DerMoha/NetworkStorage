@@ -35,11 +35,14 @@ public class AutoInsertListener implements Listener {
 
         // Check if this chest is part of a storage network
         Inventory chest = event.getInventory();
-        if (chest.getLocation() == null) {
+        if (chest.getHolder() == null || !(chest.getHolder() instanceof org.bukkit.block.BlockState)) {
             return;
         }
 
-        Network network = plugin.getNetworkManager().getNetworkByLocation(chest.getLocation().getBlock().getLocation());
+        org.bukkit.block.BlockState blockState = (org.bukkit.block.BlockState) chest.getHolder();
+        org.bukkit.Location chestLocation = blockState.getLocation();
+
+        Network network = plugin.getNetworkManager().getNetworkByLocation(chestLocation);
 
         if (network == null) {
             return;
@@ -52,8 +55,8 @@ public class AutoInsertListener implements Listener {
         }
 
         // Don't auto-insert from terminals
-        if (network.isTerminalInNetwork(chest.getLocation().getBlock().getLocation()) ||
-                network.isTerminalInNetwork(network.getNormalizedLocation(chest.getLocation().getBlock().getLocation()))) {
+        if (network.isTerminalInNetwork(chestLocation) ||
+                network.isTerminalInNetwork(network.getNormalizedLocation(chestLocation))) {
             return;
         }
 
