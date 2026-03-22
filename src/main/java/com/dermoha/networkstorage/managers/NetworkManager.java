@@ -11,6 +11,8 @@ import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -21,6 +23,7 @@ public class NetworkManager {
     private final Map<String, Network> networks = new HashMap<>();
     private final Map<Location, Network> locationIndex = new HashMap<>();
     private final File networksFile;
+    private final Object renameLock = new Object();
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
@@ -40,12 +43,8 @@ public class NetworkManager {
     }
 
     private void loadNetworks() {
-        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            if (!networks.containsKey(GLOBAL_NETWORK_NAME)) {
-                Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
-                networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
-            }
-        }
+        boolean isGlobalMode = plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL;
+        boolean globalNetworkLoaded = false;
         FileConfiguration networksConfig = YamlConfiguration.loadConfiguration(networksFile);
         ConfigurationSection networksSection = networksConfig.getConfigurationSection("networks");
         if (networksSection != null) {
@@ -89,12 +88,23 @@ public class NetworkManager {
                         }
 
                         networks.put(networkName, network);
+                        if (isGlobalMode && GLOBAL_NETWORK_NAME.equals(networkName)) {
+                            globalNetworkLoaded = true;
+                        }
                     } catch (Exception e) {
                         plugin.getLogger().warning("Could not load network '" + networkName + "': " + e.getMessage());
                     }
                 }
             }
         }
+
+        if (isGlobalMode && !globalNetworkLoaded) {
+            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+            networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
+            globalNetwork.setDirty(true);
+            plugin.getLogger().info("Created new global network in memory. It will be saved on next auto-save.");
+        }
+
         rebuildLocationIndex();
     }
 
@@ -161,7 +171,9 @@ public class NetworkManager {
             network.setDirty(false);
         }
         try {
-            newConfig.save(networksFile);
+            Path tempFile = networksFile.toPath().resolveSibling(networksFile.getName() + ".tmp");
+            newConfig.save(tempFile.toFile());
+            Files.move(tempFile, networksFile.toPath());
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save networks to " + networksFile);
             e.printStackTrace();
@@ -228,9 +240,11 @@ public class NetworkManager {
              return;
         }
 
-        networks.remove(oldName);
-        network.setName(newName);
-        networks.put(newName, network);
+        synchronized (renameLock) {
+            network.setName(newName);
+            networks.put(newName, network);
+            networks.remove(oldName);
+        }
         saveNetworks();
         player.sendMessage(String.format(lang.getMessage("network.rename.success"), oldName, newName));
     }

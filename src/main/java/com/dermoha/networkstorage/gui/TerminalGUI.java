@@ -340,24 +340,25 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        ItemStack removedItem = network.removeFromNetwork(itemType, finalAmount);
+        ItemStack toExtract = itemType.clone();
+        toExtract.setAmount(finalAmount);
+
+        HashMap<Integer, ItemStack> overflow = player.getInventory().addItem(toExtract);
+        if (!overflow.isEmpty()) {
+            int overflowAmount = overflow.values().stream().mapToInt(ItemStack::getAmount).sum();
+            if (overflowAmount >= finalAmount) {
+                player.sendMessage(lang.getMessage("terminal.no_items"));
+                return;
+            }
+            int actuallyAdded = finalAmount - overflowAmount;
+            toExtract.setAmount(actuallyAdded);
+        }
+
+        ItemStack removedItem = network.removeFromNetwork(toExtract, toExtract.getAmount());
 
         if (removedItem != null && removedItem.getAmount() > 0) {
             network.recordItemsWithdrawn(player, removedItem.getAmount());
-
-            HashMap<Integer, ItemStack> remaining = player.getInventory().addItem(removedItem);
-
-            if (!remaining.isEmpty()) {
-                for (ItemStack leftover : remaining.values()) {
-                    ItemStack stillRemaining = network.addToNetwork(leftover);
-                    if (stillRemaining != null && stillRemaining.getAmount() > 0) {
-                        player.getWorld().dropItemNaturally(player.getLocation(), stillRemaining);
-                        player.sendMessage(lang.getMessage("terminal.items_dropped"));
-                    }
-                }
-            }
             player.sendMessage(String.format(lang.getMessage("terminal.took_items"), removedItem.getAmount(), getItemDisplayName(itemType)));
-
             plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
         } else {
             player.sendMessage(lang.getMessage("terminal.could_not_remove"));
