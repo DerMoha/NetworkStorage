@@ -145,10 +145,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         int interval = configManager.getSenderChestTransferInterval() * 20;
         senderChestTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
             for (Network network : networkManager.getAllNetworks()) {
-                Set<Location> senderChestLocations = network.getSenderChestLocations();
-                Iterator<Location> iterator = senderChestLocations.iterator();
-                while (iterator.hasNext()) {
-                    Location senderLoc = iterator.next();
+                for (Location senderLoc : network.getSenderChestLocations()) {
 
                     if (!senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
                         continue;
@@ -169,8 +166,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
                             }
                         }
                     } else {
-                        iterator.remove();
-                        network.setDirty(true);
+                        network.removeSenderChest(senderLoc);
+                        networkManager.removeFromLocationIndex(senderLoc);
                         getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from a network because it was no longer a chest.");
                     }
                 }

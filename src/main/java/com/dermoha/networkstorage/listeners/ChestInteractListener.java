@@ -68,8 +68,9 @@ public class ChestInteractListener implements Listener {
 
         if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
             Network network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
+            Location normalizedLoc = network != null ? network.getNormalizedLocation(clickedBlock.getLocation()) : null;
 
-            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) || network.isTerminalInNetwork(network.getNormalizedLocation(clickedBlock.getLocation())))) {
+            if (network != null && (network.isTerminalInNetwork(clickedBlock.getLocation()) || network.isTerminalInNetwork(normalizedLoc))) {
                 event.setCancelled(true);
 
                 if (!network.canAccess(player)) {
@@ -221,31 +222,38 @@ public class ChestInteractListener implements Listener {
                 }
 
                 Location normalizedLoc = network.getNormalizedLocation(chestLoc);
-                boolean changed = false;
-                if (network.isChestInNetwork(chestLoc)) {
-                    network.removeChest(chestLoc);
-                    plugin.getNetworkManager().removeFromLocationIndex(chestLoc);
-                    changed = true;
+                boolean changed = removeTrackedLocation(network, chestLoc);
+                if (!normalizedLoc.equals(chestLoc)) {
+                    changed = removeTrackedLocation(network, normalizedLoc) || changed;
                 }
-                if (network.isChestInNetwork(normalizedLoc)) {
-                    network.removeChest(normalizedLoc);
-                    plugin.getNetworkManager().removeFromLocationIndex(normalizedLoc);
-                    changed = true;
-                }
-                if (network.isTerminalInNetwork(chestLoc)) {
-                    network.removeTerminal(chestLoc);
-                    plugin.getNetworkManager().removeFromLocationIndex(chestLoc);
-                    changed = true;
-                }
-                if (network.isTerminalInNetwork(normalizedLoc)) {
-                    network.removeTerminal(normalizedLoc);
-                    plugin.getNetworkManager().removeFromLocationIndex(normalizedLoc);
-                    changed = true;
-                }
-                if(changed) {
+
+                if (changed) {
                     plugin.getNetworkManager().saveNetworks();
                 }
             }
         }
+    }
+
+    private boolean removeTrackedLocation(Network network, Location location) {
+        boolean changed = false;
+
+        if (network.isChestInNetwork(location)) {
+            network.removeChest(location);
+            changed = true;
+        }
+        if (network.isTerminalInNetwork(location)) {
+            network.removeTerminal(location);
+            changed = true;
+        }
+        if (network.isSenderChestInNetwork(location)) {
+            network.removeSenderChest(location);
+            changed = true;
+        }
+
+        if (changed) {
+            plugin.getNetworkManager().removeFromLocationIndex(location);
+        }
+
+        return changed;
     }
 }

@@ -178,10 +178,7 @@ public class Network {
         }
 
         Map<ItemStack, Integer> networkItems = new HashMap<>();
-        Set<Location> allChestLocations = new HashSet<>(chestLocations);
-        allChestLocations.addAll(senderChestLocations);
-
-        for (Location chestLoc : allChestLocations) {
+        for (Location chestLoc : chestLocations) {
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 for (ItemStack item : chest.getInventory().getContents()) {
@@ -217,10 +214,8 @@ public class Network {
             throw new IllegalArgumentException("Amount cannot be negative: " + amount);
         }
         int remaining = amount;
-        Set<Location> allChestLocations = new HashSet<>(chestLocations);
-        allChestLocations.addAll(senderChestLocations);
 
-        for (Location chestLoc : allChestLocations) {
+        for (Location chestLoc : chestLocations) {
             if (remaining <= 0) break;
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
@@ -282,9 +277,7 @@ public class Network {
     public double getCapacityPercent() {
         int totalSlots = 0;
         int usedSlots = 0;
-        Set<Location> allChestLocations = new HashSet<>(getChestLocations());
-        allChestLocations.addAll(getSenderChestLocations());
-        for (Location chestLoc : allChestLocations) {
+        for (Location chestLoc : chestLocations) {
             if (chestLoc.getBlock().getState() instanceof Chest) {
                 Chest chest = (Chest) chestLoc.getBlock().getState();
                 Inventory inv = chest.getInventory();

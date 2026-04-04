@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
+import org.bukkit.block.Chest;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -267,23 +268,53 @@ public class NetworkManager {
     }
 
     public Network getNetworkByLocation(Location location) {
+        Location normalizedLocation = getNormalizedLocation(location);
+
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
-            if (globalNetwork != null && (globalNetwork.isChestInNetwork(location) || globalNetwork.isTerminalInNetwork(location))) {
+            if (globalNetwork != null && containsTrackedLocation(globalNetwork, location, normalizedLocation)) {
                 return globalNetwork;
             }
             return null;
         }
+
         Network indexed = locationIndex.get(location);
         if (indexed != null) {
             return indexed;
         }
+
+        if (!normalizedLocation.equals(location)) {
+            indexed = locationIndex.get(normalizedLocation);
+            if (indexed != null) {
+                return indexed;
+            }
+        }
+
         for (Network network : networks.values()) {
-            if (network.isChestInNetwork(location) || network.isTerminalInNetwork(location)) {
+            if (containsTrackedLocation(network, location, normalizedLocation)) {
                 return network;
             }
         }
         return null;
+    }
+
+    private boolean containsTrackedLocation(Network network, Location location, Location normalizedLocation) {
+        return isTrackedLocation(network, location) || isTrackedLocation(network, normalizedLocation);
+    }
+
+    private boolean isTrackedLocation(Network network, Location location) {
+        return network.isChestInNetwork(location)
+                || network.isTerminalInNetwork(location)
+                || network.isSenderChestInNetwork(location);
+    }
+
+    private Location getNormalizedLocation(Location location) {
+        if (location.getBlock().getState() instanceof Chest chest
+                && chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest doubleChest
+                && doubleChest.getLeftSide() instanceof Chest leftChest) {
+            return leftChest.getLocation();
+        }
+        return location;
     }
 
     public Network getPlayerNetwork(Player player) {
