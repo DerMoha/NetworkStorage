@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -124,21 +125,17 @@ public class NetworkManager {
     }
 
     public void saveNetworks() {
-        Set<Network> dirtyNetworks = networks.values().stream()
-                .filter(Network::isDirty)
-                .collect(Collectors.toSet());
-        if (dirtyNetworks.isEmpty()) {
+        boolean hasDirtyNetworks = networks.values().stream().anyMatch(Network::isDirty);
+        if (!hasDirtyNetworks) {
             return;
         }
-        saveNetworks(dirtyNetworks);
+        saveAllNetworksToDisk();
     }
 
-    public void saveNetworks(Set<Network> networksToSave) {
-        if (networksToSave.isEmpty()) {
-            return;
-        }
+    private void saveAllNetworksToDisk() {
         FileConfiguration newConfig = new YamlConfiguration();
-        for (Network network : networksToSave) {
+        List<Network> savedNetworks = new ArrayList<>(networks.values());
+        for (Network network : savedNetworks) {
             String path = "networks." + network.getName();
             newConfig.set(path + ".owner", network.getOwner().toString());
 
@@ -168,12 +165,21 @@ public class NetworkManager {
                 newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
                 newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
             }
-            network.setDirty(false);
         }
+
         try {
             Path tempFile = networksFile.toPath().resolveSibling(networksFile.getName() + ".tmp");
             newConfig.save(tempFile.toFile());
-            Files.move(tempFile, networksFile.toPath());
+
+            try {
+                Files.move(tempFile, networksFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException atomicMoveFailure) {
+                Files.move(tempFile, networksFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            for (Network network : savedNetworks) {
+                network.setDirty(false);
+            }
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save networks to " + networksFile);
             e.printStackTrace();
@@ -181,7 +187,7 @@ public class NetworkManager {
     }
 
     public void saveAllNetworks() {
-        saveNetworks(new HashSet<>(networks.values()));
+        saveAllNetworksToDisk();
     }
 
     public void addToLocationIndex(Location loc, Network network) {
