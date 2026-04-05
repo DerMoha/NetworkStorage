@@ -321,12 +321,15 @@ public class NetworkManager {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             return networks.get(GLOBAL_NETWORK_NAME);
         }
-        for (Network network : networks.values()) {
-            if (network.getOwner().equals(player.getUniqueId())) {
-                return network;
-            }
-        }
-        return null;
+
+        String defaultNetworkName = player.getName() + "'s Network";
+        return networks.values().stream()
+                .filter(network -> network.getOwner().equals(player.getUniqueId()))
+                .sorted(Comparator.comparing((Network network) -> !network.getName().equals(defaultNetworkName))
+                        .thenComparing(Network::getName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Network::getName))
+                .findFirst()
+                .orElse(null);
     }
 
     public synchronized Network getOrCreatePlayerNetwork(Player player) {
