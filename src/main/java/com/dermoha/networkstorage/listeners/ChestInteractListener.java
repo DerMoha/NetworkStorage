@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
@@ -117,6 +118,12 @@ public class ChestInteractListener implements Listener {
         }
 
         InventoryHolder holder = event.getInventory().getHolder();
+
+        if (holder instanceof NetworkSelectGUI selectGUI) {
+            event.setCancelled(true);
+            selectGUI.handleClick(event.getSlot());
+            return;
+        }
 
         if (holder instanceof StatsGUI statsGUI) {
             event.setCancelled(true);

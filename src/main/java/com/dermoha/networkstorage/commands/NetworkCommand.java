@@ -1,16 +1,26 @@
 package com.dermoha.networkstorage.commands;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
+import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.util.StringUtil;
 
-public class NetworkCommand implements CommandExecutor {
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+public class NetworkCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
+    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select");
 
     public NetworkCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -31,6 +41,7 @@ public class NetworkCommand implements CommandExecutor {
             player.sendMessage(lang.getMessage("network.help.create"));
             player.sendMessage(lang.getMessage("network.help.edit"));
             player.sendMessage(lang.getMessage("network.help.rename"));
+            player.sendMessage(lang.getMessage("network.help.select"));
             return true;
         }
 
@@ -58,15 +69,71 @@ public class NetworkCommand implements CommandExecutor {
                 }
                 plugin.getNetworkManager().renameNetwork(player, args[1], args[2]);
                 break;
+            case "select":
+                handleSelectCommand(player, args);
+                break;
             default:
                 player.sendMessage(String.format(lang.getMessage("unknown_subcommand"), subCommand));
                 player.sendMessage(lang.getMessage("network.help.title"));
                 player.sendMessage(lang.getMessage("network.help.create"));
                 player.sendMessage(lang.getMessage("network.help.edit"));
                 player.sendMessage(lang.getMessage("network.help.rename"));
+                player.sendMessage(lang.getMessage("network.help.select"));
                 break;
         }
 
         return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (!(sender instanceof Player player)) {
+            return Collections.emptyList();
+        }
+
+        if (args.length == 1) {
+            return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
+        }
+
+        if (args.length == 2 && (args[0].equalsIgnoreCase("select") || args[0].equalsIgnoreCase("edit"))) {
+            List<String> networkNames = plugin.getNetworkManager().getOwnedNetworks(player).stream()
+                    .map(Network::getName)
+                    .toList();
+            return StringUtil.copyPartialMatches(args[1], networkNames, new ArrayList<>());
+        }
+
+        if (args.length == 2 && args[0].equalsIgnoreCase("rename")) {
+            List<String> networkNames = plugin.getNetworkManager().getOwnedNetworks(player).stream()
+                    .map(Network::getName)
+                    .toList();
+            return StringUtil.copyPartialMatches(args[1], networkNames, new ArrayList<>());
+        }
+
+        return Collections.emptyList();
+    }
+
+    private void handleSelectCommand(Player player, String[] args) {
+        if (plugin.getConfigManager().getNetworkMode() == com.dermoha.networkstorage.managers.ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage(lang.getMessage("network.select.global_mode"));
+            return;
+        }
+
+        List<Network> ownedNetworks = plugin.getNetworkManager().getOwnedNetworks(player);
+        if (ownedNetworks.isEmpty()) {
+            player.sendMessage(lang.getMessage("network.select.none"));
+            return;
+        }
+
+        if (args.length < 2) {
+            new NetworkSelectGUI(player, ownedNetworks, plugin).open();
+            return;
+        }
+
+        if (!plugin.getNetworkManager().selectPlayerNetwork(player, args[1])) {
+            player.sendMessage(String.format(lang.getMessage("network.select.not_found"), args[1]));
+            return;
+        }
+
+        player.sendMessage(String.format(lang.getMessage("network.select.success"), plugin.getNetworkManager().getPlayerNetwork(player).getName()));
     }
 }

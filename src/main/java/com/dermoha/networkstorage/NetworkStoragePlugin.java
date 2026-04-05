@@ -52,9 +52,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
         // Register commands and tab completer
         StorageCommand storageCommand = new StorageCommand(this);
+        NetworkCommand networkCommand = new NetworkCommand(this);
         getCommand("storage").setExecutor(storageCommand);
         getCommand("storage").setTabCompleter(storageCommand);
-        getCommand("network").setExecutor(new NetworkCommand(this));
+        getCommand("network").setExecutor(networkCommand);
+        getCommand("network").setTabCompleter(networkCommand);
         getCommand("networkstorage").setExecutor(new NetworkStorageAdminCommand(this));
 
         // Register event listeners

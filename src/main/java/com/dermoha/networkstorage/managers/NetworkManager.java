@@ -24,6 +24,7 @@ public class NetworkManager {
     private final LanguageManager lang;
     private final Map<String, Network> networks = new HashMap<>();
     private final Map<Location, Network> locationIndex = new HashMap<>();
+    private final Map<UUID, String> selectedNetworks = new HashMap<>();
     private final File networksFile;
     private final Object renameLock = new Object();
     private static final String GLOBAL_NETWORK_NAME = "Global";
@@ -251,6 +252,9 @@ public class NetworkManager {
             network.setName(newName);
             networks.put(newName, network);
             networks.remove(oldName);
+            if (oldName.equals(selectedNetworks.get(network.getOwner()))) {
+                selectedNetworks.put(network.getOwner(), newName);
+            }
         }
         saveNetworks();
         player.sendMessage(String.format(lang.getMessage("network.rename.success"), oldName, newName));
@@ -317,9 +321,10 @@ public class NetworkManager {
         return location;
     }
 
-    public Network getPlayerNetwork(Player player) {
+    public List<Network> getOwnedNetworks(Player player) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            return networks.get(GLOBAL_NETWORK_NAME);
+            Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
+            return globalNetwork == null ? Collections.emptyList() : Collections.singletonList(globalNetwork);
         }
 
         String defaultNetworkName = player.getName() + "'s Network";
@@ -328,8 +333,42 @@ public class NetworkManager {
                 .sorted(Comparator.comparing((Network network) -> !network.getName().equals(defaultNetworkName))
                         .thenComparing(Network::getName, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(Network::getName))
+                .toList();
+    }
+
+    public Network findOwnedNetwork(Player player, String networkName) {
+        return getOwnedNetworks(player).stream()
+                .filter(network -> network.getName().equalsIgnoreCase(networkName))
                 .findFirst()
                 .orElse(null);
+    }
+
+    public boolean selectPlayerNetwork(Player player, String networkName) {
+        Network selectedNetwork = findOwnedNetwork(player, networkName);
+        if (selectedNetwork == null) {
+            return false;
+        }
+
+        selectedNetworks.put(player.getUniqueId(), selectedNetwork.getName());
+        return true;
+    }
+
+    public Network getPlayerNetwork(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return networks.get(GLOBAL_NETWORK_NAME);
+        }
+
+        String selectedName = selectedNetworks.get(player.getUniqueId());
+        if (selectedName != null) {
+            Network selectedNetwork = networks.get(selectedName);
+            if (selectedNetwork != null && selectedNetwork.getOwner().equals(player.getUniqueId())) {
+                return selectedNetwork;
+            }
+            selectedNetworks.remove(player.getUniqueId());
+        }
+
+        List<Network> ownedNetworks = getOwnedNetworks(player);
+        return ownedNetworks.isEmpty() ? null : ownedNetworks.get(0);
     }
 
     public synchronized Network getOrCreatePlayerNetwork(Player player) {

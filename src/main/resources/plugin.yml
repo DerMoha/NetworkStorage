@@ -12,7 +12,7 @@ commands:
     aliases: [ns, netstorage]
   network:
     description: Manages networks
-    usage: /<command> [create|edit|rename]
+    usage: /<command> [create|edit|rename|select]
     aliases: [net]
   networkstorage:
     description: Admin commands for NetworkStorage
