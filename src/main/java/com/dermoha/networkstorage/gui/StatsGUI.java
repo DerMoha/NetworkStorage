@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -22,11 +23,13 @@ public class StatsGUI implements InventoryHolder {
 
     private final Inventory inventory;
     private final Player player;
+    private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
     private final TerminalGUI previousGUI;
 
     public StatsGUI(Player player, Network network, NetworkStoragePlugin plugin, TerminalGUI previousGUI) {
         this.player = player;
+        this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
         this.previousGUI = previousGUI;
         this.inventory = Bukkit.createInventory(this, 54, lang.getMessage("stats.title"));
@@ -52,6 +55,7 @@ public class StatsGUI implements InventoryHolder {
         ItemStack backButton = new ItemStack(Material.BARRIER);
         ItemMeta meta = backButton.getItemMeta();
         meta.setDisplayName(lang.getMessage("stats.back"));
+        ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getOptionalCustomModelData("custom-model-data.gui.stats.back"));
         backButton.setItemMeta(meta);
         inventory.setItem(49, backButton);
     }

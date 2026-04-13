@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.gui;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -57,6 +58,7 @@ public class NetworkSelectGUI implements InventoryHolder {
                 lore.add(lang.getMessage("network.select.click"));
 
                 meta.setLore(lore);
+                ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getOptionalCustomModelData("custom-model-data.gui.network-select.item"));
                 item.setItemMeta(meta);
             }
 

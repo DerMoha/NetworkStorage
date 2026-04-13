@@ -115,47 +115,49 @@ public class TerminalGUI implements InventoryHolder {
 
     private void addControlButtons(int page, int totalPages, long totalItems, int uniqueTypes, double capacity) {
         if (page > 0) {
-            ItemStack prevButton = new ItemStack(Material.ARROW);
-            ItemMeta meta = prevButton.getItemMeta();
-            meta.setDisplayName(lang.getMessage("terminal.prev_page"));
-            meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 1, Math.max(1, totalPages))));
-            prevButton.setItemMeta(meta);
+            ItemStack prevButton = createGuiControlItem(
+                    Material.ARROW,
+                    lang.getMessage("terminal.prev_page"),
+                    Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 1, Math.max(1, totalPages))),
+                    "custom-model-data.gui.terminal.prev-page"
+            );
             inventory.setItem(SLOT_PREV_PAGE, prevButton);
         }
 
-        ItemStack searchButton = new ItemStack(Material.SPYGLASS);
-        ItemMeta searchMeta = searchButton.getItemMeta();
+        String searchTitle;
+        List<String> searchLore;
         if (searchFilter.isEmpty()) {
-            searchMeta.setDisplayName(lang.getMessage("terminal.search.title"));
-            searchMeta.setLore(Arrays.asList(
+            searchTitle = lang.getMessage("terminal.search.title");
+            searchLore = Arrays.asList(
                     lang.getMessage("terminal.search.lore1"),
                     lang.getMessage("terminal.search.lore2")
-            ));
+            );
         } else {
-            searchMeta.setDisplayName(String.format(lang.getMessage("terminal.search.active"), searchFilter));
-            searchMeta.setLore(Arrays.asList(
+            searchTitle = String.format(lang.getMessage("terminal.search.active"), searchFilter);
+            searchLore = Arrays.asList(
                     lang.getMessage("terminal.search.filtered"),
                     lang.getMessage("terminal.search.change"),
                     lang.getMessage("terminal.search.clear")
-            ));
+            );
         }
-        searchButton.setItemMeta(searchMeta);
+        ItemStack searchButton = createGuiControlItem(Material.SPYGLASS, searchTitle, searchLore, "custom-model-data.gui.terminal.search");
         inventory.setItem(SLOT_SEARCH, searchButton);
 
-        ItemStack sortButton = new ItemStack(Material.COMPARATOR);
-        ItemMeta sortMeta = sortButton.getItemMeta();
-        sortMeta.setDisplayName(String.format(lang.getMessage("terminal.sort.title"), getSortDisplayName()));
-        sortMeta.setLore(Arrays.asList(
+        ItemStack sortButton = createGuiControlItem(
+                Material.COMPARATOR,
+                String.format(lang.getMessage("terminal.sort.title"), getSortDisplayName()),
+                Arrays.asList(
                 lang.getMessage("terminal.sort.lore1"),
                 String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())
-        ));
-        sortButton.setItemMeta(sortMeta);
+                ),
+                "custom-model-data.gui.terminal.sort"
+        );
         inventory.setItem(SLOT_SORT, sortButton);
 
-        ItemStack infoButton = new ItemStack(Material.BOOK);
-        ItemMeta infoMeta = infoButton.getItemMeta();
-        infoMeta.setDisplayName(lang.getMessage("terminal.info.title"));
-        infoMeta.setLore(Arrays.asList(
+        ItemStack infoButton = createGuiControlItem(
+                Material.BOOK,
+                lang.getMessage("terminal.info.title"),
+                Arrays.asList(
                 String.format(lang.getMessage("terminal.info.items"), uniqueTypes),
                 String.format(lang.getMessage("total_items"), formatNumber(totalItems)),
                 String.format(lang.getMessage("terminal.info.chests"), network.getChestLocations().size()),
@@ -165,32 +167,48 @@ public class TerminalGUI implements InventoryHolder {
                 lang.getMessage("terminal.info.lore1"),
                 lang.getMessage("terminal.info.lore2"),
                 lang.getMessage("terminal.info.lore3")
-        ));
-        infoButton.setItemMeta(infoMeta);
+                ),
+                "custom-model-data.gui.terminal.info"
+        );
         inventory.setItem(SLOT_INFO, infoButton);
 
-        ItemStack statsButton = new ItemStack(Material.EMERALD);
-        ItemMeta statsMeta = statsButton.getItemMeta();
-        statsMeta.setDisplayName(lang.getMessage("terminal.stats.title"));
-        statsMeta.setLore(Collections.singletonList(lang.getMessage("terminal.stats.lore")));
-        statsButton.setItemMeta(statsMeta);
+        ItemStack statsButton = createGuiControlItem(
+                Material.EMERALD,
+                lang.getMessage("terminal.stats.title"),
+                Collections.singletonList(lang.getMessage("terminal.stats.lore")),
+                "custom-model-data.gui.terminal.stats"
+        );
         inventory.setItem(SLOT_STATS, statsButton);
 
-        ItemStack refreshButton = new ItemStack(Material.CLOCK);
-        ItemMeta refreshMeta = refreshButton.getItemMeta();
-        refreshMeta.setDisplayName(lang.getMessage("terminal.refresh.title"));
-        refreshMeta.setLore(Collections.singletonList(lang.getMessage("terminal.refresh.lore")));
-        refreshButton.setItemMeta(refreshMeta);
+        ItemStack refreshButton = createGuiControlItem(
+                Material.CLOCK,
+                lang.getMessage("terminal.refresh.title"),
+                Collections.singletonList(lang.getMessage("terminal.refresh.lore")),
+                "custom-model-data.gui.terminal.refresh"
+        );
         inventory.setItem(SLOT_REFRESH, refreshButton);
 
         if (page < totalPages - 1) {
-            ItemStack nextButton = new ItemStack(Material.ARROW);
-            ItemMeta meta = nextButton.getItemMeta();
-            meta.setDisplayName(lang.getMessage("terminal.next_page"));
-            meta.setLore(Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 2, totalPages)));
-            nextButton.setItemMeta(meta);
+            ItemStack nextButton = createGuiControlItem(
+                    Material.ARROW,
+                    lang.getMessage("terminal.next_page"),
+                    Collections.singletonList(String.format(lang.getMessage("terminal.page"), page + 2, totalPages)),
+                    "custom-model-data.gui.terminal.next-page"
+            );
             inventory.setItem(SLOT_NEXT_PAGE, nextButton);
         }
+    }
+
+    private ItemStack createGuiControlItem(Material material, String displayName, List<String> lore, String customModelDataPath) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(displayName);
+            meta.setLore(lore);
+            ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getOptionalCustomModelData(customModelDataPath));
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 
     private ItemStack createDisplayItem(ItemStack original, int totalCount, long totalNetworkItems) {
