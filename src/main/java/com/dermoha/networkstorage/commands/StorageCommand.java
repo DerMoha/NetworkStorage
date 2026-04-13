@@ -21,15 +21,20 @@ import org.bukkit.util.StringUtil;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 public class StorageCommand implements CommandExecutor, TabCompleter {
 
+    private static final long RESET_CONFIRMATION_WINDOW_MS = 30_000L;
+
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "help", "trust", "untrust", "wireless");
+    private final Map<UUID, PendingReset> pendingResets = new HashMap<>();
+    private static final List<String> SUBCOMMANDS = Arrays.asList("wand", "info", "reset", "confirm-reset", "cancel-reset", "help", "trust", "untrust", "wireless");
 
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -61,6 +66,12 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
                 break;
             case "reset":
                 handleResetCommand(player);
+                break;
+            case "confirm-reset":
+                handleConfirmResetCommand(player);
+                break;
+            case "cancel-reset":
+                handleCancelResetCommand(player);
                 break;
             case "trust":
                 handleTrustCommand(player, args);
@@ -193,7 +204,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        ItemStack wand = WandListener.createStorageWand(plugin.getLanguageManager());
+        ItemStack wand = WandListener.createStorageWand(plugin);
         String wandName = wand.getItemMeta().getDisplayName();
 
         for (int i = 0; i < player.getInventory().getSize(); i++) {
@@ -235,10 +246,17 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        String activeWirelessNetwork = plugin.getNetworkManager().getSelectedWirelessNetworkName(player);
+
         player.sendMessage(lang.getMessage("network_info_title"));
+        player.sendMessage(String.format(lang.getMessage("active_network"), network.getName()));
         player.sendMessage(String.format(lang.getMessage("network_id"), network.getName()));
         player.sendMessage(String.format(lang.getMessage("connected_chests"), network.getChestLocations().size()));
         player.sendMessage(String.format(lang.getMessage("access_terminals"), network.getTerminalLocations().size()));
+        player.sendMessage(String.format(lang.getMessage("connected_sender_chests"), network.getSenderChestLocations().size()));
+        if (activeWirelessNetwork != null && !activeWirelessNetwork.equals(network.getName())) {
+            player.sendMessage(String.format(lang.getMessage("wireless_active_network"), activeWirelessNetwork));
+        }
 
         long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
         int uniqueTypes = network.getNetworkItems().size();
@@ -262,9 +280,54 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        if (!network.getOwner().equals(player.getUniqueId())) {
+            player.sendMessage(lang.getMessage("trust.not_owner"));
+            return;
+        }
+
+        pendingResets.put(player.getUniqueId(), new PendingReset(network.getName(), System.currentTimeMillis() + RESET_CONFIRMATION_WINDOW_MS));
+
         player.sendMessage(lang.getMessage("reset_confirm_1"));
-        player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(), network.getTerminalLocations().size()));
+        player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(), network.getTerminalLocations().size(), network.getSenderChestLocations().size()));
         player.sendMessage(lang.getMessage("reset_confirm_3"));
+    }
+
+    private void handleConfirmResetCommand(Player player) {
+        PendingReset pendingReset = pendingResets.get(player.getUniqueId());
+        if (pendingReset == null) {
+            player.sendMessage(lang.getMessage("reset.no_pending"));
+            return;
+        }
+
+        if (pendingReset.expiresAt() < System.currentTimeMillis()) {
+            pendingResets.remove(player.getUniqueId());
+            player.sendMessage(lang.getMessage("reset.expired"));
+            return;
+        }
+
+        Network network = plugin.getNetworkManager().findOwnedNetwork(player, pendingReset.networkName());
+        if (network == null) {
+            pendingResets.remove(player.getUniqueId());
+            player.sendMessage(lang.getMessage("reset.not_found"));
+            return;
+        }
+
+        int chestCount = network.getChestLocations().size();
+        int terminalCount = network.getTerminalLocations().size();
+        int senderChestCount = network.getSenderChestLocations().size();
+
+        plugin.getNetworkManager().resetNetwork(network);
+        pendingResets.remove(player.getUniqueId());
+        player.sendMessage(String.format(lang.getMessage("reset.success"), chestCount, terminalCount, senderChestCount, network.getName()));
+    }
+
+    private void handleCancelResetCommand(Player player) {
+        if (pendingResets.remove(player.getUniqueId()) == null) {
+            player.sendMessage(lang.getMessage("reset.no_pending"));
+            return;
+        }
+
+        player.sendMessage(lang.getMessage("reset.cancelled"));
     }
 
     private void sendHelpMessage(Player player) {
@@ -272,6 +335,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("help_wand"));
         player.sendMessage(lang.getMessage("help_info"));
         player.sendMessage(lang.getMessage("help_reset"));
+        player.sendMessage(lang.getMessage("help_confirm_reset"));
+        player.sendMessage(lang.getMessage("help_cancel_reset"));
         player.sendMessage(lang.getMessage("help_trust"));
         player.sendMessage(lang.getMessage("help_untrust"));
         player.sendMessage(lang.getMessage("help_wireless"));
@@ -293,5 +358,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         } else {
             return String.valueOf(number);
         }
+    }
+
+    private record PendingReset(String networkName, long expiresAt) {
     }
 }

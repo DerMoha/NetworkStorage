@@ -37,6 +37,18 @@ public class ConfigManager {
         config.addDefault("enable-trust-system", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
+        config.addDefault("custom-model-data.wireless-terminal", 10001);
+        config.addDefault("custom-model-data.wand", 10002);
+        config.addDefault("custom-model-data.gui.terminal.prev-page", 10101);
+        config.addDefault("custom-model-data.gui.terminal.next-page", 10102);
+        config.addDefault("custom-model-data.gui.terminal.search", 10103);
+        config.addDefault("custom-model-data.gui.terminal.sort", 10104);
+        config.addDefault("custom-model-data.gui.terminal.info", 10105);
+        config.addDefault("custom-model-data.gui.terminal.stats", 10106);
+        config.addDefault("custom-model-data.gui.terminal.refresh", 10107);
+        config.addDefault("custom-model-data.gui.stats.back", 10201);
+        config.addDefault("custom-model-data.gui.network-select.item", 10301);
+        config.addDefault("custom-model-data.gui.wireless-select.item", 10401);
         config.options().copyDefaults(true);
     }
 
@@ -68,6 +80,21 @@ public class ConfigManager {
         return config.getInt("wireless-terminal-durability");
     }
 
+    public Integer getOptionalCustomModelData(String path) {
+        if (!config.isSet(path) || !config.isInt(path)) {
+            return null;
+        }
+        return config.getInt(path);
+    }
+
+    public Integer getWirelessTerminalCustomModelData() {
+        return getOptionalCustomModelData("custom-model-data.wireless-terminal");
+    }
+
+    public Integer getStorageWandCustomModelData() {
+        return getOptionalCustomModelData("custom-model-data.wand");
+    }
+
     public boolean isPermissionsEnabled() {
         return config.getBoolean("enable-permissions");
     }
@@ -87,5 +114,7 @@ public class ConfigManager {
     public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
+        setDefaults();
+        plugin.saveConfig();
     }
 }

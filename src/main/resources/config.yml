@@ -30,6 +30,27 @@ enable-trust-system: true
 # Langauge for Plugin-messages (de or en)
 language: en
 
+# Custom model data values used for optional resource-pack overrides.
+# Set any entry to a blank value to disable that override.
+custom-model-data:
+  wireless-terminal: 10001
+  wand: 10002
+  gui:
+    terminal:
+      prev-page: 10101
+      next-page: 10102
+      search: 10103
+      sort: 10104
+      info: 10105
+      stats: 10106
+      refresh: 10107
+    stats:
+      back: 10201
+    network-select:
+      item: 10301
+    wireless-select:
+      item: 10401
+
 wireless-terminal-recipe:
   shape:
     - "CCC"

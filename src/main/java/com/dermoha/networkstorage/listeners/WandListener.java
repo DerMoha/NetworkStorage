@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.listeners;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -195,7 +196,8 @@ public class WandListener implements Listener {
         return "chest";
     }
 
-    public static ItemStack createStorageWand(LanguageManager lang) {
+    public static ItemStack createStorageWand(NetworkStoragePlugin plugin) {
+        LanguageManager lang = plugin.getLanguageManager();
         ItemStack wand = new ItemStack(Material.BLAZE_ROD);
         ItemMeta meta = wand.getItemMeta();
 
@@ -207,6 +209,7 @@ public class WandListener implements Listener {
                     lang.getMessage("wand.lore3"),
                     lang.getMessage("wand.lore4")
             ));
+            ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getStorageWandCustomModelData());
             wand.setItemMeta(meta);
         }
 

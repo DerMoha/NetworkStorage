@@ -20,7 +20,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list");
 
     public NetworkCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -42,6 +42,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(lang.getMessage("network.help.edit"));
             player.sendMessage(lang.getMessage("network.help.rename"));
             player.sendMessage(lang.getMessage("network.help.select"));
+            player.sendMessage(lang.getMessage("network.help.list"));
             return true;
         }
 
@@ -72,6 +73,9 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             case "select":
                 handleSelectCommand(player, args);
                 break;
+            case "list":
+                handleListCommand(player);
+                break;
             default:
                 player.sendMessage(String.format(lang.getMessage("unknown_subcommand"), subCommand));
                 player.sendMessage(lang.getMessage("network.help.title"));
@@ -79,6 +83,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage(lang.getMessage("network.help.edit"));
                 player.sendMessage(lang.getMessage("network.help.rename"));
                 player.sendMessage(lang.getMessage("network.help.select"));
+                player.sendMessage(lang.getMessage("network.help.list"));
                 break;
         }
 
@@ -135,5 +140,22 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
         }
 
         player.sendMessage(String.format(lang.getMessage("network.select.success"), plugin.getNetworkManager().getPlayerNetwork(player).getName()));
+    }
+
+    private void handleListCommand(Player player) {
+        List<Network> ownedNetworks = plugin.getNetworkManager().getOwnedNetworks(player);
+        if (ownedNetworks.isEmpty()) {
+            player.sendMessage(lang.getMessage("network.select.none"));
+            return;
+        }
+
+        String activeNetworkName = plugin.getNetworkManager().getPlayerNetwork(player).getName();
+        player.sendMessage(lang.getMessage("network.list.title"));
+        for (Network network : ownedNetworks) {
+            String marker = network.getName().equals(activeNetworkName)
+                    ? lang.getMessage("network.list.active_marker")
+                    : lang.getMessage("network.list.inactive_marker");
+            player.sendMessage(String.format(lang.getMessage("network.list.entry"), marker, network.getName(), network.getChestLocations().size(), network.getTerminalLocations().size(), network.getSenderChestLocations().size()));
+        }
     }
 }

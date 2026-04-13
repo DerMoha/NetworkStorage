@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Chest;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -25,7 +26,9 @@ public class NetworkManager {
     private final Map<String, Network> networks = new HashMap<>();
     private final Map<Location, Network> locationIndex = new HashMap<>();
     private final Map<UUID, String> selectedNetworks = new HashMap<>();
+    private final Map<UUID, String> selectedWirelessNetworks = new HashMap<>();
     private final File networksFile;
+    private final File playerStateFile;
     private final Object renameLock = new Object();
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -34,15 +37,25 @@ public class NetworkManager {
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
-        if (!networksFile.exists()) {
-            try {
-                plugin.getDataFolder().mkdirs();
-                networksFile.createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().severe("Could not create networks.yml: " + e.getMessage());
-            }
-        }
+        this.playerStateFile = new File(plugin.getDataFolder(), "player-state.yml");
+        ensureDataFileExists(networksFile, "networks.yml");
+        ensureDataFileExists(playerStateFile, "player-state.yml");
         loadNetworks();
+        loadPlayerState();
+        pruneInvalidPlayerState();
+    }
+
+    private void ensureDataFileExists(File file, String fileName) {
+        if (file.exists()) {
+            return;
+        }
+
+        try {
+            plugin.getDataFolder().mkdirs();
+            file.createNewFile();
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not create " + fileName + ": " + e.getMessage());
+        }
     }
 
     private void loadNetworks() {
@@ -126,6 +139,94 @@ public class NetworkManager {
         }
     }
 
+    private void loadPlayerState() {
+        selectedNetworks.clear();
+        selectedWirelessNetworks.clear();
+
+        FileConfiguration playerStateConfig = YamlConfiguration.loadConfiguration(playerStateFile);
+        ConfigurationSection playersSection = playerStateConfig.getConfigurationSection("players");
+        if (playersSection == null) {
+            return;
+        }
+
+        for (String uuidString : playersSection.getKeys(false)) {
+            try {
+                UUID playerId = UUID.fromString(uuidString);
+                String basePath = "players." + uuidString;
+                String selectedOwnedNetwork = playerStateConfig.getString(basePath + ".selected-owned-network");
+                String selectedWirelessNetwork = playerStateConfig.getString(basePath + ".selected-wireless-network");
+
+                if (selectedOwnedNetwork != null && !selectedOwnedNetwork.isBlank()) {
+                    selectedNetworks.put(playerId, selectedOwnedNetwork);
+                }
+                if (selectedWirelessNetwork != null && !selectedWirelessNetwork.isBlank()) {
+                    selectedWirelessNetworks.put(playerId, selectedWirelessNetwork);
+                }
+            } catch (IllegalArgumentException e) {
+                plugin.getLogger().warning("Skipping invalid player-state entry for UUID '" + uuidString + "'.");
+            }
+        }
+    }
+
+    private void pruneInvalidPlayerState() {
+        boolean changed = false;
+
+        Iterator<Map.Entry<UUID, String>> selectedIterator = selectedNetworks.entrySet().iterator();
+        while (selectedIterator.hasNext()) {
+            Map.Entry<UUID, String> entry = selectedIterator.next();
+            Network network = networks.get(entry.getValue());
+            if (network == null || !network.getOwner().equals(entry.getKey())) {
+                selectedIterator.remove();
+                changed = true;
+            }
+        }
+
+        Iterator<Map.Entry<UUID, String>> wirelessIterator = selectedWirelessNetworks.entrySet().iterator();
+        while (wirelessIterator.hasNext()) {
+            Map.Entry<UUID, String> entry = wirelessIterator.next();
+            if (!networks.containsKey(entry.getValue())) {
+                wirelessIterator.remove();
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            savePlayerState();
+        }
+    }
+
+    private void savePlayerState() {
+        FileConfiguration newConfig = new YamlConfiguration();
+        Set<UUID> playerIds = new HashSet<>();
+        playerIds.addAll(selectedNetworks.keySet());
+        playerIds.addAll(selectedWirelessNetworks.keySet());
+
+        for (UUID playerId : playerIds) {
+            String basePath = "players." + playerId;
+
+            if (selectedNetworks.containsKey(playerId)) {
+                newConfig.set(basePath + ".selected-owned-network", selectedNetworks.get(playerId));
+            }
+            if (selectedWirelessNetworks.containsKey(playerId)) {
+                newConfig.set(basePath + ".selected-wireless-network", selectedWirelessNetworks.get(playerId));
+            }
+        }
+
+        try {
+            Path tempFile = playerStateFile.toPath().resolveSibling(playerStateFile.getName() + ".tmp");
+            newConfig.save(tempFile.toFile());
+
+            try {
+                Files.move(tempFile, playerStateFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException atomicMoveFailure) {
+                Files.move(tempFile, playerStateFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not save player state to " + playerStateFile);
+            e.printStackTrace();
+        }
+    }
+
     public void saveNetworks() {
         boolean hasDirtyNetworks = networks.values().stream().anyMatch(Network::isDirty);
         if (!hasDirtyNetworks) {
@@ -190,6 +291,7 @@ public class NetworkManager {
 
     public void saveAllNetworks() {
         saveAllNetworksToDisk();
+        savePlayerState();
     }
 
     public void addToLocationIndex(Location loc, Network network) {
@@ -212,6 +314,10 @@ public class NetworkManager {
         Network network = new Network(networkName, player.getUniqueId());
         networks.put(networkName, network);
         network.setDirty(true);
+        if (!selectedNetworks.containsKey(player.getUniqueId())) {
+            selectedNetworks.put(player.getUniqueId(), networkName);
+            savePlayerState();
+        }
         saveNetworks();
         player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
@@ -252,8 +358,19 @@ public class NetworkManager {
             network.setName(newName);
             networks.put(newName, network);
             networks.remove(oldName);
+            boolean playerStateChanged = false;
             if (oldName.equals(selectedNetworks.get(network.getOwner()))) {
                 selectedNetworks.put(network.getOwner(), newName);
+                playerStateChanged = true;
+            }
+            for (Map.Entry<UUID, String> entry : selectedWirelessNetworks.entrySet()) {
+                if (oldName.equals(entry.getValue())) {
+                    entry.setValue(newName);
+                    playerStateChanged = true;
+                }
+            }
+            if (playerStateChanged) {
+                savePlayerState();
             }
         }
         saveNetworks();
@@ -336,8 +453,31 @@ public class NetworkManager {
                 .toList();
     }
 
+    public List<Network> getAccessibleNetworks(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
+            return globalNetwork == null ? Collections.emptyList() : Collections.singletonList(globalNetwork);
+        }
+
+        String defaultNetworkName = player.getName() + "'s Network";
+        return networks.values().stream()
+                .filter(network -> network.canAccess(player))
+                .sorted(Comparator.comparing((Network network) -> !network.getOwner().equals(player.getUniqueId()))
+                        .thenComparing(network -> !network.getName().equals(defaultNetworkName))
+                        .thenComparing(Network::getName, String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(Network::getName))
+                .toList();
+    }
+
     public Network findOwnedNetwork(Player player, String networkName) {
         return getOwnedNetworks(player).stream()
+                .filter(network -> network.getName().equalsIgnoreCase(networkName))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public Network findAccessibleNetwork(Player player, String networkName) {
+        return getAccessibleNetworks(player).stream()
                 .filter(network -> network.getName().equalsIgnoreCase(networkName))
                 .findFirst()
                 .orElse(null);
@@ -350,7 +490,56 @@ public class NetworkManager {
         }
 
         selectedNetworks.put(player.getUniqueId(), selectedNetwork.getName());
+        savePlayerState();
         return true;
+    }
+
+    public boolean selectWirelessNetwork(Player player, String networkName) {
+        Network selectedNetwork = findAccessibleNetwork(player, networkName);
+        if (selectedNetwork == null) {
+            return false;
+        }
+
+        selectedWirelessNetworks.put(player.getUniqueId(), selectedNetwork.getName());
+        savePlayerState();
+        return true;
+    }
+
+    public Network getSelectedWirelessNetwork(Player player) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            return networks.get(GLOBAL_NETWORK_NAME);
+        }
+
+        String selectedName = selectedWirelessNetworks.get(player.getUniqueId());
+        if (selectedName == null) {
+            return null;
+        }
+
+        Network selectedNetwork = networks.get(selectedName);
+        if (selectedNetwork != null && selectedNetwork.canAccess(player)) {
+            return selectedNetwork;
+        }
+
+        selectedWirelessNetworks.remove(player.getUniqueId());
+        savePlayerState();
+        return null;
+    }
+
+    public String getSelectedWirelessNetworkName(Player player) {
+        Network selectedNetwork = getSelectedWirelessNetwork(player);
+        return selectedNetwork == null ? null : selectedNetwork.getName();
+    }
+
+    public String getNetworkOwnerName(Network network) {
+        if (network == null) {
+            return "";
+        }
+        if (GLOBAL_NETWORK_OWNER.equals(network.getOwner())) {
+            return lang.getMessage("network.global_owner");
+        }
+
+        OfflinePlayer owner = plugin.getServer().getOfflinePlayer(network.getOwner());
+        return owner.getName() != null ? owner.getName() : network.getOwner().toString();
     }
 
     public Network getPlayerNetwork(Player player) {
@@ -365,6 +554,7 @@ public class NetworkManager {
                 return selectedNetwork;
             }
             selectedNetworks.remove(player.getUniqueId());
+            savePlayerState();
         }
 
         List<Network> ownedNetworks = getOwnedNetworks(player);
@@ -387,5 +577,21 @@ public class NetworkManager {
             network.setDirty(true);
         }
         return network;
+    }
+
+    public void resetNetwork(Network network) {
+        for (Location location : network.getChestLocations()) {
+            network.removeChest(location);
+            removeFromLocationIndex(location);
+        }
+        for (Location location : network.getTerminalLocations()) {
+            network.removeTerminal(location);
+            removeFromLocationIndex(location);
+        }
+        for (Location location : network.getSenderChestLocations()) {
+            network.removeSenderChest(location);
+            removeFromLocationIndex(location);
+        }
+        saveNetworks();
     }
 }

@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.util.ItemUtils;
@@ -47,6 +48,11 @@ public class ChestInteractListener implements Listener {
 
     public void setTransitioningToStats(UUID playerId) {
         transitioningToStats.add(playerId);
+    }
+
+    public void clearRuntimeState() {
+        openTerminals.clear();
+        transitioningToStats.clear();
     }
 
     @EventHandler
@@ -120,6 +126,12 @@ public class ChestInteractListener implements Listener {
         InventoryHolder holder = event.getInventory().getHolder();
 
         if (holder instanceof NetworkSelectGUI selectGUI) {
+            event.setCancelled(true);
+            selectGUI.handleClick(event.getSlot());
+            return;
+        }
+
+        if (holder instanceof WirelessNetworkSelectGUI selectGUI) {
             event.setCancelled(true);
             selectGUI.handleClick(event.getSlot());
             return;

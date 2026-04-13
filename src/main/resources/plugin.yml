@@ -8,11 +8,11 @@ description: A networked storage system for Minecraft servers, make sharing stor
 commands:
   storage:
     description: Main command for NetworkStorage
-    usage: /<command> [wand|info|reset|help|wireless]
+    usage: /<command> [wand|info|reset|confirm-reset|cancel-reset|help|wireless]
     aliases: [ns, netstorage]
   network:
     description: Manages networks
-    usage: /<command> [create|edit|rename|select]
+    usage: /<command> [create|edit|rename|select|list]
     aliases: [net]
   networkstorage:
     description: Admin commands for NetworkStorage

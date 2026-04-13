@@ -3,6 +3,10 @@ package com.dermoha.networkstorage;
 import com.dermoha.networkstorage.commands.NetworkCommand;
 import com.dermoha.networkstorage.commands.NetworkStorageAdminCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
+import com.dermoha.networkstorage.gui.NetworkSelectGUI;
+import com.dermoha.networkstorage.gui.StatsGUI;
+import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
@@ -12,6 +16,8 @@ import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.SearchManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -34,42 +40,23 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private SearchManager searchManager;
     private LanguageManager languageManager;
     private ChestInteractListener chestInteractListener;
+    private WandListener wandListener;
+    private WirelessTerminalListener wirelessTerminalListener;
+    private StorageCommand storageCommand;
+    private NetworkCommand networkCommand;
+    private NetworkStorageAdminCommand adminCommand;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
+    private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
 
     @Override
     public void onEnable() {
         instance = this;
-
-        // Initialize managers
-        configManager = new ConfigManager(this);
-        languageManager = new LanguageManager(this, configManager.getLanguage());
-        networkManager = new NetworkManager(this);
-
-        // Initialize listeners that need to be accessed
-        this.chestInteractListener = new ChestInteractListener(this);
-        this.searchManager = new SearchManager(this);
-
-        // Register commands and tab completer
-        StorageCommand storageCommand = new StorageCommand(this);
-        NetworkCommand networkCommand = new NetworkCommand(this);
-        getCommand("storage").setExecutor(storageCommand);
-        getCommand("storage").setTabCompleter(storageCommand);
-        getCommand("network").setExecutor(networkCommand);
-        getCommand("network").setTabCompleter(networkCommand);
-        getCommand("networkstorage").setExecutor(new NetworkStorageAdminCommand(this));
-
-        // Register event listeners
-        getServer().getPluginManager().registerEvents(chestInteractListener, this);
-        getServer().getPluginManager().registerEvents(new WandListener(this), this);
-        getServer().getPluginManager().registerEvents(new WirelessTerminalListener(this), this);
-
-        // Register recipes
+        createManagers();
+        registerCommands();
+        registerListeners();
         registerRecipes();
-
-        // Schedule repeating tasks
-        startSenderChestTask();
-        startAutoSaveTask();
+        startTasks();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -79,22 +66,98 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (networkManager != null) {
             networkManager.saveAllNetworks();
         }
+        closePluginInventories();
+        unregisterRuntimeComponents();
         cancelScheduledTasks();
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
 
     public void reload() {
         networkManager.saveAllNetworks();
+        closePluginInventories();
         cancelScheduledTasks();
+        unregisterRuntimeComponents();
+        createManagers();
+        registerCommands();
+        registerListeners();
+        registerRecipes();
+        startTasks();
+    }
 
-        searchManager.cleanup();
-
+    private void createManagers() {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+    }
 
+    private void registerCommands() {
+        storageCommand = new StorageCommand(this);
+        networkCommand = new NetworkCommand(this);
+        adminCommand = new NetworkStorageAdminCommand(this);
+
+        getCommand("storage").setExecutor(storageCommand);
+        getCommand("storage").setTabCompleter(storageCommand);
+        getCommand("network").setExecutor(networkCommand);
+        getCommand("network").setTabCompleter(networkCommand);
+        getCommand("networkstorage").setExecutor(adminCommand);
+    }
+
+    private void registerListeners() {
+        chestInteractListener = new ChestInteractListener(this);
+        wandListener = new WandListener(this);
+        wirelessTerminalListener = new WirelessTerminalListener(this);
+        searchManager = new SearchManager(this);
+
+        getServer().getPluginManager().registerEvents(chestInteractListener, this);
+        getServer().getPluginManager().registerEvents(wandListener, this);
+        getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
+    }
+
+    private void startTasks() {
         startSenderChestTask();
         startAutoSaveTask();
+    }
+
+    private void unregisterRuntimeComponents() {
+        if (searchManager != null) {
+            searchManager.cleanup();
+            HandlerList.unregisterAll(searchManager);
+            searchManager = null;
+        }
+        if (chestInteractListener != null) {
+            chestInteractListener.clearRuntimeState();
+            HandlerList.unregisterAll(chestInteractListener);
+            chestInteractListener = null;
+        }
+        if (wandListener != null) {
+            HandlerList.unregisterAll(wandListener);
+            wandListener = null;
+        }
+        if (wirelessTerminalListener != null) {
+            HandlerList.unregisterAll(wirelessTerminalListener);
+            wirelessTerminalListener = null;
+        }
+    }
+
+    private void closePluginInventories() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            if (player.getOpenInventory() == null) {
+                continue;
+            }
+
+            Inventory topInventory = player.getOpenInventory().getTopInventory();
+            if (topInventory == null) {
+                continue;
+            }
+
+            Object holder = topInventory.getHolder();
+            if (holder instanceof TerminalGUI
+                    || holder instanceof StatsGUI
+                    || holder instanceof NetworkSelectGUI
+                    || holder instanceof WirelessNetworkSelectGUI) {
+                player.closeInventory();
+            }
+        }
     }
 
     private void cancelScheduledTasks() {
@@ -109,7 +172,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private void registerRecipes() {
-        NamespacedKey key = new NamespacedKey(this, "wireless_terminal");
+        NamespacedKey key = new NamespacedKey(this, WIRELESS_RECIPE_KEY);
+        getServer().removeRecipe(key);
         ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
 
         List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
@@ -210,5 +274,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public ChestInteractListener getChestInteractListener() {
         return chestInteractListener;
+    }
+
+    public WirelessTerminalListener getWirelessTerminalListener() {
+        return wirelessTerminalListener;
     }
 }

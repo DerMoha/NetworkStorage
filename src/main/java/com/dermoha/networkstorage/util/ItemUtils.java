@@ -23,4 +23,10 @@ public final class ItemUtils {
         }
         return displayName.toString();
     }
+
+    public static void applyCustomModelData(ItemMeta meta, Integer customModelData) {
+        if (meta != null && customModelData != null) {
+            meta.setCustomModelData(customModelData);
+        }
+    }
 }

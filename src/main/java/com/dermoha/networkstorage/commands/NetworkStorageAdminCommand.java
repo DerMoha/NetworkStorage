@@ -35,6 +35,6 @@ public class NetworkStorageAdminCommand implements CommandExecutor {
 
         sender.sendMessage(lang.getMessage("reload.start"));
         plugin.reload();
-        sender.sendMessage(lang.getMessage("reload.success"));
+        sender.sendMessage(plugin.getLanguageManager().getMessage("reload.success"));
     }
 }
