@@ -579,7 +579,48 @@ public class NetworkManager {
         return network;
     }
 
+    public synchronized int purgeAllNetworksForSeasonReset() {
+        List<Network> networksToPurge = new ArrayList<>(networks.values());
+        if (networksToPurge.isEmpty()) {
+            return 0;
+        }
+
+        for (Network network : networksToPurge) {
+            clearNetworkChestContents(network);
+            resetNetworkInternal(network);
+        }
+
+        networks.clear();
+        locationIndex.clear();
+        selectedNetworks.clear();
+        selectedWirelessNetworks.clear();
+
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+            globalNetwork.setDirty(true);
+            networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
+        }
+
+        saveAllNetworks();
+        return networksToPurge.size();
+    }
+
+    private void clearNetworkChestContents(Network network) {
+        for (Location location : network.getChestLocations()) {
+            if (!(location.getBlock().getState() instanceof Chest chest)) {
+                continue;
+            }
+            chest.getInventory().clear();
+            chest.update();
+        }
+    }
+
     public void resetNetwork(Network network) {
+        resetNetworkInternal(network);
+        saveNetworks();
+    }
+
+    private void resetNetworkInternal(Network network) {
         for (Location location : network.getChestLocations()) {
             network.removeChest(location);
             removeFromLocationIndex(location);
@@ -592,6 +633,5 @@ public class NetworkManager {
             network.removeSenderChest(location);
             removeFromLocationIndex(location);
         }
-        saveNetworks();
     }
 }
