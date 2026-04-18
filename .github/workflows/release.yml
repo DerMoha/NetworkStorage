@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_modrinth:
+        description: Skip Modrinth upload
+        required: false
+        default: 'false'
+        type: boolean
+      skip_hangar:
+        description: Skip Hangar upload
+        required: false
+        default: 'false'
+        type: boolean
+      hangar_channel:
+        description: Hangar channel name
+        required: false
+        default: Release
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Read version from pom.xml
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout --no-transfer-progress)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout --no-transfer-progress)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+          echo "jar_file=target/$ARTIFACT_ID-$VERSION.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Maven
+        run: mvn -B package --file pom.xml -q
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: ${{ steps.version.outputs.jar_file }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to Modrinth
+        if: github.event.inputs.skip_modrinth != 'true'
+        uses: Kir-Antipov/mc-publish@v3.3
+        with:
+          modrinth-id: MFLw2RTS
+          modrinth-token: ${{ secrets.MODRINTH_API_TOKEN }}
+          version: ${{ steps.version.outputs.version }}
+          version-type: release
+          loaders: |
+            paper
+          game-versions: |
+            ">=1.21"
+          files: ${{ steps.version.outputs.jar_file }}
+
+      - name: Upload to Hangar
+        if: github.event.inputs.skip_hangar != 'true'
+        uses: milkdrinkers/Hangar-Publish@v2
+        with:
+          api_token: ${{ secrets.HANGAR_API_TOKEN }}
+          slug: NetworkStorage
+          version: ${{ steps.version.outputs.version }}
+          channel: ${{ github.event.inputs.hangar_channel }}
+          files: |
+            [
+              {
+                "path": "${{ steps.version.outputs.jar_file }}",
+                "platforms": ["PAPER"]
+              }
+            ]
+          platform_dependencies: |
+            {
+              "PAPER": ["1.21.x"]
+            }
