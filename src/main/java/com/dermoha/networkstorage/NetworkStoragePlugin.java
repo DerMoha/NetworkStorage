@@ -27,12 +27,17 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bstats.bukkit.Metrics;
+import org.bstats.charts.SimplePie;
+import org.bstats.charts.SingleLineChart;
 
 import java.util.List;
 import java.util.Set;
 import java.util.Iterator;
 
 public class NetworkStoragePlugin extends JavaPlugin {
+
+    private static final int BSTATS_PLUGIN_ID = 28228;
 
     private static NetworkStoragePlugin instance;
     private NetworkManager networkManager;
@@ -53,6 +58,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     public void onEnable() {
         instance = this;
         createManagers();
+        initializeMetrics();
         registerCommands();
         registerListeners();
         registerRecipes();
@@ -88,6 +94,32 @@ public class NetworkStoragePlugin extends JavaPlugin {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         networkManager = new NetworkManager(this);
+    }
+
+    private void initializeMetrics() {
+        Metrics metrics = new Metrics(this, BSTATS_PLUGIN_ID);
+        metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name().toLowerCase()));
+        metrics.addCustomChart(new SingleLineChart("tracked_chests", this::getTrackedChestCount));
+        metrics.addCustomChart(new SingleLineChart("stored_items", this::getStoredItemCount));
+    }
+
+    private int getTrackedChestCount() {
+        int trackedChestCount = 0;
+        for (Network network : networkManager.getAllNetworks()) {
+            trackedChestCount += network.getChestLocations().size();
+            trackedChestCount += network.getSenderChestLocations().size();
+        }
+        return trackedChestCount;
+    }
+
+    private int getStoredItemCount() {
+        long storedItemCount = 0;
+        for (Network network : networkManager.getAllNetworks()) {
+            for (int amount : network.getNetworkItems().values()) {
+                storedItemCount += amount;
+            }
+        }
+        return (int) Math.min(Integer.MAX_VALUE, storedItemCount);
     }
 
     private void registerCommands() {
