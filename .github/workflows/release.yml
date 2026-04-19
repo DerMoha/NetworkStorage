@@ -67,7 +67,7 @@ jobs:
           loaders: |
             paper
           game-versions: |
-            ">=1.21"
+            >=1.21 <=26.1.2
           files: ${{ steps.version.outputs.jar_file }}
 
       - name: Upload to Hangar
@@ -87,5 +87,5 @@ jobs:
             ]
           platform_dependencies: |
             {
-              "PAPER": ["1.21.x"]
+              "PAPER": [">=1.21 <=26.1.2"]
             }
