@@ -212,12 +212,15 @@ public class ChestInteractListener implements Listener {
         }
 
         if (holder instanceof TerminalGUI) {
-            if (plugin.getSearchManager().isSearching(player)) {
-                plugin.getSearchManager().cancelSearch(player);
-            }
             if (transitioningToStats.remove(player.getUniqueId())) {
+                if (plugin.getSearchManager().isSearching(player)) {
+                    plugin.getSearchManager().cancelSearch(player);
+                }
                 openTerminals.remove(player.getUniqueId());
                 return;
+            }
+            if (plugin.getSearchManager().isSearching(player)) {
+                plugin.getSearchManager().cancelSearch(player);
             }
             openTerminals.remove(player.getUniqueId());
         }

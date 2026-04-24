@@ -2,6 +2,8 @@ package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.TerminalGUI;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -34,11 +36,7 @@ public class SearchManager implements Listener {
     public void startSearch(Player player, TerminalGUI gui) {
         UUID playerId = player.getUniqueId();
 
-        Integer existingTaskId = searchTaskIds.get(playerId);
-        if (existingTaskId != null) {
-            plugin.getServer().getScheduler().cancelTask(existingTaskId);
-            searchTaskIds.remove(playerId);
-        }
+        cancelSearchTask(playerId);
 
         searchingPlayers.put(playerId, gui);
 
@@ -54,7 +52,10 @@ public class SearchManager implements Listener {
     public void cancelSearch(Player player) {
         UUID playerId = player.getUniqueId();
         searchingPlayers.remove(playerId);
+        cancelSearchTask(playerId);
+    }
 
+    private void cancelSearchTask(UUID playerId) {
         Integer taskId = searchTaskIds.remove(playerId);
         if (taskId != null) {
             plugin.getServer().getScheduler().cancelTask(taskId);
@@ -62,21 +63,36 @@ public class SearchManager implements Listener {
     }
 
     @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
-        Player player = event.getPlayer();
-        UUID playerUUID = player.getUniqueId();
-
-        if (!searchingPlayers.containsKey(playerUUID)) {
-            return; // Player is not searching
+    public void onPlayerChatLegacy(AsyncPlayerChatEvent event) {
+        if (!isSearching(event.getPlayer())) {
+            return;
         }
 
-        event.setCancelled(true); // Don't send the message to chat
+        event.setCancelled(true);
+        handleSearchInput(event.getPlayer(), event.getMessage());
+    }
 
-        String message = event.getMessage().trim();
-        TerminalGUI gui = searchingPlayers.remove(playerUUID);
-        searchTaskIds.remove(playerUUID);
+    @EventHandler
+    public void onPlayerChat(AsyncChatEvent event) {
+        if (!isSearching(event.getPlayer())) {
+            return;
+        }
 
-        // Handle search on main thread
+        event.setCancelled(true);
+        String message = PlainTextComponentSerializer.plainText().serialize(event.message());
+        handleSearchInput(event.getPlayer(), message);
+    }
+
+    private void handleSearchInput(Player player, String rawMessage) {
+        UUID playerId = player.getUniqueId();
+        TerminalGUI gui = searchingPlayers.remove(playerId);
+        if (gui == null) {
+            return;
+        }
+
+        cancelSearchTask(playerId);
+        String message = rawMessage.trim();
+
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (message.equalsIgnoreCase("cancel")) {
                 player.sendMessage(lang.getMessage("search.cancelled"));
@@ -85,7 +101,6 @@ public class SearchManager implements Listener {
                 player.sendMessage(String.format(lang.getMessage("search.searching_for"), message));
             }
 
-            // Reopen the GUI
             gui.open();
         });
     }
