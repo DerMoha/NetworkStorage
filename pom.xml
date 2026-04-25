@@ -14,7 +14,7 @@
     <properties>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>26.1.2.build.12-alpha</paper.version>
+        <paper.version>26.1.2.build.40-alpha</paper.version>
     </properties>
 
     <build>
