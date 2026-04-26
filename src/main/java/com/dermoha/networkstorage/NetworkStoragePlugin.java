@@ -8,6 +8,7 @@ import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
 import com.dermoha.networkstorage.listeners.ChestInteractListener;
+import com.dermoha.networkstorage.listeners.MiningTaxListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
@@ -45,6 +46,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private SearchManager searchManager;
     private LanguageManager languageManager;
     private ChestInteractListener chestInteractListener;
+    private MiningTaxListener miningTaxListener;
     private WandListener wandListener;
     private WirelessTerminalListener wirelessTerminalListener;
     private StorageCommand storageCommand;
@@ -136,11 +138,13 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private void registerListeners() {
         chestInteractListener = new ChestInteractListener(this);
+        miningTaxListener = new MiningTaxListener(this);
         wandListener = new WandListener(this);
         wirelessTerminalListener = new WirelessTerminalListener(this);
         searchManager = new SearchManager(this);
 
         getServer().getPluginManager().registerEvents(chestInteractListener, this);
+        getServer().getPluginManager().registerEvents(miningTaxListener, this);
         getServer().getPluginManager().registerEvents(wandListener, this);
         getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
     }
@@ -160,6 +164,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
             chestInteractListener.clearRuntimeState();
             HandlerList.unregisterAll(chestInteractListener);
             chestInteractListener = null;
+        }
+        if (miningTaxListener != null) {
+            HandlerList.unregisterAll(miningTaxListener);
+            miningTaxListener = null;
         }
         if (wandListener != null) {
             HandlerList.unregisterAll(wandListener);

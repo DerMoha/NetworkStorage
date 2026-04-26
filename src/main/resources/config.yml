@@ -27,6 +27,11 @@ enable-permissions: true
 # Enable the trust system (only used in PLAYER mode). If false, anyone can access any network.
 enable-trust-system: true
 
+# Mining tax only works in GLOBAL mode. Each mined block item has a chance to be sent directly into the global network.
+mining-tax:
+  enabled: false
+  rate: 10.0
+
 # Langauge for Plugin-messages (de or en)
 language: en
 
