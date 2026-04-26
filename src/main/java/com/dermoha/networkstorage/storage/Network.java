@@ -139,6 +139,11 @@ public class Network {
         this.dirty = true;
     }
 
+    public void recordItemsTaxed(Player player, int amount) {
+        getPlayerStat(player).addItemsTaxed(amount);
+        this.dirty = true;
+    }
+
     public boolean canAccess(Player player) {
         ConfigManager configManager = NetworkStoragePlugin.getInstance().getConfigManager();
         if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
