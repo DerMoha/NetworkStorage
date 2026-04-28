@@ -76,11 +76,11 @@ public class ConfigManager {
     }
 
     public int getSenderChestTransferInterval() {
-        return config.getInt("sender-chest-transfer-interval-seconds");
+        return getClampedInt("sender-chest-transfer-interval-seconds", 5, 1, 86_400);
     }
 
     public int getWirelessTerminalDurability() {
-        return config.getInt("wireless-terminal-durability");
+        return getClampedInt("wireless-terminal-durability", 100, 1, 1_000_000);
     }
 
     public Integer getOptionalCustomModelData(String path) {
@@ -115,7 +115,7 @@ public class ConfigManager {
     }
 
     public int getAutoSaveInterval() {
-        return config.getInt("auto-save-interval-minutes");
+        return getClampedInt("auto-save-interval-minutes", 5, 1, 10_080);
     }
 
     public String getLanguage() {
@@ -136,5 +136,14 @@ public class ConfigManager {
         config = plugin.getConfig();
         setDefaults();
         plugin.saveConfig();
+    }
+
+    private int getClampedInt(String path, int defaultValue, int min, int max) {
+        int value = config.getInt(path, defaultValue);
+        int clamped = Math.max(min, Math.min(max, value));
+        if (value != clamped) {
+            plugin.getLogger().warning("Config value '" + path + "' must be between " + min + " and " + max + "; using " + clamped + ".");
+        }
+        return clamped;
     }
 }

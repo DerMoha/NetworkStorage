@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class NetworkManager {
@@ -32,6 +33,7 @@ public class NetworkManager {
     private final Object renameLock = new Object();
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final Pattern SAFE_NETWORK_NAME = Pattern.compile("^[A-Za-z0-9 _'-]{1,32}$");
 
     public NetworkManager(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -87,7 +89,13 @@ public class NetworkManager {
                         }
 
                         List<String> trustedUuids = netSection.getStringList("trusted");
-                        trustedUuids.stream().map(UUID::fromString).forEach(network::addTrustedPlayer);
+                        for (String trustedUuid : trustedUuids) {
+                            try {
+                                network.addTrustedPlayer(UUID.fromString(trustedUuid));
+                            } catch (IllegalArgumentException e) {
+                                plugin.getLogger().warning("Skipping invalid trusted UUID '" + trustedUuid + "' in network '" + networkName + "'.");
+                            }
+                        }
 
                         // Load player stats
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
@@ -104,6 +112,7 @@ public class NetworkManager {
                             }
                         }
 
+                        network.setDirty(false);
                         networks.put(networkName, network);
                         if (isGlobalMode && GLOBAL_NETWORK_NAME.equals(networkName)) {
                             globalNetworkLoaded = true;
@@ -309,6 +318,10 @@ public class NetworkManager {
             player.sendMessage(lang.getMessage("network.create.global_mode"));
             return;
         }
+        if (!isValidNetworkName(networkName)) {
+            player.sendMessage(lang.getMessage("network.name.invalid"));
+            return;
+        }
         if (networks.containsKey(networkName)) {
             player.sendMessage(lang.getMessage("network.create.exists"));
             return;
@@ -339,6 +352,10 @@ public class NetworkManager {
     public void renameNetwork(Player player, String oldName, String newName) {
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             player.sendMessage(lang.getMessage("network.rename.global_mode"));
+            return;
+        }
+        if (!isValidNetworkName(newName)) {
+            player.sendMessage(lang.getMessage("network.name.invalid"));
             return;
         }
         if (!networks.containsKey(oldName)) {
@@ -579,6 +596,10 @@ public class NetworkManager {
             network.setDirty(true);
         }
         return network;
+    }
+
+    public boolean isValidNetworkName(String networkName) {
+        return networkName != null && SAFE_NETWORK_NAME.matcher(networkName).matches();
     }
 
     public synchronized int purgeAllNetworksForSeasonReset() {

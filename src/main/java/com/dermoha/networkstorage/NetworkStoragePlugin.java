@@ -214,37 +214,92 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private void registerRecipes() {
         NamespacedKey key = new NamespacedKey(this, WIRELESS_RECIPE_KEY);
         getServer().removeRecipe(key);
-        ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
+        if (!tryRegisterWirelessRecipe(key, getConfiguredWirelessRecipeShape(), true)) {
+            getLogger().warning("Falling back to the default wireless terminal recipe.");
+            getServer().removeRecipe(key);
+            tryRegisterWirelessRecipe(key, getDefaultWirelessRecipeShape(), false);
+        }
+    }
 
+    private boolean tryRegisterWirelessRecipe(NamespacedKey key, String[] shape, boolean useConfiguredIngredients) {
+        try {
+            ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
+            recipe.shape(shape);
+            if (useConfiguredIngredients) {
+                applyConfiguredWirelessRecipeIngredients(recipe);
+            } else {
+                applyDefaultWirelessRecipeIngredients(recipe);
+            }
+            if (!getServer().addRecipe(recipe)) {
+                getLogger().warning("Wireless terminal recipe could not be registered.");
+                return false;
+            }
+            return true;
+        } catch (IllegalArgumentException e) {
+            getLogger().warning("Invalid wireless terminal recipe config: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private String[] getConfiguredWirelessRecipeShape() {
         List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
         if (shape.isEmpty()) {
-            recipe.shape("CCC", "CSC", "CDC");
-        } else {
-            recipe.shape(shape.toArray(new String[0]));
+            return getDefaultWirelessRecipeShape();
         }
+        if (!isValidRecipeShape(shape)) {
+            getLogger().warning("Invalid wireless terminal recipe shape; using default shape.");
+            return getDefaultWirelessRecipeShape();
+        }
+        return shape.toArray(new String[0]);
+    }
 
-        ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
-        if (ingredients == null) {
-            recipe.setIngredient('C', Material.COMPASS);
-            recipe.setIngredient('S', Material.NETHER_STAR);
-            recipe.setIngredient('D', Material.DIAMOND_BLOCK);
-        } else {
-            for (String keyChar : ingredients.getKeys(false)) {
-                if (keyChar.length() == 1) {
-                    String materialName = ingredients.getString(keyChar);
-                    if (materialName != null) {
-                        try {
-                            Material ingredient = Material.valueOf(materialName.toUpperCase());
-                            recipe.setIngredient(keyChar.charAt(0), ingredient);
-                        } catch (IllegalArgumentException e) {
-                            getLogger().warning("Invalid material '" + materialName + "' in wireless terminal recipe.");
-                        }
-                    }
-                }
+    private boolean isValidRecipeShape(List<String> shape) {
+        if (shape.isEmpty() || shape.size() > 3) {
+            return false;
+        }
+        int width = shape.get(0).length();
+        if (width == 0 || width > 3) {
+            return false;
+        }
+        for (String row : shape) {
+            if (row == null || row.length() != width) {
+                return false;
             }
         }
+        return true;
+    }
 
-        getServer().addRecipe(recipe);
+    private void applyConfiguredWirelessRecipeIngredients(ShapedRecipe recipe) {
+        ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
+        if (ingredients == null) {
+            applyDefaultWirelessRecipeIngredients(recipe);
+            return;
+        }
+
+        for (String keyChar : ingredients.getKeys(false)) {
+            if (keyChar.length() != 1) {
+                getLogger().warning("Ignoring invalid wireless recipe ingredient key '" + keyChar + "'.");
+                continue;
+            }
+
+            String materialName = ingredients.getString(keyChar);
+            Material ingredient = materialName == null ? null : Material.matchMaterial(materialName);
+            if (ingredient == null) {
+                getLogger().warning("Invalid material '" + materialName + "' in wireless terminal recipe.");
+                continue;
+            }
+            recipe.setIngredient(keyChar.charAt(0), ingredient);
+        }
+    }
+
+    private void applyDefaultWirelessRecipeIngredients(ShapedRecipe recipe) {
+        recipe.setIngredient('C', Material.COMPASS);
+        recipe.setIngredient('S', Material.NETHER_STAR);
+        recipe.setIngredient('D', Material.DIAMOND_BLOCK);
+    }
+
+    private String[] getDefaultWirelessRecipeShape() {
+        return new String[] {"CCC", "CSC", "CDC"};
     }
 
     private void startSenderChestTask() {

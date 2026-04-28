@@ -25,6 +25,20 @@ public class LanguageManager {
 
     private void loadAndCheckLangFile() {
         String fileName = "lang_" + lang + ".yml";
+        InputStream defaultStream = plugin.getResource(fileName);
+        if (defaultStream == null) {
+            plugin.getLogger().warning("Unsupported language '" + lang + "'. Falling back to English.");
+            lang = "en";
+            fileName = "lang_en.yml";
+            defaultStream = plugin.getResource(fileName);
+        }
+
+        if (defaultStream == null) {
+            plugin.getLogger().severe("Default language file 'lang_en.yml' is missing from the JAR. Cannot load translations.");
+            langConfig = new YamlConfiguration();
+            return;
+        }
+
         langFile = new File(plugin.getDataFolder(), fileName);
 
         // If the user's file doesn't exist, create it from the JAR's default.
@@ -34,15 +48,6 @@ public class LanguageManager {
         langConfig = YamlConfiguration.loadConfiguration(langFile);
 
         // Load the default language file from the JAR to use as a reference.
-        InputStream defaultStream = plugin.getResource(fileName);
-        if (defaultStream == null) {
-            // If the primary language file is missing from the JAR, try falling back to English.
-            defaultStream = plugin.getResource("lang_en.yml");
-            if (defaultStream == null) {
-                plugin.getLogger().severe("Default language file 'lang_en.yml' is missing from the JAR. Cannot check for missing translations.");
-                return;
-            }
-        }
         FileConfiguration defaultLangConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultStream));
 
         // Check for missing keys and add them.
