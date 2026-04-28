@@ -81,7 +81,7 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
+        if (plugin.getConfigManager().isNetworkContainerBlock(clickedBlock.getType())) {
             Network network = plugin.getNetworkManager().getNetworkByLocation(clickedBlock.getLocation());
             Location normalizedLoc = network != null ? network.getNormalizedLocation(clickedBlock.getLocation()) : null;
 
@@ -274,7 +274,7 @@ public class ChestInteractListener implements Listener {
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (block.getType() == Material.CHEST || block.getType() == Material.TRAPPED_CHEST) {
+        if (plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
             Location chestLoc = block.getLocation();
             Network network = plugin.getNetworkManager().getNetworkByLocation(chestLoc);
 

@@ -57,7 +57,7 @@ public class WandListener implements Listener {
 
         event.setCancelled(true);
 
-        if (clickedBlock.getType() == Material.CHEST || clickedBlock.getType() == Material.TRAPPED_CHEST) {
+        if (plugin.getConfigManager().isNetworkContainerBlock(clickedBlock.getType())) {
             handleChestClick(player, clickedBlock, event.getAction());
         } else {
             player.sendMessage(lang.getMessage("wand.only_chest"));
@@ -234,12 +234,13 @@ public class WandListener implements Listener {
                 return "double chest";
             }
         }
-        return "chest";
+        String typeName = chestBlock.getType().name().toLowerCase().replace("_", " ");
+        return typeName;
     }
 
     public static ItemStack createStorageWand(NetworkStoragePlugin plugin) {
         LanguageManager lang = plugin.getLanguageManager();
-        ItemStack wand = new ItemStack(Material.BLAZE_ROD);
+        ItemStack wand = new ItemStack(plugin.getConfigManager().getWandMaterial());
         ItemMeta meta = wand.getItemMeta();
 
         if (meta != null) {
@@ -259,7 +260,7 @@ public class WandListener implements Listener {
     }
 
     public static boolean isStorageWand(ItemStack item, NetworkStoragePlugin plugin) {
-        if (item == null || item.getType() != Material.BLAZE_ROD) {
+        if (item == null || item.getType() != plugin.getConfigManager().getWandMaterial()) {
             return false;
         }
 

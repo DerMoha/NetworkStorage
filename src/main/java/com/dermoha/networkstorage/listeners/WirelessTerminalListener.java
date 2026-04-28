@@ -173,7 +173,7 @@ public class WirelessTerminalListener implements Listener {
         LanguageManager lang = plugin.getLanguageManager();
         int durability = plugin.getConfigManager().getWirelessTerminalDurability();
 
-        ItemStack terminal = new ItemStack(Material.RECOVERY_COMPASS);
+        ItemStack terminal = new ItemStack(plugin.getConfigManager().getWirelessTerminalMaterial());
         ItemMeta meta = terminal.getItemMeta();
         if (meta != null) {
             meta.setDisplayName(lang.getMessage("wireless_terminal.name"));
@@ -190,7 +190,7 @@ public class WirelessTerminalListener implements Listener {
     }
 
     public static boolean isWirelessTerminal(ItemStack item, NetworkStoragePlugin plugin) {
-        if (item == null || item.getType() != Material.RECOVERY_COMPASS) {
+        if (item == null || item.getType() != plugin.getConfigManager().getWirelessTerminalMaterial()) {
             return false;
         }
         ItemMeta meta = item.getItemMeta();

@@ -312,9 +312,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
                         continue;
                     }
 
-                    if (senderLoc.getBlock().getState() instanceof Chest) {
-                        Chest senderChest = (Chest) senderLoc.getBlock().getState();
-                        Inventory senderInv = senderChest.getInventory();
+                    if (senderLoc.getBlock().getState() instanceof org.bukkit.inventory.InventoryHolder holder) {
+                        Inventory senderInv = holder.getInventory();
                         for (int i = 0; i < senderInv.getSize(); i++) {
                             ItemStack item = senderInv.getItem(i);
                             if (item != null && item.getType() != Material.AIR) {
@@ -329,7 +328,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     } else {
                         network.removeSenderChest(senderLoc);
                         networkManager.removeFromLocationIndex(senderLoc);
-                        getLogger().info("Pruned non-chest block at " + senderLoc.toString() + " from a network because it was no longer a chest.");
+                        getLogger().info("Pruned non-inventory block at " + senderLoc.toString() + " from a network because it was no longer a container.");
                     }
                 }
             }

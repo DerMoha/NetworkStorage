@@ -29,6 +29,14 @@ enable-permissions: true
 # normal land-claim/protection plugin if players should not open storage chests directly.
 enable-trust-system: true
 
+# Item materials used for plugin tools. Must be valid Bukkit Material names.
+wand-material: BLAZE_ROD
+wireless-terminal-material: RECOVERY_COMPASS
+
+# Block type used for access terminals. Must be a valid Bukkit Material name.
+# CHEST and TRAPPED_CHEST are always supported regardless of this setting.
+terminal-block-type: CHEST
+
 # Mining tax only works in GLOBAL mode. Each mined block item has a chance to be sent directly into the global network.
 mining-tax:
   enabled: false

@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -40,6 +41,9 @@ public class ConfigManager {
         config.addDefault("mining-tax.enabled", false);
         config.addDefault("mining-tax.rate", 10.0);
         config.addDefault("wireless-terminal-durability", 100);
+        config.addDefault("wand-material", "BLAZE_ROD");
+        config.addDefault("wireless-terminal-material", "RECOVERY_COMPASS");
+        config.addDefault("terminal-block-type", "CHEST");
         config.addDefault("custom-model-data.wireless-terminal", 10001);
         config.addDefault("custom-model-data.wand", 10002);
         config.addDefault("custom-model-data.gui.terminal.prev-page", 10101);
@@ -81,6 +85,24 @@ public class ConfigManager {
 
     public int getWirelessTerminalDurability() {
         return getClampedInt("wireless-terminal-durability", 100, 1, 1_000_000);
+    }
+
+    public Material getWandMaterial() {
+        return parseMaterial("wand-material", Material.BLAZE_ROD);
+    }
+
+    public Material getWirelessTerminalMaterial() {
+        return parseMaterial("wireless-terminal-material", Material.RECOVERY_COMPASS);
+    }
+
+    public Material getTerminalBlockType() {
+        return parseMaterial("terminal-block-type", Material.CHEST);
+    }
+
+    public boolean isNetworkContainerBlock(Material material) {
+        return material == Material.CHEST
+                || material == Material.TRAPPED_CHEST
+                || material == getTerminalBlockType();
     }
 
     public Integer getOptionalCustomModelData(String path) {
@@ -145,5 +167,15 @@ public class ConfigManager {
             plugin.getLogger().warning("Config value '" + path + "' must be between " + min + " and " + max + "; using " + clamped + ".");
         }
         return clamped;
+    }
+
+    private Material parseMaterial(String path, Material fallback) {
+        String name = config.getString(path, fallback.name());
+        try {
+            return Material.valueOf(name.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid material '" + name + "' for " + path + ", using " + fallback.name() + ".");
+            return fallback;
+        }
     }
 }

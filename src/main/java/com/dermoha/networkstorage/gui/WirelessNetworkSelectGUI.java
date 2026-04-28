@@ -43,7 +43,7 @@ public class WirelessNetworkSelectGUI implements InventoryHolder {
 
         for (int i = 0; i < Math.min(networks.size(), inventory.getSize()); i++) {
             Network network = networks.get(i);
-            ItemStack item = new ItemStack(Material.RECOVERY_COMPASS);
+            ItemStack item = new ItemStack(plugin.getConfigManager().getWirelessTerminalMaterial());
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
                 meta.setDisplayName(String.format(lang.getMessage("wireless.select.item"), network.getName()));
