@@ -71,6 +71,10 @@ public class WandListener implements Listener {
                     return;
                 }
 
+                if (!canAddNetworkRole(player, network, normalizedLoc)) {
+                    return;
+                }
+
                 if (isOtherHalfInNetwork(chestBlock, network)) {
                     player.sendMessage(lang.getMessage("wand.sender_chest.other_half"));
                     player.sendMessage(lang.getMessage("wand.sender_chest.unit_hint"));
@@ -91,6 +95,10 @@ public class WandListener implements Listener {
             } else {
                 if (network.isChestInNetwork(normalizedLoc)) {
                     player.sendMessage(lang.getMessage("wand.chest.already_in_network"));
+                    return;
+                }
+
+                if (!canAddNetworkRole(player, network, normalizedLoc)) {
                     return;
                 }
 
@@ -115,6 +123,10 @@ public class WandListener implements Listener {
             if (player.isSneaking()) {
                 if (network.isTerminalInNetwork(normalizedLoc)) {
                     player.sendMessage(lang.getMessage("wand.terminal.already"));
+                    return;
+                }
+
+                if (!canAddNetworkRole(player, network, normalizedLoc)) {
                     return;
                 }
 
@@ -161,6 +173,27 @@ public class WandListener implements Listener {
                 }
             }
         }
+    }
+
+    private boolean canAddNetworkRole(Player player, Network network, Location normalizedLoc) {
+        Network existingNetwork = plugin.getNetworkManager().getNetworkByLocation(normalizedLoc);
+        if (existingNetwork != null && existingNetwork != network) {
+            player.sendMessage(lang.getMessage("wand.chest.in_other_network"));
+            return false;
+        }
+
+        if (isAnyRoleInNetwork(network, normalizedLoc)) {
+            player.sendMessage(lang.getMessage("wand.chest.already_assigned"));
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean isAnyRoleInNetwork(Network network, Location location) {
+        return network.isChestInNetwork(location)
+                || network.isTerminalInNetwork(location)
+                || network.isSenderChestInNetwork(location);
     }
 
     private boolean isOtherHalfInNetwork(Block chestBlock, Network network) {
