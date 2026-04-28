@@ -351,7 +351,7 @@ public class NetworkManager {
         }
         Network network = networks.get(oldName);
 
-        if (!network.getOwner().equals(player.getUniqueId()) && !player.hasPermission("networkstorage.admin")) {
+        if (!network.getOwner().equals(player.getUniqueId()) && !plugin.getConfigManager().hasPrivilege(player, "networkstorage.admin")) {
              player.sendMessage(lang.getMessage("network.rename.permission"));
              return;
         }

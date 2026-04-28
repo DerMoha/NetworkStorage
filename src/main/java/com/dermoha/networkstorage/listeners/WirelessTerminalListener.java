@@ -7,6 +7,7 @@ import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,6 +17,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,12 +39,17 @@ public class WirelessTerminalListener implements Listener {
         ItemStack item = event.getItem();
         LanguageManager lang = plugin.getLanguageManager();
 
-        if (!isWirelessTerminal(item, lang)) {
+        if (!isWirelessTerminal(item, plugin)) {
             return;
         }
 
         if (event.getAction() == Action.RIGHT_CLICK_AIR || event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
+
+            if (!plugin.getConfigManager().hasPermission(player, "networkstorage.wireless")) {
+                player.sendMessage(lang.getMessage("no_permission_wireless"));
+                return;
+            }
 
             ItemMeta meta = item.getItemMeta();
             if (meta == null || !meta.hasLore()) {
@@ -76,6 +83,11 @@ public class WirelessTerminalListener implements Listener {
 
     public void openSelectedNetwork(Player player, EquipmentSlot hand, String networkName) {
         LanguageManager lang = plugin.getLanguageManager();
+        if (!plugin.getConfigManager().hasPermission(player, "networkstorage.wireless")) {
+            player.sendMessage(lang.getMessage("no_permission_wireless"));
+            return;
+        }
+
         Network network = plugin.getNetworkManager().findAccessibleNetwork(player, networkName);
         if (network == null) {
             player.sendMessage(String.format(lang.getMessage("wireless.select.not_found"), networkName));
@@ -83,7 +95,7 @@ public class WirelessTerminalListener implements Listener {
         }
 
         ItemStack item = getWirelessTerminalInHand(player, hand);
-        if (!isWirelessTerminal(item, lang)) {
+        if (!isWirelessTerminal(item, plugin)) {
             player.sendMessage(lang.getMessage("wireless.select.item_missing"));
             return;
         }
@@ -171,16 +183,21 @@ public class WirelessTerminalListener implements Listener {
             lore.add(String.format(lang.getMessage("wireless_terminal.lore.durability"), durability, durability));
             meta.setLore(lore);
             ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getWirelessTerminalCustomModelData());
+            meta.getPersistentDataContainer().set(getWirelessTerminalKey(plugin), PersistentDataType.BYTE, (byte) 1);
             terminal.setItemMeta(meta);
         }
         return terminal;
     }
 
-    public static boolean isWirelessTerminal(ItemStack item, LanguageManager lang) {
+    public static boolean isWirelessTerminal(ItemStack item, NetworkStoragePlugin plugin) {
         if (item == null || item.getType() != Material.RECOVERY_COMPASS) {
             return false;
         }
         ItemMeta meta = item.getItemMeta();
-        return meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(lang.getMessage("wireless_terminal.name"));
+        return meta != null && meta.getPersistentDataContainer().has(getWirelessTerminalKey(plugin), PersistentDataType.BYTE);
+    }
+
+    private static NamespacedKey getWirelessTerminalKey(NetworkStoragePlugin plugin) {
+        return new NamespacedKey(plugin, "wireless_terminal");
     }
 }

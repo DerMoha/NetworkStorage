@@ -150,10 +150,10 @@ public class Network {
             return true;
         }
         UUID playerUUID = player.getUniqueId();
-        if (playerUUID.equals(this.owner) || player.hasPermission("networkstorage.admin")) {
+        if (playerUUID.equals(this.owner) || configManager.hasPrivilege(player, "networkstorage.admin")) {
             return true;
         }
-        if (player.hasPermission("networkstorage.access.all")) {
+        if (configManager.hasPrivilege(player, "networkstorage.access.all")) {
             return true;
         }
         if (configManager.isTrustSystemEnabled()) {

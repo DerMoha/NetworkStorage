@@ -50,6 +50,10 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
 
         switch (subCommand) {
             case "create":
+                if (!plugin.getConfigManager().hasPermission(player, "networkstorage.network.create")) {
+                    player.sendMessage(lang.getMessage("no-permission"));
+                    return true;
+                }
                 if (args.length < 2) {
                     player.sendMessage(lang.getMessage("network.create.usage"));
                     return true;
@@ -57,6 +61,10 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
                 plugin.getNetworkManager().createNetwork(player, args[1]);
                 break;
             case "edit":
+                if (!plugin.getConfigManager().hasPermission(player, "networkstorage.network.edit")) {
+                    player.sendMessage(lang.getMessage("no-permission"));
+                    return true;
+                }
                 if (args.length < 2) {
                     player.sendMessage(lang.getMessage("network.edit.usage"));
                     return true;
@@ -64,6 +72,10 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
                 plugin.getNetworkManager().editNetwork(player, args[1]);
                 break;
             case "rename":
+                if (!plugin.getConfigManager().hasPermission(player, "networkstorage.network.rename")) {
+                    player.sendMessage(lang.getMessage("no-permission"));
+                    return true;
+                }
                 if (args.length < 3) {
                     player.sendMessage(lang.getMessage("network.rename.usage"));
                     return true;

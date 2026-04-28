@@ -69,7 +69,7 @@ public class ChestInteractListener implements Listener {
         }
 
         ItemStack itemInHand = event.getItem();
-        if (WandListener.isStorageWand(itemInHand, lang)) {
+        if (WandListener.isStorageWand(itemInHand, plugin)) {
             return;
         }
 
@@ -236,7 +236,7 @@ public class ChestInteractListener implements Listener {
             if (network != null) {
                 Player breaker = event.getPlayer();
                 boolean isOwner = network.getOwner().equals(breaker.getUniqueId());
-                boolean isAdmin = breaker.hasPermission("networkstorage.admin");
+                boolean isAdmin = plugin.getConfigManager().hasPrivilege(breaker, "networkstorage.admin");
 
                 if (!isOwner && !isAdmin) {
                     event.setCancelled(true);

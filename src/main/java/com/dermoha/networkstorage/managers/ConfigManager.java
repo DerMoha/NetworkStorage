@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 
 public class ConfigManager {
@@ -99,6 +100,14 @@ public class ConfigManager {
 
     public boolean isPermissionsEnabled() {
         return config.getBoolean("enable-permissions");
+    }
+
+    public boolean hasPermission(CommandSender sender, String permission) {
+        return !isPermissionsEnabled() || sender.hasPermission(permission);
+    }
+
+    public boolean hasPrivilege(CommandSender sender, String permission) {
+        return isPermissionsEnabled() && sender.hasPermission(permission);
     }
 
     public boolean isTrustSystemEnabled() {

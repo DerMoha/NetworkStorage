@@ -7,7 +7,6 @@ import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -15,7 +14,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.StringUtil;
 
 import java.util.ArrayList;
@@ -199,25 +197,21 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleWandCommand(Player player) {
-        if (!player.hasPermission("networkstorage.wand")) {
+        if (!plugin.getConfigManager().hasPermission(player, "networkstorage.wand")) {
             player.sendMessage(lang.getMessage("no_permission_wand"));
             return;
         }
 
         ItemStack wand = WandListener.createStorageWand(plugin);
-        String wandName = wand.getItemMeta().getDisplayName();
 
         for (int i = 0; i < player.getInventory().getSize(); i++) {
             ItemStack slot = player.getInventory().getItem(i);
-            if (slot != null && slot.getType() == Material.BLAZE_ROD) {
-                ItemMeta meta = slot.getItemMeta();
-                if (meta != null && meta.hasDisplayName() && meta.getDisplayName().equals(wandName)) {
-                    player.getInventory().setItem(i, wand);
-                    player.sendMessage(lang.getMessage("received_wand"));
-                    player.sendMessage(lang.getMessage("wand_left_click"));
-                    player.sendMessage(lang.getMessage("wand_right_click"));
-                    return;
-                }
+            if (WandListener.isStorageWand(slot, plugin)) {
+                player.getInventory().setItem(i, wand);
+                player.sendMessage(lang.getMessage("received_wand"));
+                player.sendMessage(lang.getMessage("wand_left_click"));
+                player.sendMessage(lang.getMessage("wand_right_click"));
+                return;
             }
         }
 
@@ -228,7 +222,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleWirelessCommand(Player player) {
-        if (!player.hasPermission("networkstorage.wireless")) {
+        if (!plugin.getConfigManager().hasPermission(player, "networkstorage.wireless")) {
             player.sendMessage(lang.getMessage("no_permission_wireless"));
             return;
         }
@@ -268,7 +262,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleResetCommand(Player player) {
-        if (!player.hasPermission("networkstorage.reset")) {
+        if (!plugin.getConfigManager().hasPermission(player, "networkstorage.reset")) {
             player.sendMessage(lang.getMessage("no_permission_reset"));
             return;
         }

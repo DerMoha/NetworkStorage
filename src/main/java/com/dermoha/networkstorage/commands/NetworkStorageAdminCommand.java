@@ -28,7 +28,7 @@ public class NetworkStorageAdminCommand implements CommandExecutor {
     }
 
     private void handleReloadCommand(CommandSender sender) {
-        if (!sender.hasPermission("networkstorage.admin")) {
+        if (!plugin.getConfigManager().hasPermission(sender, "networkstorage.admin")) {
             sender.sendMessage(lang.getMessage("no_permission_reload"));
             return;
         }

@@ -6,6 +6,7 @@ import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
@@ -16,6 +17,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Arrays;
 
@@ -34,7 +36,13 @@ public class WandListener implements Listener {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
-        if (!isStorageWand(item, lang)) {
+        if (!isStorageWand(item, plugin)) {
+            return;
+        }
+
+        if (!plugin.getConfigManager().hasPermission(player, "networkstorage.wand")) {
+            player.sendMessage(lang.getMessage("no_permission_wand"));
+            event.setCancelled(true);
             return;
         }
 
@@ -243,19 +251,23 @@ public class WandListener implements Listener {
                     lang.getMessage("wand.lore4")
             ));
             ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getStorageWandCustomModelData());
+            meta.getPersistentDataContainer().set(getStorageWandKey(plugin), PersistentDataType.BYTE, (byte) 1);
             wand.setItemMeta(meta);
         }
 
         return wand;
     }
 
-    public static boolean isStorageWand(ItemStack item, LanguageManager lang) {
+    public static boolean isStorageWand(ItemStack item, NetworkStoragePlugin plugin) {
         if (item == null || item.getType() != Material.BLAZE_ROD) {
             return false;
         }
 
         ItemMeta meta = item.getItemMeta();
-        return meta != null && meta.hasDisplayName() &&
-                meta.getDisplayName().equals(lang.getMessage("wand.name"));
+        return meta != null && meta.getPersistentDataContainer().has(getStorageWandKey(plugin), PersistentDataType.BYTE);
+    }
+
+    private static NamespacedKey getStorageWandKey(NetworkStoragePlugin plugin) {
+        return new NamespacedKey(plugin, "storage_wand");
     }
 }
