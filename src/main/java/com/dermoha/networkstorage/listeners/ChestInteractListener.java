@@ -20,6 +20,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
@@ -86,7 +87,7 @@ public class ChestInteractListener implements Listener {
                 }
 
                 if (player.isSneaking() && itemInHand != null && itemInHand.getType() != Material.AIR) {
-                    handleQuickDeposit(player, network, itemInHand);
+                    handleQuickDeposit(player, network, itemInHand, event.getHand());
                     return;
                 }
 
@@ -99,12 +100,12 @@ public class ChestInteractListener implements Listener {
             }
         }
     }
-    private void handleQuickDeposit(Player player, Network network, ItemStack itemInHand) {
+    private void handleQuickDeposit(Player player, Network network, ItemStack itemInHand, EquipmentSlot hand) {
         int originalAmount = itemInHand.getAmount();
         ItemStack remaining = network.addToNetwork(itemInHand.clone());
 
         if (remaining == null || remaining.getAmount() == 0) {
-            player.getInventory().setItemInMainHand(null);
+            setItemInHand(player, hand, null);
             player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, ItemUtils.getItemDisplayName(itemInHand)));
             network.recordItemsDeposited(player, originalAmount);
         } else {
@@ -113,8 +114,16 @@ public class ChestInteractListener implements Listener {
                 player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, ItemUtils.getItemDisplayName(itemInHand), remaining.getAmount()));
                 network.recordItemsDeposited(player, depositedAmount);
             }
-            itemInHand.setAmount(remaining.getAmount());
+            setItemInHand(player, hand, remaining);
         }
+    }
+
+    private void setItemInHand(Player player, EquipmentSlot hand, ItemStack item) {
+        if (hand == EquipmentSlot.OFF_HAND) {
+            player.getInventory().setItemInOffHand(item);
+            return;
+        }
+        player.getInventory().setItemInMainHand(item);
     }
 
     @EventHandler

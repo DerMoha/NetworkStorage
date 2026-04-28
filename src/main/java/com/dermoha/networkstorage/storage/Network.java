@@ -159,7 +159,7 @@ public class Network {
         if (configManager.isTrustSystemEnabled()) {
             return trustedPlayers.contains(playerUUID);
         }
-        return false;
+        return true;
     }
 
     public boolean isTrusted(UUID playerUUID) {
