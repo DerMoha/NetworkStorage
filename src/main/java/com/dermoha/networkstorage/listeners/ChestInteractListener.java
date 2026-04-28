@@ -19,6 +19,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
@@ -35,6 +36,7 @@ public class ChestInteractListener implements Listener {
     private final NetworkStoragePlugin plugin;
     private final Map<UUID, TerminalGUI> openTerminals;
     private final Set<UUID> transitioningToStats = new HashSet<>();
+    private final Set<UUID> transitioningToSearch = new HashSet<>();
     private final LanguageManager lang;
 
     public ChestInteractListener(NetworkStoragePlugin plugin) {
@@ -51,9 +53,14 @@ public class ChestInteractListener implements Listener {
         transitioningToStats.add(playerId);
     }
 
+    public void setTransitioningToSearch(UUID playerId) {
+        transitioningToSearch.add(playerId);
+    }
+
     public void clearRuntimeState() {
         openTerminals.clear();
         transitioningToStats.clear();
+        transitioningToSearch.clear();
     }
 
     @EventHandler
@@ -178,7 +185,32 @@ public class ChestInteractListener implements Listener {
         }
     }
 
+    @EventHandler
+    public void onInventoryDrag(InventoryDragEvent event) {
+        InventoryHolder holder = event.getView().getTopInventory().getHolder();
+        if (!(holder instanceof NetworkSelectGUI
+                || holder instanceof WirelessNetworkSelectGUI
+                || holder instanceof StatsGUI
+                || holder instanceof TerminalGUI)) {
+            return;
+        }
+
+        int topSize = event.getView().getTopInventory().getSize();
+        for (int rawSlot : event.getRawSlots()) {
+            if (rawSlot < topSize) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
     private void handleShiftClickDeposit(InventoryClickEvent event, TerminalGUI terminal, Player player) {
+        if (!terminal.getNetwork().canAccess(player)) {
+            player.closeInventory();
+            player.sendMessage(lang.getMessage("trust.no_permission_access"));
+            return;
+        }
+
         ItemStack clickedItem = event.getCurrentItem();
         if (clickedItem == null || clickedItem.getType() == Material.AIR) {
             return;
@@ -221,6 +253,10 @@ public class ChestInteractListener implements Listener {
         }
 
         if (holder instanceof TerminalGUI) {
+            if (transitioningToSearch.remove(player.getUniqueId())) {
+                openTerminals.remove(player.getUniqueId());
+                return;
+            }
             if (transitioningToStats.remove(player.getUniqueId())) {
                 if (plugin.getSearchManager().isSearching(player)) {
                     plugin.getSearchManager().cancelSearch(player);

@@ -277,6 +277,10 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
+        if (!ensureAccess()) {
+            return;
+        }
+
         if (slot == SLOT_PREV_PAGE && currentPage > 0) {
             currentPage--;
             updateInventory();
@@ -300,6 +304,7 @@ public class TerminalGUI implements InventoryHolder {
                 player.sendMessage(lang.getMessage("terminal.search.cleared"));
             } else {
                 plugin.getSearchManager().startSearch(player, this);
+                plugin.getChestInteractListener().setTransitioningToSearch(player.getUniqueId());
                 player.closeInventory();
                 player.sendMessage(lang.getMessage("terminal.search.prompt"));
                 player.sendMessage(lang.getMessage("terminal.search.cancel_hint"));
@@ -413,13 +418,32 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public void setSearchFilter(String filter) {
+        if (!ensureAccess()) {
+            return;
+        }
+
         this.searchFilter = filter;
         this.currentPage = 0;
         updateInventory();
     }
 
-    public void open() {
+    public boolean open() {
+        if (!ensureAccess()) {
+            return false;
+        }
+
         player.openInventory(inventory);
+        return true;
+    }
+
+    private boolean ensureAccess() {
+        if (network.canAccess(player)) {
+            return true;
+        }
+
+        player.closeInventory();
+        player.sendMessage(lang.getMessage("trust.no_permission_access"));
+        return false;
     }
 
     @Override

@@ -101,7 +101,9 @@ public class SearchManager implements Listener {
                 player.sendMessage(String.format(lang.getMessage("search.searching_for"), message));
             }
 
-            gui.open();
+            if (gui.open()) {
+                plugin.getChestInteractListener().addOpenTerminal(playerId, gui);
+            }
         });
     }
 
