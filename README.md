@@ -45,6 +45,13 @@ This option is only relevant in `PLAYER` mode:
 *   **`true` (Default):** Only the owner and players they have added via `/storage trust` can access a network.
 *   **`false`:** The trust system is completely disabled. **Every player can access every network.** Ideal for small, private servers where everyone works together.
 
+Trust checks apply to terminals and wireless access. Physical storage chests are still normal Minecraft chests, so use your server's land-claim or block-protection plugin if players should not open them directly.
+
+### Safety Compatibility
+
+*   Storage wands and wireless terminals must be created by this plugin. Items that only match the display name are rejected intentionally, because renamed legacy items cannot be distinguished from forged items.
+*   New network names are limited to 1-32 characters: letters, numbers, spaces, underscores, hyphens, and apostrophes. This keeps names safe for YAML-backed storage.
+
 ### Language and Item Search
 
 *   **Display:** The names of items in the terminal are always displayed in the language you have set in your Minecraft client (e.g., German, French, etc.).

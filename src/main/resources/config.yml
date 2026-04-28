@@ -25,6 +25,8 @@ auto-save-interval-minutes: 5
 enable-permissions: true
 
 # Enable the trust system (only used in PLAYER mode). If false, anyone can access any network.
+# This controls terminal and wireless access. Protect physical chest blocks with your server's
+# normal land-claim/protection plugin if players should not open storage chests directly.
 enable-trust-system: true
 
 # Mining tax only works in GLOBAL mode. Each mined block item has a chance to be sent directly into the global network.
@@ -37,6 +39,8 @@ language: en
 
 # Custom model data values used for optional resource-pack overrides.
 # Set any entry to a blank value to disable that override.
+# Storage wands and wireless terminals must be issued by this plugin. Renamed legacy items
+# are intentionally not accepted, because they cannot be distinguished from forged items.
 custom-model-data:
   wireless-terminal: 10001
   wand: 10002
