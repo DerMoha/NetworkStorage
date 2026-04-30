@@ -38,8 +38,6 @@ public class ConfigManager {
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
         config.addDefault("language", "en");
-        config.addDefault("mining-tax.enabled", false);
-        config.addDefault("mining-tax.rate", 10.0);
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wand-material", "BLAZE_ROD");
         config.addDefault("wireless-terminal-material", "RECOVERY_COMPASS");
@@ -142,15 +140,6 @@ public class ConfigManager {
 
     public String getLanguage() {
         return config.getString("language");
-    }
-
-    public boolean isMiningTaxEnabled() {
-        return config.getBoolean("mining-tax.enabled");
-    }
-
-    public double getMiningTaxRate() {
-        double rate = config.getDouble("mining-tax.rate", 0.0);
-        return Math.max(0.0, Math.min(100.0, rate));
     }
 
     public void reloadConfig() {

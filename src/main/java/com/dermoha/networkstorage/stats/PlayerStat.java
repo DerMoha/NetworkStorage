@@ -12,22 +12,15 @@ public class PlayerStat {
     private final String playerName;
     private long itemsDeposited;
     private long itemsWithdrawn;
-    private long itemsTaxed;
-
     public PlayerStat(UUID playerUUID, String playerName) {
-        this(playerUUID, playerName, 0, 0, 0);
+        this(playerUUID, playerName, 0, 0);
     }
 
     public PlayerStat(UUID playerUUID, String playerName, long itemsDeposited, long itemsWithdrawn) {
-        this(playerUUID, playerName, itemsDeposited, itemsWithdrawn, 0);
-    }
-
-    public PlayerStat(UUID playerUUID, String playerName, long itemsDeposited, long itemsWithdrawn, long itemsTaxed) {
         this.playerUUID = playerUUID;
         this.playerName = validatePlayerName(playerName);
         this.itemsDeposited = itemsDeposited;
         this.itemsWithdrawn = itemsWithdrawn;
-        this.itemsTaxed = itemsTaxed;
     }
 
     private static String validatePlayerName(String playerName) {
@@ -60,10 +53,6 @@ public class PlayerStat {
         return itemsWithdrawn;
     }
 
-    public long getItemsTaxed() {
-        return itemsTaxed;
-    }
-
     // Modifiers
     public void addItemsDeposited(long amount) {
         this.itemsDeposited += amount;
@@ -71,9 +60,5 @@ public class PlayerStat {
 
     public void addItemsWithdrawn(long amount) {
         this.itemsWithdrawn += amount;
-    }
-
-    public void addItemsTaxed(long amount) {
-        this.itemsTaxed += amount;
     }
 }

@@ -37,11 +37,6 @@ wireless-terminal-material: RECOVERY_COMPASS
 # CHEST and TRAPPED_CHEST are always supported regardless of this setting.
 terminal-block-type: CHEST
 
-# Mining tax only works in GLOBAL mode. Each mined block item has a chance to be sent directly into the global network.
-mining-tax:
-  enabled: false
-  rate: 10.0
-
 # Langauge for Plugin-messages (de or en)
 language: en
 

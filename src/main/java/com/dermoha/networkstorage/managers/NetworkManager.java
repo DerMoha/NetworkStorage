@@ -105,9 +105,7 @@ public class NetworkManager {
                                 String name = statsSection.getString(uuidString + ".name");
                                 long deposited = statsSection.getLong(uuidString + ".deposited");
                                 long withdrawn = statsSection.getLong(uuidString + ".withdrawn");
-                                long taxed = statsSection.getLong(uuidString + ".taxed");
-
-                                PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn, taxed);
+                                PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn);
                                 network.getPlayerStats().put(playerUUID, stat);
                             }
                         }
@@ -277,7 +275,6 @@ public class NetworkManager {
                 newConfig.set(statPath + ".name", stat.getPlayerName());
                 newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
                 newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
-                newConfig.set(statPath + ".taxed", stat.getItemsTaxed());
             }
         }
 

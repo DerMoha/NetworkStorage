@@ -42,8 +42,8 @@ public class StatsGUI implements InventoryHolder {
 
         List<PlayerStat> stats = new ArrayList<>(network.getPlayerStats().values());
 
-        // Sort by total contribution (manual deposits + taxed items)
-        stats.sort(Comparator.comparingLong((PlayerStat stat) -> stat.getItemsDeposited() + stat.getItemsTaxed()).reversed());
+        // Sort by total contribution (manual deposits)
+        stats.sort(Comparator.comparingLong(PlayerStat::getItemsDeposited).reversed());
 
         // Display top players (up to 45)
         for (int i = 0; i < Math.min(stats.size(), 45); i++) {
@@ -70,9 +70,8 @@ public class StatsGUI implements InventoryHolder {
 
             List<String> lore = new ArrayList<>();
             lore.add(String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()));
-            lore.add(String.format(lang.getMessage("stats.player.taxed"), stat.getItemsTaxed()));
             lore.add(String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()));
-            long balance = stat.getItemsDeposited() + stat.getItemsTaxed() - stat.getItemsWithdrawn();
+            long balance = stat.getItemsDeposited() - stat.getItemsWithdrawn();
             lore.add(String.format(lang.getMessage("stats.player.balance"), balance));
 
             meta.setLore(lore);
