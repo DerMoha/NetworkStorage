@@ -12,3 +12,11 @@ updates:
       paper-dependencies:
         patterns:
           - io.papermc.paper**
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore
+      include: scope
