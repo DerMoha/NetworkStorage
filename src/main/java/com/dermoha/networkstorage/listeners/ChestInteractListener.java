@@ -63,7 +63,7 @@ public class ChestInteractListener implements Listener {
         transitioningToSearch.clear();
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
@@ -104,6 +104,12 @@ public class ChestInteractListener implements Listener {
                 gui.open();
 
                 player.sendMessage(lang.getMessage("network.access"));
+                return;
+            }
+
+            if (network != null && plugin.getConfigManager().isNetworkContainerProtectionEnabled() && !network.canAccess(player)) {
+                event.setCancelled(true);
+                player.sendMessage(lang.getMessage("trust.no_permission_access"));
             }
         }
     }
@@ -139,34 +145,42 @@ public class ChestInteractListener implements Listener {
             return;
         }
 
-        InventoryHolder holder = event.getInventory().getHolder();
+        InventoryHolder holder = event.getView().getTopInventory().getHolder();
+        int topSize = event.getView().getTopInventory().getSize();
+        int rawSlot = event.getRawSlot();
 
         if (holder instanceof NetworkSelectGUI selectGUI) {
             event.setCancelled(true);
-            selectGUI.handleClick(event.getSlot());
+            if (rawSlot >= 0 && rawSlot < topSize) {
+                selectGUI.handleClick(event.getSlot());
+            }
             return;
         }
 
         if (holder instanceof WirelessNetworkSelectGUI selectGUI) {
             event.setCancelled(true);
-            selectGUI.handleClick(event.getSlot());
+            if (rawSlot >= 0 && rawSlot < topSize) {
+                selectGUI.handleClick(event.getSlot());
+            }
             return;
         }
 
         if (holder instanceof StatsGUI statsGUI) {
             event.setCancelled(true);
-            statsGUI.handleClick(event.getSlot());
+            if (rawSlot >= 0 && rawSlot < topSize) {
+                statsGUI.handleClick(event.getSlot());
+            }
             return;
         }
 
         if (holder instanceof TerminalGUI terminal) {
             if (!terminal.equals(openTerminals.get(player.getUniqueId()))) {
+                event.setCancelled(true);
                 return;
             }
 
             event.setCancelled(true);
 
-            int rawSlot = event.getRawSlot();
             int slot = event.getSlot();
             boolean isRightClick = event.isRightClick();
             boolean isLeftClick = event.isLeftClick();
@@ -179,7 +193,7 @@ public class ChestInteractListener implements Listener {
                 return;
             }
 
-            if (rawSlot < terminal.getInventory().getSize()) {
+            if (rawSlot >= 0 && rawSlot < terminal.getInventory().getSize()) {
                 terminal.handleClick(slot, isRightClick, isShiftClick, isLeftClick);
             }
         }
@@ -271,7 +285,7 @@ public class ChestInteractListener implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
         if (plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
