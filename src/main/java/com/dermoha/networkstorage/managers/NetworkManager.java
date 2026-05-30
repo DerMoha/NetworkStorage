@@ -31,6 +31,9 @@ public class NetworkManager {
     private final File networksFile;
     private final File playerStateFile;
     private final Object renameLock = new Object();
+    private final Object diskWriteLock = new Object();
+    private int networkSaveGeneration = 0;
+    private int playerStateSaveGeneration = 0;
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
     private static final Pattern SAFE_NETWORK_NAME = Pattern.compile("^[A-Za-z0-9 _'-]{1,32}$");
@@ -70,22 +73,35 @@ public class NetworkManager {
                 ConfigurationSection netSection = networksSection.getConfigurationSection(networkName);
                 if (netSection != null) {
                     try {
-                        UUID owner = UUID.fromString(netSection.getString("owner"));
+                        String ownerString = netSection.getString("owner");
+                        if (ownerString == null) {
+                            throw new IllegalArgumentException("missing owner UUID");
+                        }
+                        UUID owner = UUID.fromString(ownerString);
                         Network network = new Network(networkName, owner);
 
                         List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
                         for (Map<?, ?> locMap : chestLocationsMaps) {
-                            network.addChest(Location.deserialize((Map<String, Object>) locMap));
+                            Location location = deserializeSavedLocation(locMap, networkName, "chest");
+                            if (location != null) {
+                                network.addChest(location);
+                            }
                         }
 
                         List<Map<?, ?>> terminalLocationsMaps = netSection.getMapList("terminals");
                         for (Map<?, ?> locMap : terminalLocationsMaps) {
-                            network.addTerminal(Location.deserialize((Map<String, Object>) locMap));
+                            Location location = deserializeSavedLocation(locMap, networkName, "terminal");
+                            if (location != null) {
+                                network.addTerminal(location);
+                            }
                         }
 
                         List<Map<?, ?>> senderChestLocationsMaps = netSection.getMapList("sender-chests");
                         for (Map<?, ?> locMap : senderChestLocationsMaps) {
-                            network.addSenderChest(Location.deserialize((Map<String, Object>) locMap));
+                            Location location = deserializeSavedLocation(locMap, networkName, "sender chest");
+                            if (location != null) {
+                                network.addSenderChest(location);
+                            }
                         }
 
                         List<String> trustedUuids = netSection.getStringList("trusted");
@@ -101,12 +117,16 @@ public class NetworkManager {
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
                         if (statsSection != null) {
                             for (String uuidString : statsSection.getKeys(false)) {
-                                UUID playerUUID = UUID.fromString(uuidString);
-                                String name = statsSection.getString(uuidString + ".name");
-                                long deposited = statsSection.getLong(uuidString + ".deposited");
-                                long withdrawn = statsSection.getLong(uuidString + ".withdrawn");
-                                PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn);
-                                network.getPlayerStats().put(playerUUID, stat);
+                                try {
+                                    UUID playerUUID = UUID.fromString(uuidString);
+                                    String name = statsSection.getString(uuidString + ".name");
+                                    long deposited = Math.max(0L, statsSection.getLong(uuidString + ".deposited"));
+                                    long withdrawn = Math.max(0L, statsSection.getLong(uuidString + ".withdrawn"));
+                                    PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn);
+                                    network.getPlayerStats().put(playerUUID, stat);
+                                } catch (IllegalArgumentException e) {
+                                    plugin.getLogger().warning("Skipping invalid stats UUID '" + uuidString + "' in network '" + networkName + "'.");
+                                }
                             }
                         }
 
@@ -130,6 +150,29 @@ public class NetworkManager {
         }
 
         rebuildLocationIndex();
+    }
+
+    private Location deserializeSavedLocation(Map<?, ?> locMap, String networkName, String locationType) {
+        try {
+            Map<String, Object> serializedLocation = new HashMap<>();
+            for (Map.Entry<?, ?> entry : locMap.entrySet()) {
+                if (entry.getKey() instanceof String key) {
+                    serializedLocation.put(key, entry.getValue());
+                }
+            }
+
+            Location location = Location.deserialize(serializedLocation);
+            if (location.getWorld() == null
+                    || !Double.isFinite(location.getX())
+                    || !Double.isFinite(location.getY())
+                    || !Double.isFinite(location.getZ())) {
+                throw new IllegalArgumentException("invalid or unloaded world/coordinates");
+            }
+            return location;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Skipping invalid " + locationType + " location in network '" + networkName + "': " + e.getMessage());
+            return null;
+        }
     }
 
     private void rebuildLocationIndex() {
@@ -204,6 +247,23 @@ public class NetworkManager {
     }
 
     private void savePlayerState() {
+        FileConfiguration newConfig = createPlayerStateSnapshot();
+        int saveGeneration;
+        synchronized (diskWriteLock) {
+            saveGeneration = ++playerStateSaveGeneration;
+        }
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            synchronized (diskWriteLock) {
+                if (saveGeneration != playerStateSaveGeneration) {
+                    return;
+                }
+                savePlayerStateSnapshot(newConfig);
+            }
+        });
+    }
+
+    private FileConfiguration createPlayerStateSnapshot() {
         FileConfiguration newConfig = new YamlConfiguration();
         Set<UUID> playerIds = new HashSet<>();
         playerIds.addAll(selectedNetworks.keySet());
@@ -220,6 +280,10 @@ public class NetworkManager {
             }
         }
 
+        return newConfig;
+    }
+
+    private void savePlayerStateSnapshot(FileConfiguration newConfig) {
         try {
             Path tempFile = playerStateFile.toPath().resolveSibling(playerStateFile.getName() + ".tmp");
             newConfig.save(tempFile.toFile());
@@ -231,7 +295,7 @@ public class NetworkManager {
             }
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save player state to " + playerStateFile);
-            e.printStackTrace();
+            plugin.getLogger().severe(e.getMessage());
         }
     }
 
@@ -240,12 +304,37 @@ public class NetworkManager {
         if (!hasDirtyNetworks) {
             return;
         }
-        saveAllNetworksToDisk();
+        saveNetworksAsync();
     }
 
-    private void saveAllNetworksToDisk() {
-        FileConfiguration newConfig = new YamlConfiguration();
+    private void saveNetworksAsync() {
         List<Network> savedNetworks = new ArrayList<>(networks.values());
+        FileConfiguration newConfig = createNetworksSnapshot(savedNetworks);
+        for (Network network : savedNetworks) {
+            network.setDirty(false);
+        }
+
+        int saveGeneration;
+        synchronized (diskWriteLock) {
+            saveGeneration = ++networkSaveGeneration;
+        }
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+            synchronized (diskWriteLock) {
+                if (saveGeneration != networkSaveGeneration) {
+                    return;
+                }
+                if (!saveNetworksSnapshot(newConfig)) {
+                    for (Network network : savedNetworks) {
+                        network.setDirty(true);
+                    }
+                }
+            }
+        });
+    }
+
+    private FileConfiguration createNetworksSnapshot(List<Network> savedNetworks) {
+        FileConfiguration newConfig = new YamlConfiguration();
         for (Network network : savedNetworks) {
             String path = "networks." + network.getName();
             newConfig.set(path + ".owner", network.getOwner().toString());
@@ -278,6 +367,10 @@ public class NetworkManager {
             }
         }
 
+        return newConfig;
+    }
+
+    private boolean saveNetworksSnapshot(FileConfiguration newConfig) {
         try {
             Path tempFile = networksFile.toPath().resolveSibling(networksFile.getName() + ".tmp");
             newConfig.save(tempFile.toFile());
@@ -287,19 +380,29 @@ public class NetworkManager {
             } catch (IOException atomicMoveFailure) {
                 Files.move(tempFile, networksFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-
-            for (Network network : savedNetworks) {
-                network.setDirty(false);
-            }
+            return true;
         } catch (IOException e) {
             plugin.getLogger().severe("Could not save networks to " + networksFile);
-            e.printStackTrace();
+            plugin.getLogger().severe(e.getMessage());
+            return false;
         }
     }
 
     public void saveAllNetworks() {
-        saveAllNetworksToDisk();
-        savePlayerState();
+        List<Network> savedNetworks = new ArrayList<>(networks.values());
+        FileConfiguration networksSnapshot = createNetworksSnapshot(savedNetworks);
+        FileConfiguration playerStateSnapshot = createPlayerStateSnapshot();
+
+        synchronized (diskWriteLock) {
+            networkSaveGeneration++;
+            playerStateSaveGeneration++;
+            if (saveNetworksSnapshot(networksSnapshot)) {
+                for (Network network : savedNetworks) {
+                    network.setDirty(false);
+                }
+            }
+            savePlayerStateSnapshot(playerStateSnapshot);
+        }
     }
 
     public void addToLocationIndex(Location loc, Network network) {
