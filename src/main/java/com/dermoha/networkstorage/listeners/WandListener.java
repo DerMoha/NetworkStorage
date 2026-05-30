@@ -31,7 +31,7 @@ public class WandListener implements Listener {
         this.lang = plugin.getLanguageManager();
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
