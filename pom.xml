@@ -16,6 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.1.2.build.12-alpha</paper.version>
         <bstats.version>3.2.1</bstats.version>
+        <junit.jupiter.version>5.11.4</junit.jupiter.version>
     </properties>
 
     <build>
@@ -77,6 +78,12 @@
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
             <version>${bstats.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>
