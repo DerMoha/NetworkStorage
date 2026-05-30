@@ -1,19 +1,19 @@
 package com.dermoha.networkstorage;
 
 import com.dermoha.networkstorage.commands.NetworkCommand;
-import com.dermoha.networkstorage.commands.NetworkStorageAdminCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
 import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
-import com.dermoha.networkstorage.listeners.ChestInteractListener;
+import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
+import com.dermoha.networkstorage.listeners.NetworkContainerListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
-import com.dermoha.networkstorage.managers.SearchManager;
+import com.dermoha.networkstorage.managers.TerminalSessions;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -22,6 +22,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Chest;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -41,24 +42,22 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private static final int BSTATS_PLUGIN_ID = 28228;
 
-    private static NetworkStoragePlugin instance;
     private NetworkManager networkManager;
     private ConfigManager configManager;
-    private SearchManager searchManager;
+    private TerminalSessions terminalSessions;
     private LanguageManager languageManager;
-    private ChestInteractListener chestInteractListener;
+    private NetworkContainerListener networkContainerListener;
+    private InventoryInteractionListener inventoryInteractionListener;
     private WandListener wandListener;
     private WirelessTerminalListener wirelessTerminalListener;
     private StorageCommand storageCommand;
     private NetworkCommand networkCommand;
-    private NetworkStorageAdminCommand adminCommand;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
 
     @Override
     public void onEnable() {
-        instance = this;
         createManagers();
         initializeMetrics();
         registerCommands();
@@ -155,22 +154,40 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private void registerCommands() {
         storageCommand = new StorageCommand(this);
         networkCommand = new NetworkCommand(this);
-        adminCommand = new NetworkStorageAdminCommand(this);
 
         getCommand("storage").setExecutor(storageCommand);
         getCommand("storage").setTabCompleter(storageCommand);
         getCommand("network").setExecutor(networkCommand);
         getCommand("network").setTabCompleter(networkCommand);
-        getCommand("networkstorage").setExecutor(adminCommand);
+        PluginCommand networkStorageCommand = getCommand("networkstorage");
+        networkStorageCommand.setExecutor((sender, command, label, args) -> {
+            if (args.length == 0 || !args[0].equalsIgnoreCase("reload")) {
+                sender.sendMessage("§cUsage: /networkstorage reload");
+                return true;
+            }
+
+            if (!configManager.hasPermission(sender, "networkstorage.admin")) {
+                sender.sendMessage(languageManager.getMessage("no_permission_reload"));
+                return true;
+            }
+
+            sender.sendMessage(languageManager.getMessage("reload.start"));
+            reload();
+            sender.sendMessage(languageManager.getMessage("reload.success"));
+            return true;
+        });
     }
 
     private void registerListeners() {
-        chestInteractListener = new ChestInteractListener(this);
+        terminalSessions = new TerminalSessions(this);
+        networkContainerListener = new NetworkContainerListener(this);
+        inventoryInteractionListener = new InventoryInteractionListener(this);
         wandListener = new WandListener(this);
         wirelessTerminalListener = new WirelessTerminalListener(this);
-        searchManager = new SearchManager(this);
 
-        getServer().getPluginManager().registerEvents(chestInteractListener, this);
+        getServer().getPluginManager().registerEvents(terminalSessions, this);
+        getServer().getPluginManager().registerEvents(networkContainerListener, this);
+        getServer().getPluginManager().registerEvents(inventoryInteractionListener, this);
         getServer().getPluginManager().registerEvents(wandListener, this);
         getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
     }
@@ -185,15 +202,18 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private void unregisterRuntimeComponents() {
-        if (searchManager != null) {
-            searchManager.cleanup();
-            HandlerList.unregisterAll(searchManager);
-            searchManager = null;
+        if (terminalSessions != null) {
+            terminalSessions.cleanup();
+            HandlerList.unregisterAll(terminalSessions);
+            terminalSessions = null;
         }
-        if (chestInteractListener != null) {
-            chestInteractListener.clearRuntimeState();
-            HandlerList.unregisterAll(chestInteractListener);
-            chestInteractListener = null;
+        if (networkContainerListener != null) {
+            HandlerList.unregisterAll(networkContainerListener);
+            networkContainerListener = null;
+        }
+        if (inventoryInteractionListener != null) {
+            HandlerList.unregisterAll(inventoryInteractionListener);
+            inventoryInteractionListener = null;
         }
         if (wandListener != null) {
             HandlerList.unregisterAll(wandListener);
@@ -396,8 +416,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
                             }
                         }
                     } else {
-                        network.removeSenderChest(senderLoc);
-                        networkManager.removeFromLocationIndex(senderLoc);
+                        networkManager.removeTrackedLocation(network, senderLoc);
                         getLogger().info("Pruned non-inventory block at " + senderLoc.toString() + " from a network because it was no longer a container.");
                     }
                 }
@@ -416,10 +435,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
-    public static NetworkStoragePlugin getInstance() {
-        return instance;
-    }
-
     public NetworkManager getNetworkManager() {
         return networkManager;
     }
@@ -428,16 +443,12 @@ public class NetworkStoragePlugin extends JavaPlugin {
         return configManager;
     }
 
-    public SearchManager getSearchManager() {
-        return searchManager;
-    }
-
     public LanguageManager getLanguageManager() {
         return languageManager;
     }
 
-    public ChestInteractListener getChestInteractListener() {
-        return chestInteractListener;
+    public TerminalSessions getTerminalSessions() {
+        return terminalSessions;
     }
 
     public WirelessTerminalListener getWirelessTerminalListener() {

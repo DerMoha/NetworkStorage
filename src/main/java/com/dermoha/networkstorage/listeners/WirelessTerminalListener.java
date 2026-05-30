@@ -112,9 +112,9 @@ public class WirelessTerminalListener implements Listener {
         plugin.getNetworkManager().selectWirelessNetwork(player, network.getName());
 
         TerminalGUI gui = new TerminalGUI(player, network, plugin);
-        plugin.getChestInteractListener().addOpenTerminal(player.getUniqueId(), gui);
-        player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
-        gui.open();
+        if (plugin.getTerminalSessions().openTerminal(player, gui)) {
+            player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
+        }
     }
 
     private ItemStack getWirelessTerminalInHand(Player player, EquipmentSlot hand) {

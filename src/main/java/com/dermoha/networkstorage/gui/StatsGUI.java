@@ -82,8 +82,7 @@ public class StatsGUI implements InventoryHolder {
 
     public void handleClick(int slot) {
         if (slot == 49) {
-            plugin.getChestInteractListener().addOpenTerminal(player.getUniqueId(), previousGUI);
-            previousGUI.open();
+            plugin.getTerminalSessions().returnToTerminal(player, previousGUI);
         }
     }
 

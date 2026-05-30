@@ -303,11 +303,7 @@ public class TerminalGUI implements InventoryHolder {
                 updateInventory();
                 player.sendMessage(lang.getMessage("terminal.search.cleared"));
             } else {
-                plugin.getSearchManager().startSearch(player, this);
-                plugin.getChestInteractListener().setTransitioningToSearch(player.getUniqueId());
-                player.closeInventory();
-                player.sendMessage(lang.getMessage("terminal.search.prompt"));
-                player.sendMessage(lang.getMessage("terminal.search.cancel_hint"));
+                plugin.getTerminalSessions().promptSearch(player, this);
             }
             return;
         }
@@ -320,9 +316,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_STATS) {
-            plugin.getChestInteractListener().setTransitioningToStats(player.getUniqueId());
-            StatsGUI statsGUI = new StatsGUI(player, network, plugin, this);
-            statsGUI.open();
+            plugin.getTerminalSessions().openStats(player, network, this);
             return;
         }
 
