@@ -17,6 +17,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
@@ -33,7 +34,7 @@ public class WirelessTerminalListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
@@ -106,18 +107,7 @@ public class WirelessTerminalListener implements Listener {
             return;
         }
 
-        if (useState.usesLineIndex != -1 && useState.currentUses > 0) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta == null || !meta.hasLore()) {
-                player.sendMessage(lang.getMessage("wireless_terminal.broken"));
-                return;
-            }
-
-            List<String> lore = new ArrayList<>(meta.getLore());
-            lore.set(useState.usesLineIndex, String.format(lang.getMessage("wireless_terminal.lore.durability"), useState.currentUses - 1, useState.maxUses));
-            meta.setLore(lore);
-            item.setItemMeta(meta);
-        }
+        setUseState(item, useState.currentUses - 1, useState.maxUses, lang);
 
         plugin.getNetworkManager().selectWirelessNetwork(player, network.getName());
 
@@ -136,8 +126,36 @@ public class WirelessTerminalListener implements Listener {
 
     private WirelessUseState getUseState(ItemStack item, LanguageManager lang) {
         ItemMeta meta = item.getItemMeta();
-        if (meta == null || !meta.hasLore() || meta.getLore() == null) {
-            return new WirelessUseState(-1, 0, 0);
+        if (meta == null) {
+            return new WirelessUseState(0, 0);
+        }
+
+        PersistentDataContainer data = meta.getPersistentDataContainer();
+        Integer storedCurrentUses = data.get(getWirelessTerminalUsesKey(plugin), PersistentDataType.INTEGER);
+        Integer storedMaxUses = data.get(getWirelessTerminalMaxUsesKey(plugin), PersistentDataType.INTEGER);
+        if (storedCurrentUses != null && storedMaxUses != null) {
+            int maxUses = Math.max(1, storedMaxUses);
+            int currentUses = Math.max(0, Math.min(storedCurrentUses, maxUses));
+            if (currentUses != storedCurrentUses || maxUses != storedMaxUses || !hasDurabilityLore(meta)) {
+                setUseState(item, currentUses, maxUses, lang);
+            }
+            return new WirelessUseState(currentUses, maxUses);
+        }
+
+        WirelessUseState legacyUseState = getLegacyLoreUseState(meta);
+        if (legacyUseState.maxUses > 0) {
+            setUseState(item, legacyUseState.currentUses, legacyUseState.maxUses, lang);
+            return legacyUseState;
+        }
+
+        int defaultUses = plugin.getConfigManager().getWirelessTerminalDurability();
+        setUseState(item, defaultUses, defaultUses, lang);
+        return new WirelessUseState(defaultUses, defaultUses);
+    }
+
+    private WirelessUseState getLegacyLoreUseState(ItemMeta meta) {
+        if (!meta.hasLore() || meta.getLore() == null) {
+            return new WirelessUseState(0, 0);
         }
 
         List<String> lore = meta.getLore();
@@ -150,23 +168,59 @@ public class WirelessTerminalListener implements Listener {
             try {
                 int currentUses = Integer.parseInt(matcher.group(1));
                 int maxUses = Integer.parseInt(matcher.group(2));
-                return new WirelessUseState(i, currentUses, maxUses);
+                maxUses = Math.max(1, maxUses);
+                return new WirelessUseState(Math.max(0, Math.min(currentUses, maxUses)), maxUses);
             } catch (NumberFormatException e) {
-                return new WirelessUseState(-1, 0, 0);
+                return new WirelessUseState(0, 0);
             }
         }
 
-        int defaultUses = plugin.getConfigManager().getWirelessTerminalDurability();
-        if (meta != null) {
-            List<String> loreWithDurability = new ArrayList<>(meta.getLore());
-            loreWithDurability.add(String.format(lang.getMessage("wireless_terminal.lore.durability"), defaultUses, defaultUses));
-            meta.setLore(loreWithDurability);
-            item.setItemMeta(meta);
-        }
-        return new WirelessUseState(meta.getLore() == null ? -1 : meta.getLore().size() - 1, defaultUses, defaultUses);
+        return new WirelessUseState(0, 0);
     }
 
-    private record WirelessUseState(int usesLineIndex, int currentUses, int maxUses) {
+    private void setUseState(ItemStack item, int currentUses, int maxUses, LanguageManager lang) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+
+        int safeMaxUses = Math.max(1, maxUses);
+        int safeCurrentUses = Math.max(0, Math.min(currentUses, safeMaxUses));
+        PersistentDataContainer data = meta.getPersistentDataContainer();
+        data.set(getWirelessTerminalUsesKey(plugin), PersistentDataType.INTEGER, safeCurrentUses);
+        data.set(getWirelessTerminalMaxUsesKey(plugin), PersistentDataType.INTEGER, safeMaxUses);
+
+        List<String> lore = meta.getLore() == null ? new ArrayList<>() : new ArrayList<>(meta.getLore());
+        String durabilityLine = String.format(lang.getMessage("wireless_terminal.lore.durability"), safeCurrentUses, safeMaxUses);
+        boolean replaced = false;
+        for (int i = 0; i < lore.size(); i++) {
+            if (USES_PATTERN.matcher(lore.get(i)).find()) {
+                lore.set(i, durabilityLine);
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            lore.add(durabilityLine);
+        }
+
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+    }
+
+    private boolean hasDurabilityLore(ItemMeta meta) {
+        if (meta.getLore() == null) {
+            return false;
+        }
+        for (String line : meta.getLore()) {
+            if (USES_PATTERN.matcher(line).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private record WirelessUseState(int currentUses, int maxUses) {
     }
 
     public static ItemStack createWirelessTerminal(NetworkStoragePlugin plugin) {
@@ -184,6 +238,8 @@ public class WirelessTerminalListener implements Listener {
             meta.setLore(lore);
             ItemUtils.applyCustomModelData(meta, plugin.getConfigManager().getWirelessTerminalCustomModelData());
             meta.getPersistentDataContainer().set(getWirelessTerminalKey(plugin), PersistentDataType.BYTE, (byte) 1);
+            meta.getPersistentDataContainer().set(getWirelessTerminalUsesKey(plugin), PersistentDataType.INTEGER, durability);
+            meta.getPersistentDataContainer().set(getWirelessTerminalMaxUsesKey(plugin), PersistentDataType.INTEGER, durability);
             terminal.setItemMeta(meta);
         }
         return terminal;
@@ -199,5 +255,13 @@ public class WirelessTerminalListener implements Listener {
 
     private static NamespacedKey getWirelessTerminalKey(NetworkStoragePlugin plugin) {
         return new NamespacedKey(plugin, "wireless_terminal");
+    }
+
+    private static NamespacedKey getWirelessTerminalUsesKey(NetworkStoragePlugin plugin) {
+        return new NamespacedKey(plugin, "wireless_terminal_uses");
+    }
+
+    private static NamespacedKey getWirelessTerminalMaxUsesKey(NetworkStoragePlugin plugin) {
+        return new NamespacedKey(plugin, "wireless_terminal_max_uses");
     }
 }
