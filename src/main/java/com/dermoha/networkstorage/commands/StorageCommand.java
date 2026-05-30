@@ -215,7 +215,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        player.getInventory().addItem(wand);
+        giveOrDrop(player, wand);
         player.sendMessage(lang.getMessage("received_wand"));
         player.sendMessage(lang.getMessage("wand_left_click"));
         player.sendMessage(lang.getMessage("wand_right_click"));
@@ -227,8 +227,15 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        player.getInventory().addItem(WirelessTerminalListener.createWirelessTerminal(plugin));
+        giveOrDrop(player, WirelessTerminalListener.createWirelessTerminal(plugin));
         player.sendMessage(lang.getMessage("received_wireless_terminal"));
+    }
+
+    private void giveOrDrop(Player player, ItemStack item) {
+        Map<Integer, ItemStack> overflow = player.getInventory().addItem(item);
+        for (ItemStack overflowItem : overflow.values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), overflowItem);
+        }
     }
 
     private void handleInfoCommand(Player player) {
