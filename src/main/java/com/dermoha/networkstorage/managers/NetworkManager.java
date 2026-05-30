@@ -78,7 +78,7 @@ public class NetworkManager {
                             throw new IllegalArgumentException("missing owner UUID");
                         }
                         UUID owner = UUID.fromString(ownerString);
-                        Network network = new Network(networkName, owner);
+                        Network network = new Network(networkName, owner, plugin.getConfigManager());
 
                         List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
                         for (Map<?, ?> locMap : chestLocationsMaps) {
@@ -143,7 +143,7 @@ public class NetworkManager {
         }
 
         if (isGlobalMode && !globalNetworkLoaded) {
-            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
             globalNetwork.setDirty(true);
             plugin.getLogger().info("Created new global network in memory. It will be saved on next auto-save.");
@@ -405,12 +405,54 @@ public class NetworkManager {
         }
     }
 
-    public void addToLocationIndex(Location loc, Network network) {
-        locationIndex.put(loc, network);
+    public void addChestToNetwork(Network network, Location location) {
+        Location normalizedLocation = getNormalizedLocation(location);
+        network.addChest(normalizedLocation);
+        locationIndex.put(normalizedLocation, network);
     }
 
-    public void removeFromLocationIndex(Location loc) {
-        locationIndex.remove(loc);
+    public void addTerminalToNetwork(Network network, Location location) {
+        Location normalizedLocation = getNormalizedLocation(location);
+        network.addTerminal(normalizedLocation);
+        locationIndex.put(normalizedLocation, network);
+    }
+
+    public void addSenderChestToNetwork(Network network, Location location) {
+        Location normalizedLocation = getNormalizedLocation(location);
+        network.addSenderChest(normalizedLocation);
+        locationIndex.put(normalizedLocation, network);
+    }
+
+    public boolean removeTrackedLocation(Network network, Location location) {
+        Location normalizedLocation = getNormalizedLocation(location);
+        boolean changed = removeTrackedLocationExact(network, location);
+        if (!normalizedLocation.equals(location)) {
+            changed = removeTrackedLocationExact(network, normalizedLocation) || changed;
+        }
+        return changed;
+    }
+
+    private boolean removeTrackedLocationExact(Network network, Location location) {
+        boolean changed = false;
+
+        if (network.isChestInNetwork(location)) {
+            network.removeChest(location);
+            changed = true;
+        }
+        if (network.isTerminalInNetwork(location)) {
+            network.removeTerminal(location);
+            changed = true;
+        }
+        if (network.isSenderChestInNetwork(location)) {
+            network.removeSenderChest(location);
+            changed = true;
+        }
+
+        if (changed) {
+            locationIndex.remove(location);
+        }
+
+        return changed;
     }
 
     public void createNetwork(Player player, String networkName) {
@@ -426,7 +468,7 @@ public class NetworkManager {
             player.sendMessage(lang.getMessage("network.create.exists"));
             return;
         }
-        Network network = new Network(networkName, player.getUniqueId());
+        Network network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
         networks.put(networkName, network);
         network.setDirty(true);
         if (!selectedNetworks.containsKey(player.getUniqueId())) {
@@ -548,7 +590,7 @@ public class NetworkManager {
                 || network.isSenderChestInNetwork(location);
     }
 
-    private Location getNormalizedLocation(Location location) {
+    public Location getNormalizedLocation(Location location) {
         if (location.getBlock().getState() instanceof Chest chest
                 && chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest doubleChest
                 && doubleChest.getLeftSide() instanceof Chest leftChest) {
@@ -691,7 +733,7 @@ public class NetworkManager {
                 player.sendMessage(lang.getMessage("network.orcreate.exists"));
                 return null;
             }
-            network = new Network(networkName, player.getUniqueId());
+            network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
             networks.put(networkName, network);
             network.setDirty(true);
         }
@@ -719,7 +761,7 @@ public class NetworkManager {
         selectedWirelessNetworks.clear();
 
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
+            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
             globalNetwork.setDirty(true);
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
         }
@@ -745,16 +787,13 @@ public class NetworkManager {
 
     private void resetNetworkInternal(Network network) {
         for (Location location : network.getChestLocations()) {
-            network.removeChest(location);
-            removeFromLocationIndex(location);
+            removeTrackedLocationExact(network, location);
         }
         for (Location location : network.getTerminalLocations()) {
-            network.removeTerminal(location);
-            removeFromLocationIndex(location);
+            removeTrackedLocationExact(network, location);
         }
         for (Location location : network.getSenderChestLocations()) {
-            network.removeSenderChest(location);
-            removeFromLocationIndex(location);
+            removeTrackedLocationExact(network, location);
         }
     }
 }

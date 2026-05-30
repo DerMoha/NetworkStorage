@@ -1,11 +1,12 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.storage.NetworkAccessRules;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 
-public class ConfigManager {
+public class ConfigManager implements NetworkAccessRules {
 
     private final NetworkStoragePlugin plugin;
     private FileConfiguration config;
@@ -66,6 +67,11 @@ public class ConfigManager {
         } catch (IllegalArgumentException e) {
             return NetworkMode.PLAYER;
         }
+    }
+
+    @Override
+    public boolean isGlobalNetworkMode() {
+        return getNetworkMode() == NetworkMode.GLOBAL;
     }
 
     public int getMaxChestsPerNetwork() {
@@ -129,10 +135,12 @@ public class ConfigManager {
         return !isPermissionsEnabled() || sender.hasPermission(permission);
     }
 
+    @Override
     public boolean hasPrivilege(CommandSender sender, String permission) {
         return isPermissionsEnabled() && sender.hasPermission(permission);
     }
 
+    @Override
     public boolean isTrustSystemEnabled() {
         return config.getBoolean("enable-trust-system");
     }

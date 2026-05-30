@@ -1,7 +1,5 @@
 package com.dermoha.networkstorage.storage;
 
-import com.dermoha.networkstorage.NetworkStoragePlugin;
-import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -22,15 +20,17 @@ public class Network {
     private final Set<Location> senderChestLocations;
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
+    private final NetworkAccessRules accessRules;
     private transient boolean dirty = false;
 
     private transient Map<ItemStack, Integer> itemCache;
     private transient long itemCacheTime;
     private static final long ITEM_CACHE_TTL_MS = 500;
 
-    public Network(String name, UUID owner) {
+    public Network(String name, UUID owner, NetworkAccessRules accessRules) {
         this.name = name;
         this.owner = owner;
+        this.accessRules = accessRules;
         this.chestLocations = new HashSet<>();
         this.terminalLocations = new HashSet<>();
         this.senderChestLocations = new HashSet<>();
@@ -140,18 +140,17 @@ public class Network {
     }
 
     public boolean canAccess(Player player) {
-        ConfigManager configManager = NetworkStoragePlugin.getInstance().getConfigManager();
-        if (configManager.getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+        if (accessRules.isGlobalNetworkMode()) {
             return true;
         }
         UUID playerUUID = player.getUniqueId();
-        if (playerUUID.equals(this.owner) || configManager.hasPrivilege(player, "networkstorage.admin")) {
+        if (playerUUID.equals(this.owner) || accessRules.hasPrivilege(player, "networkstorage.admin")) {
             return true;
         }
-        if (configManager.hasPrivilege(player, "networkstorage.access.all")) {
+        if (accessRules.hasPrivilege(player, "networkstorage.access.all")) {
             return true;
         }
-        if (configManager.isTrustSystemEnabled()) {
+        if (accessRules.isTrustSystemEnabled()) {
             return trustedPlayers.contains(playerUUID);
         }
         return true;
@@ -258,20 +257,6 @@ public class Network {
         }
         invalidateItemCache();
         return remaining;
-    }
-
-    public Location getNormalizedLocation(Location location) {
-        if (location.getBlock().getState() instanceof Chest) {
-            Chest chest = (Chest) location.getBlock().getState();
-            if (chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest) {
-                org.bukkit.block.DoubleChest doubleChest = (org.bukkit.block.DoubleChest) chest.getInventory().getHolder();
-                Chest left = (Chest) doubleChest.getLeftSide();
-                if (left != null) {
-                    return left.getLocation();
-                }
-            }
-        }
-        return location;
     }
 
     public double getCapacityPercent() {
