@@ -206,3 +206,6 @@ network.orcreate.exists: "§cA network with your default name already exists, bu
 reload.start: "§eReloading NetworkStorage configuration..."
 reload.success: "§aNetworkStorage reloaded successfully."
 no_permission_reload: "§cYou do not have permission to reload this plugin."
+update.available: "§e[NetworkStorage] A new version (§a%s§e) is available! Current version: §c%s"
+update.notify.console: "[NetworkStorage] Update available: %s (current: %s)"
+update.check.failed: "§c[NetworkStorage] Failed to check for updates: %s"

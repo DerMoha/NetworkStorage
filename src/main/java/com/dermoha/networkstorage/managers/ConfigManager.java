@@ -37,6 +37,7 @@ public class ConfigManager {
         config.addDefault("auto-save-interval-minutes", 5);
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
+        config.addDefault("protect-network-containers", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wand-material", "BLAZE_ROD");
@@ -54,6 +55,8 @@ public class ConfigManager {
         config.addDefault("custom-model-data.gui.stats.back", 10201);
         config.addDefault("custom-model-data.gui.network-select.item", 10301);
         config.addDefault("custom-model-data.gui.wireless-select.item", 10401);
+        config.addDefault("update-check.enabled", true);
+        config.addDefault("update-check.notify-admins", true);
         config.options().copyDefaults(true);
     }
 
@@ -66,15 +69,15 @@ public class ConfigManager {
     }
 
     public int getMaxChestsPerNetwork() {
-        return config.getInt("max-chests-per-network");
+        return getClampedInt("max-chests-per-network", 100, 1, 10_000);
     }
 
     public int getMaxTerminalsPerNetwork() {
-        return config.getInt("max-terminals-per-network");
+        return getClampedInt("max-terminals-per-network", 100, 1, 10_000);
     }
 
     public int getMaxSenderChestsPerNetwork() {
-        return config.getInt("max-sender-chests-per-network");
+        return getClampedInt("max-sender-chests-per-network", 100, 1, 10_000);
     }
 
     public int getSenderChestTransferInterval() {
@@ -134,12 +137,24 @@ public class ConfigManager {
         return config.getBoolean("enable-trust-system");
     }
 
+    public boolean isNetworkContainerProtectionEnabled() {
+        return config.getBoolean("protect-network-containers");
+    }
+
     public int getAutoSaveInterval() {
         return getClampedInt("auto-save-interval-minutes", 5, 1, 10_080);
     }
 
     public String getLanguage() {
         return config.getString("language");
+    }
+
+    public boolean isUpdateCheckEnabled() {
+        return config.getBoolean("update-check.enabled", true);
+    }
+
+    public boolean shouldNotifyAdminsOnUpdate() {
+        return config.getBoolean("update-check.notify-admins", true);
     }
 
     public void reloadConfig() {
