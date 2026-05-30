@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.1.2.build.53-stable</paper.version>
         <bstats.version>3.2.1</bstats.version>
-        <junit.jupiter.version>5.11.4</junit.jupiter.version>
+        <junit.jupiter.version>6.1.0</junit.jupiter.version>
     </properties>
 
     <build>
