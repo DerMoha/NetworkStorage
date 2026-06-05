@@ -78,7 +78,7 @@ public class NetworkManager {
                             throw new IllegalArgumentException("missing owner UUID");
                         }
                         UUID owner = UUID.fromString(ownerString);
-                        Network network = new Network(networkName, owner, plugin.getConfigManager());
+                        Network network = new Network(networkName, owner, plugin.getConfigManager(), plugin.getMovementEvents());
 
                         List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
                         for (Map<?, ?> locMap : chestLocationsMaps) {

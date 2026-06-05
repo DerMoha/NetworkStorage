@@ -21,6 +21,8 @@ public class Network {
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
     private final NetworkAccessRules accessRules;
+    private final MovementEvents movementEvents;
+    private final NetworkMovement movement;
     private transient boolean dirty = false;
 
     private transient Map<ItemStack, Integer> itemCache;
@@ -28,14 +30,24 @@ public class Network {
     private static final long ITEM_CACHE_TTL_MS = 500;
 
     public Network(String name, UUID owner, NetworkAccessRules accessRules) {
+        this(name, owner, accessRules, MovementEvents.NOOP);
+    }
+
+    public Network(String name, UUID owner, NetworkAccessRules accessRules, MovementEvents movementEvents) {
         this.name = name;
         this.owner = owner;
         this.accessRules = accessRules;
+        this.movementEvents = movementEvents;
+        this.movement = new NetworkMovement(this, movementEvents);
         this.chestLocations = new HashSet<>();
         this.terminalLocations = new HashSet<>();
         this.senderChestLocations = new HashSet<>();
         this.playerStats = new ConcurrentHashMap<>();
         this.trustedPlayers = new HashSet<>();
+    }
+
+    public NetworkMovement getMovement() {
+        return movement;
     }
 
     public String getName() {

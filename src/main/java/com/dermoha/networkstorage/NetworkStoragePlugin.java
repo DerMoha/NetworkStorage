@@ -14,6 +14,8 @@ import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.NetworkManager;
 import com.dermoha.networkstorage.managers.TerminalSessions;
+import com.dermoha.networkstorage.storage.DefaultMovementEvents;
+import com.dermoha.networkstorage.storage.MovementEvents;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -46,6 +48,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private ConfigManager configManager;
     private TerminalSessions terminalSessions;
     private LanguageManager languageManager;
+    private MovementEvents movementEvents;
     private NetworkContainerListener networkContainerListener;
     private InventoryInteractionListener inventoryInteractionListener;
     private WandListener wandListener;
@@ -95,6 +98,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private void createManagers() {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
+        movementEvents = new DefaultMovementEvents(this, languageManager);
         networkManager = new NetworkManager(this);
     }
 
@@ -405,15 +409,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     if (senderLoc.getBlock().getState() instanceof org.bukkit.inventory.InventoryHolder holder) {
                         Inventory senderInv = holder.getInventory();
                         for (int i = 0; i < senderInv.getSize(); i++) {
-                            ItemStack item = senderInv.getItem(i);
-                            if (item != null && item.getType() != Material.AIR) {
-                                ItemStack remaining = network.addToNetwork(item.clone());
-                                if (remaining == null || remaining.getAmount() == 0) {
-                                    senderInv.setItem(i, null);
-                                } else {
-                                    item.setAmount(remaining.getAmount());
-                                }
-                            }
+                            network.getMovement().absorbFromInventory(senderInv, i);
                         }
                     } else {
                         networkManager.removeTrackedLocation(network, senderLoc);
@@ -449,6 +445,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public TerminalSessions getTerminalSessions() {
         return terminalSessions;
+    }
+
+    public MovementEvents getMovementEvents() {
+        return movementEvents;
     }
 
     public WirelessTerminalListener getWirelessTerminalListener() {
