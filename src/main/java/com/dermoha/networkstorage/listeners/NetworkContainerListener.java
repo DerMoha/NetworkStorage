@@ -4,7 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
-import com.dermoha.networkstorage.util.ItemUtils;
+import com.dermoha.networkstorage.storage.NetworkMovement;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -80,29 +80,7 @@ public class NetworkContainerListener implements Listener {
     }
 
     private void handleQuickDeposit(Player player, Network network, ItemStack itemInHand, EquipmentSlot hand) {
-        int originalAmount = itemInHand.getAmount();
-        ItemStack remaining = network.addToNetwork(itemInHand.clone());
-
-        if (remaining == null || remaining.getAmount() == 0) {
-            setItemInHand(player, hand, null);
-            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, ItemUtils.getItemDisplayName(itemInHand)));
-            network.recordItemsDeposited(player, originalAmount);
-        } else {
-            int depositedAmount = originalAmount - remaining.getAmount();
-            if (depositedAmount > 0) {
-                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, ItemUtils.getItemDisplayName(itemInHand), remaining.getAmount()));
-                network.recordItemsDeposited(player, depositedAmount);
-            }
-            setItemInHand(player, hand, remaining);
-        }
-    }
-
-    private void setItemInHand(Player player, EquipmentSlot hand, ItemStack item) {
-        if (hand == EquipmentSlot.OFF_HAND) {
-            player.getInventory().setItemInOffHand(item);
-            return;
-        }
-        player.getInventory().setItemInMainHand(item);
+        network.getMovement().depositFromPlayer(player, new NetworkMovement.ItemSource.HandSource(player, hand));
     }
 
     @EventHandler(ignoreCancelled = true)
