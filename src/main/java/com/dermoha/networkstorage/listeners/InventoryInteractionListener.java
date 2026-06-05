@@ -6,14 +6,13 @@ import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
-import org.bukkit.Material;
+import com.dermoha.networkstorage.storage.NetworkMovement;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemStack;
 
 public class InventoryInteractionListener implements Listener {
 
@@ -111,33 +110,13 @@ public class InventoryInteractionListener implements Listener {
             return;
         }
 
-        ItemStack clickedItem = event.getCurrentItem();
-        if (clickedItem == null || clickedItem.getType() == Material.AIR) {
+        if (event.getCurrentItem() == null) {
             return;
         }
 
-        int playerSlot = event.getSlot();
-        ItemStack itemToDeposit = player.getInventory().getItem(playerSlot);
-        if (itemToDeposit == null || itemToDeposit.getType() == Material.AIR) {
-            return;
-        }
-
-        int originalAmount = itemToDeposit.getAmount();
-        ItemStack remaining = terminal.getNetwork().addToNetwork(itemToDeposit.clone());
-
-        if (remaining == null || remaining.getAmount() == 0) {
-            player.getInventory().setItem(playerSlot, null);
-            player.sendMessage(String.format(lang.getMessage("network.deposit.success"), originalAmount, terminal.getItemDisplayName(itemToDeposit)));
-            terminal.getNetwork().recordItemsDeposited(player, originalAmount);
-        } else {
-            int depositedAmount = originalAmount - remaining.getAmount();
-            if (depositedAmount > 0) {
-                player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), depositedAmount, terminal.getItemDisplayName(itemToDeposit), remaining.getAmount()));
-                terminal.getNetwork().recordItemsDeposited(player, depositedAmount);
-            }
-            player.getInventory().setItem(playerSlot, remaining);
-        }
-
-        plugin.getServer().getScheduler().runTask(plugin, terminal::updateInventory);
+        terminal.getNetwork().getMovement().depositFromPlayerToTerminal(
+                player,
+                new NetworkMovement.ItemSource.InvSlotSource(player, event.getSlot()),
+                terminal);
     }
 }
