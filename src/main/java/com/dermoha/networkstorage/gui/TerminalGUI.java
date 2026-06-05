@@ -343,67 +343,14 @@ public class TerminalGUI implements InventoryHolder {
                 }
 
                 if (amountToTake > 0) {
-                    handleItemExtraction(originalItem, availableAmount, amountToTake);
+                    handleItemExtraction(originalItem, amountToTake);
                 }
             }
         }
     }
 
-    private void handleItemExtraction(ItemStack itemType, int availableAmount, int amountToTake) {
-        int requestedAmount = Math.min(availableAmount, amountToTake);
-
-        if (requestedAmount <= 0) {
-            player.sendMessage(lang.getMessage("terminal.no_items"));
-            return;
-        }
-
-        ItemStack requestedItem = itemType.clone();
-        requestedItem.setAmount(requestedAmount);
-        ItemStack removedItem = network.removeFromNetwork(requestedItem, requestedAmount);
-
-        if (removedItem == null || removedItem.getAmount() <= 0) {
-            player.sendMessage(lang.getMessage("terminal.no_items"));
-            plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
-            return;
-        }
-
-        HashMap<Integer, ItemStack> overflow = player.getInventory().addItem(removedItem.clone());
-        int returnedToNetworkAmount = 0;
-        boolean droppedItems = false;
-
-        for (ItemStack overflowItem : overflow.values()) {
-            int overflowAmount = overflowItem.getAmount();
-            ItemStack remaining = network.addToNetwork(overflowItem.clone());
-
-            if (remaining == null || remaining.getAmount() == 0) {
-                returnedToNetworkAmount += overflowAmount;
-                continue;
-            }
-
-            returnedToNetworkAmount += overflowAmount - remaining.getAmount();
-            if (remaining.getAmount() > 0) {
-                player.getWorld().dropItemNaturally(player.getLocation(), remaining);
-                droppedItems = true;
-            }
-        }
-
-        int withdrawnAmount = removedItem.getAmount() - returnedToNetworkAmount;
-        if (withdrawnAmount <= 0) {
-            player.sendMessage(lang.getMessage("terminal.inventory_full_returned"));
-            plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
-            return;
-        }
-
-        network.recordItemsWithdrawn(player, withdrawnAmount);
-        player.sendMessage(String.format(lang.getMessage("terminal.took_items"), withdrawnAmount, getItemDisplayName(itemType)));
-        if (!overflow.isEmpty() && !droppedItems) {
-            player.sendMessage(lang.getMessage("terminal.inventory_full_returned"));
-        }
-        if (droppedItems) {
-            player.sendMessage(lang.getMessage("terminal.items_dropped"));
-        }
-
-        plugin.getServer().getScheduler().runTask(plugin, this::updateInventory);
+    private void handleItemExtraction(ItemStack itemType, int amountToTake) {
+        network.getMovement().withdrawToPlayer(player, itemType, amountToTake, this);
     }
 
     private void cycleSortType() {
