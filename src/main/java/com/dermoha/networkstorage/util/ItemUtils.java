@@ -2,7 +2,13 @@ package com.dermoha.networkstorage.util;
 
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public final class ItemUtils {
 
@@ -95,5 +101,39 @@ public final class ItemUtils {
         if (number == 9) return "IX";
         if (number == 10) return "X";
         return String.valueOf(number);
+    }
+
+    public static String getSortableName(ItemStack item) {
+        String displayName = getItemDisplayName(item);
+
+        if (item.hasItemMeta()) {
+            ItemMeta meta = item.getItemMeta();
+            if (meta != null) {
+                List<String> enchants = new ArrayList<>();
+
+                if (meta instanceof EnchantmentStorageMeta storageMeta) {
+                    if (storageMeta.hasStoredEnchants()) {
+                        for (Map.Entry<Enchantment, Integer> entry : storageMeta.getStoredEnchants().entrySet()) {
+                            String name = formatEnchantmentName(entry.getKey());
+                            String levelStr = String.format("%03d", entry.getValue());
+                            enchants.add(name + " " + levelStr);
+                        }
+                    }
+                } else if (meta.hasEnchants()) {
+                    for (Map.Entry<Enchantment, Integer> entry : meta.getEnchants().entrySet()) {
+                        String name = formatEnchantmentName(entry.getKey());
+                        String levelStr = String.format("%03d", entry.getValue());
+                        enchants.add(name + " " + levelStr);
+                    }
+                }
+
+                if (!enchants.isEmpty()) {
+                    Collections.sort(enchants);
+                    return displayName + " - " + enchants.getFirst();
+                }
+            }
+        }
+
+        return displayName;
     }
 }
