@@ -3,7 +3,7 @@ package com.dermoha.networkstorage.storage;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.block.Chest;
+import org.bukkit.block.Container;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -190,9 +190,8 @@ public class Network {
 
         Map<ItemStack, Integer> networkItems = new HashMap<>();
         for (Location chestLoc : chestLocations) {
-            if (chestLoc.getBlock().getState() instanceof Chest) {
-                Chest chest = (Chest) chestLoc.getBlock().getState();
-                for (ItemStack item : chest.getInventory().getContents()) {
+            if (chestLoc.getBlock().getState() instanceof Container container) {
+                for (ItemStack item : container.getInventory().getContents()) {
                     if (item != null && item.getType() != Material.AIR) {
                         addToNetworkMap(networkItems, item);
                     }
@@ -228,9 +227,8 @@ public class Network {
 
         for (Location chestLoc : chestLocations) {
             if (remaining <= 0) break;
-            if (chestLoc.getBlock().getState() instanceof Chest) {
-                Chest chest = (Chest) chestLoc.getBlock().getState();
-                Inventory inv = chest.getInventory();
+            if (chestLoc.getBlock().getState() instanceof Container container) {
+                Inventory inv = container.getInventory();
                 for (int i = 0; i < inv.getSize() && remaining > 0; i++) {
                     ItemStack item = inv.getItem(i);
                     if (item != null && item.isSimilar(itemToRemove)) {
@@ -256,9 +254,8 @@ public class Network {
         ItemStack remaining = itemToAdd.clone();
         for (Location chestLoc : chestLocations) {
             if (remaining.getAmount() <= 0) break;
-            if (chestLoc.getBlock().getState() instanceof Chest) {
-                Chest chest = (Chest) chestLoc.getBlock().getState();
-                HashMap<Integer, ItemStack> result = chest.getInventory().addItem(remaining);
+            if (chestLoc.getBlock().getState() instanceof Container container) {
+                HashMap<Integer, ItemStack> result = container.getInventory().addItem(remaining);
                 if (result.isEmpty()) {
                     remaining = null;
                     break;
@@ -275,9 +272,8 @@ public class Network {
         int totalSlots = 0;
         int usedSlots = 0;
         for (Location chestLoc : chestLocations) {
-            if (chestLoc.getBlock().getState() instanceof Chest) {
-                Chest chest = (Chest) chestLoc.getBlock().getState();
-                Inventory inv = chest.getInventory();
+            if (chestLoc.getBlock().getState() instanceof Container container) {
+                Inventory inv = container.getInventory();
                 totalSlots += inv.getSize();
                 for (ItemStack item : inv.getContents()) {
                     if (item != null && item.getType() != Material.AIR) {

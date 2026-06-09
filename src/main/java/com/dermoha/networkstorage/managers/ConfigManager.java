@@ -109,6 +109,15 @@ public class ConfigManager implements NetworkAccessRules {
     public boolean isNetworkContainerBlock(Material material) {
         return material == Material.CHEST
                 || material == Material.TRAPPED_CHEST
+                || material == Material.COPPER_CHEST
+                || material == Material.BARREL
+                || material == Material.EXPOSED_COPPER_CHEST
+                || material == Material.WEATHERED_COPPER_CHEST
+                || material == Material.OXIDIZED_COPPER_CHEST
+                || material == Material.WAXED_COPPER_CHEST
+                || material == Material.WAXED_EXPOSED_COPPER_CHEST
+                || material == Material.WAXED_WEATHERED_COPPER_CHEST
+                || material == Material.WAXED_OXIDIZED_COPPER_CHEST
                 || material == getTerminalBlockType();
     }
 
