@@ -116,7 +116,7 @@ public class TerminalGUI implements InventoryHolder {
 
         switch (sortType) {
             case ALPHABETICAL:
-                sortedItems.sort(Comparator.comparing(a -> getItemDisplayName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
+                sortedItems.sort(Comparator.comparing(a -> ItemUtils.getSortableName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
                 break;
             case COUNT_DESC:
                 sortedItems.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
