@@ -6,10 +6,12 @@ import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.*;
@@ -79,6 +81,31 @@ public class TerminalGUI implements InventoryHolder {
                         // Check internal material name (e.g., "diamond_sword")
                         if (item.getType().getKey().getKey().toLowerCase().contains(lowerCaseFilter)) {
                             return true;
+                        }
+
+                        // Check enchantments of enchanted books
+                        if (item.hasItemMeta()) {
+                            ItemMeta meta = item.getItemMeta();
+
+                            // Normal Item Enchants
+                            if (meta.hasEnchants()) {
+                                for (Map.Entry<Enchantment, Integer> enchEntry : meta.getEnchants().entrySet()) {
+                                    if (ItemUtils.matchesEnchantment(enchEntry.getKey(), enchEntry.getValue(), lowerCaseFilter)) {
+                                        return true;
+                                    }
+                                }
+                            }
+
+                            // Enchanted Books
+                            if (meta instanceof EnchantmentStorageMeta storageMeta) {
+                                if (storageMeta.hasStoredEnchants()) {
+                                    for (Map.Entry<Enchantment, Integer> enchEntry : storageMeta.getStoredEnchants().entrySet()) {
+                                        if (ItemUtils.matchesEnchantment(enchEntry.getKey(), enchEntry.getValue(), lowerCaseFilter)) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // Fallback check for formatted English name
