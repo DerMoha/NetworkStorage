@@ -64,6 +64,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private com.dermoha.networkstorage.integrations.PlaceholderAPIHook placeholderAPIHook;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
+    private int trustExpiryTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
     private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = NetworkStorageConstants.BSTATS_STORED_ITEM_CACHE_TTL_MS;
 
@@ -233,6 +234,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private void startTasks() {
         startSenderChestTask();
         startAutoSaveTask();
+        startTrustExpiryTask();
     }
 
     private void checkForUpdates() {
@@ -300,6 +302,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (autoSaveTaskId != -1) {
             getServer().getScheduler().cancelTask(autoSaveTaskId);
             autoSaveTaskId = -1;
+        }
+        if (trustExpiryTaskId != -1) {
+            getServer().getScheduler().cancelTask(trustExpiryTaskId);
+            trustExpiryTaskId = -1;
         }
     }
 
@@ -471,6 +477,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 getLogger().info("Auto-save complete.");
             }, interval, interval).getTaskId();
         }
+    }
+
+    private void startTrustExpiryTask() {
+        trustExpiryTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
+            for (Network network : networkManager.getAllNetworks()) {
+                network.pruneExpiredTrusts();
+            }
+        }, 1200L, 1200L).getTaskId();
     }
 
     public NetworkManager getNetworkManager() {

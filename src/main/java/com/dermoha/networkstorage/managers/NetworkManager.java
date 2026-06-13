@@ -115,6 +115,24 @@ public class NetworkManager {
                             }
                         }
 
+                        ConfigurationSection timedTrustSection = netSection.getConfigurationSection("trusted-expiry");
+                        if (timedTrustSection != null) {
+                            long now = System.currentTimeMillis();
+                            for (String uuidString : timedTrustSection.getKeys(false)) {
+                                try {
+                                    UUID trustedId = UUID.fromString(uuidString);
+                                    long expiresAt = timedTrustSection.getLong(uuidString);
+                                    if (expiresAt > now) {
+                                        network.addTrustedPlayerWithExpiry(trustedId, expiresAt);
+                                    } else {
+                                        plugin.getLogger().info("Skipping expired trust for " + uuidString + " in network '" + networkName + "'.");
+                                    }
+                                } catch (IllegalArgumentException e) {
+                                    plugin.getLogger().warning("Skipping invalid trusted-expiry UUID '" + uuidString + "' in network '" + networkName + "'.");
+                                }
+                            }
+                        }
+
                         String description = netSection.getString("description", "");
                         if (description != null && !description.isEmpty()) {
                             network.setDescription(description);
@@ -394,6 +412,13 @@ public class NetworkManager {
             newConfig.set(path + ".sender-chests", serializedSenderChests);
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
+
+            Map<UUID, Long> timedTrusts = network.getTrustedPlayersWithExpiry();
+            if (!timedTrusts.isEmpty()) {
+                for (Map.Entry<UUID, Long> entry : timedTrusts.entrySet()) {
+                    newConfig.set(path + ".trusted-expiry." + entry.getKey().toString(), entry.getValue());
+                }
+            }
 
             if (network.getDescription() != null && !network.getDescription().isEmpty()) {
                 newConfig.set(path + ".description", network.getDescription());

@@ -18,6 +18,7 @@ public class Network {
 
     private String name;
     private String description = "";
+    private final Map<UUID, Long> trustedPlayersWithExpiry = new java.util.concurrent.ConcurrentHashMap<>();
     private final UUID owner;
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
@@ -183,6 +184,7 @@ public class Network {
             return true;
         }
         if (accessRules.isTrustSystemEnabled()) {
+            pruneExpiredTrusts();
             return trustedPlayers.contains(playerUUID);
         }
         return true;
@@ -194,12 +196,41 @@ public class Network {
 
     public void addTrustedPlayer(UUID playerUUID) {
         trustedPlayers.add(playerUUID);
+        trustedPlayersWithExpiry.remove(playerUUID);
+        this.dirty = true;
+    }
+
+    public void addTrustedPlayerWithExpiry(UUID playerUUID, long expiresAt) {
+        trustedPlayers.add(playerUUID);
+        trustedPlayersWithExpiry.put(playerUUID, expiresAt);
         this.dirty = true;
     }
 
     public void removeTrustedPlayer(UUID playerUUID) {
         trustedPlayers.remove(playerUUID);
+        trustedPlayersWithExpiry.remove(playerUUID);
         this.dirty = true;
+    }
+
+    public Map<UUID, Long> getTrustedPlayersWithExpiry() {
+        return new java.util.HashMap<>(trustedPlayersWithExpiry);
+    }
+
+    public void pruneExpiredTrusts() {
+        long now = System.currentTimeMillis();
+        boolean changed = false;
+        java.util.Iterator<java.util.Map.Entry<UUID, Long>> iterator = trustedPlayersWithExpiry.entrySet().iterator();
+        while (iterator.hasNext()) {
+            java.util.Map.Entry<UUID, Long> entry = iterator.next();
+            if (entry.getValue() <= now) {
+                trustedPlayers.remove(entry.getKey());
+                iterator.remove();
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.dirty = true;
+        }
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {

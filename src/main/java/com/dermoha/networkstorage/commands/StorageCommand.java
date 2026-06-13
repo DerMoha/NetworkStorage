@@ -146,12 +146,73 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        network.addTrustedPlayer(target.getUniqueId());
+        long durationMs = parseDurationMillis(args, 2);
+        if (durationMs < 0) {
+            player.sendMessage(lang.getMessage("trust.invalid_duration"));
+            return;
+        }
+        if (durationMs > 0) {
+            network.addTrustedPlayerWithExpiry(target.getUniqueId(), System.currentTimeMillis() + durationMs);
+        } else {
+            network.addTrustedPlayer(target.getUniqueId());
+        }
         player.sendMessage(String.format(lang.getMessage("trust.success"), target.getName()));
+        if (durationMs > 0) {
+            player.sendMessage(String.format(lang.getMessage("trust.success_timed"), formatDuration(durationMs)));
+        }
 
         if (target.isOnline()) {
             ((Player) target).sendMessage(String.format(lang.getMessage("trust.notification"), player.getName()));
         }
+    }
+
+    private long parseDurationMillis(String[] args, int startIndex) {
+        if (args.length <= startIndex) {
+            return 0;
+        }
+        long total = 0;
+        for (int i = startIndex; i < args.length; i++) {
+            String token = args[i];
+            if (token.length() < 2) {
+                return -1;
+            }
+            long value;
+            try {
+                value = Long.parseLong(token.substring(0, token.length() - 1));
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+            char unit = token.charAt(token.length() - 1);
+            long millis = switch (unit) {
+                case 's' -> 1000L;
+                case 'm' -> 60L * 1000L;
+                case 'h' -> 60L * 60L * 1000L;
+                case 'd' -> 24L * 60L * 60L * 1000L;
+                default -> -1L;
+            };
+            if (millis < 0 || value < 0) {
+                return -1;
+            }
+            total += value * millis;
+        }
+        return total;
+    }
+
+    private String formatDuration(long millis) {
+        long seconds = millis / 1000L;
+        if (seconds < 60) {
+            return seconds + "s";
+        }
+        long minutes = seconds / 60L;
+        if (minutes < 60) {
+            return minutes + "m";
+        }
+        long hours = minutes / 60L;
+        if (hours < 24) {
+            return hours + "h";
+        }
+        long days = hours / 24L;
+        return days + "d";
     }
 
     private void handleUntrustCommand(Player player, String[] args) {
