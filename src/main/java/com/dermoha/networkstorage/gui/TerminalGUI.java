@@ -99,7 +99,13 @@ public class TerminalGUI implements InventoryHolder {
                 break;
         }
 
-        int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
+        int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
+        if (currentPage >= totalPages) {
+            currentPage = totalPages - 1;
+        }
+        if (currentPage < 0) {
+            currentPage = 0;
+        }
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.size());
 
@@ -288,7 +294,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_NEXT_PAGE) {
-            int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
+            int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
             if (currentPage < totalPages - 1) {
                 currentPage++;
                 updateInventory();
