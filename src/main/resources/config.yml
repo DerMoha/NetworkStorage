@@ -33,6 +33,7 @@ enable-trust-system: true
 # that network. Protection plugins still run first and can deny interaction independently.
 protect-network-containers: true
 enable-hopper-integration: true
+enable-comparator-output: true
 
 # Item materials used for plugin tools. Must be valid Bukkit Material names.
 wand-material: BLAZE_ROD

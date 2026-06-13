@@ -40,6 +40,7 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("enable-trust-system", true);
         config.addDefault("protect-network-containers", true);
         config.addDefault("enable-hopper-integration", true);
+        config.addDefault("enable-comparator-output", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wand-material", "BLAZE_ROD");
@@ -153,6 +154,10 @@ public class ConfigManager implements NetworkAccessRules {
 
     public boolean isHopperIntegrationEnabled() {
         return config.getBoolean("enable-hopper-integration");
+    }
+
+    public boolean isComparatorOutputEnabled() {
+        return config.getBoolean("enable-comparator-output");
     }
 
     public int getAutoSaveInterval() {
