@@ -4,12 +4,14 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Chest;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
@@ -132,6 +134,7 @@ public class NetworkManager {
 
                         network.setDirty(false);
                         networks.put(networkName, network);
+                        recomputeNetworkTotal(network);
                         if (isGlobalMode && GLOBAL_NETWORK_NAME.equals(networkName)) {
                             globalNetworkLoaded = true;
                         }
@@ -188,6 +191,24 @@ public class NetworkManager {
                 locationIndex.put(loc, network);
             }
         }
+    }
+
+    private void recomputeNetworkTotal(Network network) {
+        long total = 0L;
+        for (Location location : network.getChestLocations()) {
+            if (!(location.getBlock().getState() instanceof org.bukkit.block.Chest chest)) {
+                continue;
+            }
+            if (location.getWorld() == null || !location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                continue;
+            }
+            for (ItemStack item : chest.getInventory().getContents()) {
+                if (item != null && item.getType() != Material.AIR) {
+                    total += item.getAmount();
+                }
+            }
+        }
+        network.setTotalStoredAmount(total);
     }
 
     private void loadPlayerState() {
@@ -778,6 +799,7 @@ public class NetworkManager {
             chest.getInventory().clear();
             chest.update();
         }
+        network.resetTotalStoredAmount();
     }
 
     public void resetNetwork(Network network) {

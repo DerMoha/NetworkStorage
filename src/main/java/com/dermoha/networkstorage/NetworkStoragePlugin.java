@@ -58,6 +58,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
+    private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = 30_000L;
+
+    private volatile long cachedStoredItemCount = 0L;
+    private volatile long cachedStoredItemCountAtMs = 0L;
+    private final Object storedItemCountCacheLock = new Object();
 
     @Override
     public void onEnable() {
@@ -146,13 +151,29 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private int getStoredItemCount() {
-        long storedItemCount = 0;
-        for (Network network : networkManager.getAllNetworks()) {
-            for (int amount : network.getNetworkItems().values()) {
-                storedItemCount += amount;
-            }
+        long now = System.currentTimeMillis();
+        long cachedAt;
+        long cached;
+        synchronized (storedItemCountCacheLock) {
+            cachedAt = cachedStoredItemCountAtMs;
+            cached = cachedStoredItemCount;
         }
-        return (int) Math.min(Integer.MAX_VALUE, storedItemCount);
+        if (cachedAt > 0 && (now - cachedAt) < BSTATS_STORED_ITEM_CACHE_TTL_MS) {
+            return (int) Math.min(Integer.MAX_VALUE, cached);
+        }
+        return refreshStoredItemCountCache();
+    }
+
+    private int refreshStoredItemCountCache() {
+        long total = 0L;
+        for (Network network : networkManager.getAllNetworks()) {
+            total += network.getTotalStoredAmount();
+        }
+        synchronized (storedItemCountCacheLock) {
+            cachedStoredItemCount = total;
+            cachedStoredItemCountAtMs = System.currentTimeMillis();
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
     private void registerCommands() {

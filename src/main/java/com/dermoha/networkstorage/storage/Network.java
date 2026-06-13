@@ -25,9 +25,10 @@ public class Network {
     private final NetworkMovement movement;
     private transient boolean dirty = false;
 
-    private transient Map<ItemStack, Integer> itemCache;
-    private transient long itemCacheTime;
+    private transient volatile Map<ItemStack, Integer> itemCache;
+    private transient volatile long itemCacheTime;
     private static final long ITEM_CACHE_TTL_MS = 500;
+    private final java.util.concurrent.atomic.AtomicLong totalStoredAmount = new java.util.concurrent.atomic.AtomicLong(0L);
 
     public Network(String name, UUID owner, NetworkAccessRules accessRules) {
         this(name, owner, accessRules, MovementEvents.NOOP);
@@ -220,6 +221,22 @@ public class Network {
         this.itemCache = null;
     }
 
+    public long getTotalStoredAmount() {
+        return totalStoredAmount.get();
+    }
+
+    public void adjustTotalStoredAmount(long delta) {
+        totalStoredAmount.addAndGet(delta);
+    }
+
+    public void resetTotalStoredAmount() {
+        totalStoredAmount.set(0L);
+    }
+
+    public void setTotalStoredAmount(long value) {
+        totalStoredAmount.set(Math.max(0L, value));
+    }
+
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
         if (amount < 0) {
             throw new IllegalArgumentException("Amount cannot be negative: " + amount);
@@ -245,9 +262,13 @@ public class Network {
                 }
             }
         }
+        int actuallyRemoved = amount - remaining;
+        if (actuallyRemoved > 0) {
+            adjustTotalStoredAmount(-actuallyRemoved);
+        }
         invalidateItemCache();
         ItemStack result = itemToRemove.clone();
-        result.setAmount(amount - remaining);
+        result.setAmount(actuallyRemoved);
         return result;
     }
 
@@ -266,6 +287,11 @@ public class Network {
                     remaining = result.get(0);
                 }
             }
+        }
+        int originalAmount = itemToAdd.getAmount();
+        int added = remaining == null ? originalAmount : originalAmount - remaining.getAmount();
+        if (added > 0) {
+            adjustTotalStoredAmount(added);
         }
         invalidateItemCache();
         return remaining;
