@@ -4,6 +4,7 @@ main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
 author: DerMoha
 description: A networked storage system for Minecraft servers, make sharing storage easy!
+softdepend: [PlaceholderAPI]
 
 commands:
   storage:

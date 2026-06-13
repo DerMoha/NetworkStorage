@@ -61,6 +61,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private com.dermoha.networkstorage.api.NetworkStorageService apiService;
     private HopperIntegrationListener hopperIntegrationListener;
     private ComparatorOutputListener comparatorOutputListener;
+    private com.dermoha.networkstorage.integrations.PlaceholderAPIHook placeholderAPIHook;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
@@ -112,6 +113,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         movementEvents = new DefaultMovementEvents(this, languageManager);
         networkManager = new NetworkManager(this);
         apiService = new com.dermoha.networkstorage.api.DefaultNetworkStorageService(this);
+        placeholderAPIHook = new com.dermoha.networkstorage.integrations.PlaceholderAPIHook(this);
     }
 
     private void initializeMetrics() {
@@ -497,5 +499,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public com.dermoha.networkstorage.api.NetworkStorageService getApiService() {
         return apiService;
+    }
+
+    public com.dermoha.networkstorage.integrations.PlaceholderAPIHook getPlaceholderAPIHook() {
+        return placeholderAPIHook;
     }
 }
