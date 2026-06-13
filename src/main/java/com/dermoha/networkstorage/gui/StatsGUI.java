@@ -65,7 +65,12 @@ public class StatsGUI implements InventoryHolder {
         SkullMeta meta = (SkullMeta) item.getItemMeta();
 
         if (meta != null) {
-            meta.setOwningPlayer(Bukkit.getOfflinePlayer(stat.getPlayerUUID()));
+            boolean textureApplied = meta.setOwningPlayer(Bukkit.getOfflinePlayer(stat.getPlayerUUID()));
+            if (!textureApplied) {
+                meta = createFallbackSkullMeta(stat, rank);
+                item.setItemMeta(meta);
+                return item;
+            }
             meta.setDisplayName(String.format(lang.getMessage("stats.player.name"), rank, stat.getPlayerName()));
 
             List<String> lore = new ArrayList<>();
@@ -78,6 +83,22 @@ public class StatsGUI implements InventoryHolder {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    private SkullMeta createFallbackSkullMeta(PlayerStat stat, int rank) {
+        ItemStack fallback = new ItemStack(Material.SKELETON_SKULL, 1);
+        ItemMeta base = fallback.getItemMeta();
+        if (!(base instanceof SkullMeta skullMeta)) {
+            return (SkullMeta) fallback.getItemMeta();
+        }
+        skullMeta.setDisplayName(String.format(lang.getMessage("stats.player.name"), rank, stat.getPlayerName()));
+        List<String> lore = new ArrayList<>();
+        lore.add(String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()));
+        lore.add(String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()));
+        long balance = stat.getItemsDeposited() - stat.getItemsWithdrawn();
+        lore.add(String.format(lang.getMessage("stats.player.balance"), balance));
+        skullMeta.setLore(lore);
+        return skullMeta;
     }
 
     public void handleClick(int slot) {
