@@ -791,6 +791,67 @@ public class NetworkManager {
         return networksToPurge.size();
     }
 
+    public synchronized boolean deleteNetwork(Player player, String networkName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage(lang.getMessage("network.delete.global_mode"));
+            return false;
+        }
+        if (GLOBAL_NETWORK_NAME.equals(networkName)) {
+            player.sendMessage(lang.getMessage("network.delete.protected"));
+            return false;
+        }
+        Network network = networks.get(networkName);
+        if (network == null) {
+            player.sendMessage(String.format(lang.getMessage("network.delete.not_found"), networkName));
+            return false;
+        }
+        if (!network.getOwner().equals(player.getUniqueId())
+                && !plugin.getConfigManager().hasPrivilege(player, "networkstorage.admin")) {
+            player.sendMessage(lang.getMessage("network.delete.permission"));
+            return false;
+        }
+
+        archiveDeletedNetworkStats(networkName, network);
+        clearNetworkChestContents(network);
+        resetNetworkInternal(network);
+        networks.remove(networkName);
+
+        for (Map.Entry<UUID, String> entry : selectedNetworks.entrySet()) {
+            if (networkName.equals(entry.getValue())) {
+                entry.setValue(null);
+            }
+        }
+        selectedNetworks.values().removeIf(Objects::isNull);
+        for (Map.Entry<UUID, String> entry : selectedWirelessNetworks.entrySet()) {
+            if (networkName.equals(entry.getValue())) {
+                entry.setValue(null);
+            }
+        }
+        selectedWirelessNetworks.values().removeIf(Objects::isNull);
+
+        saveNetworks();
+        savePlayerState();
+        player.sendMessage(String.format(lang.getMessage("network.delete.success"), networkName));
+        return true;
+    }
+
+    private void archiveDeletedNetworkStats(String networkName, Network network) {
+        if (network.getPlayerStats().isEmpty()) {
+            return;
+        }
+        File archiveFile = new File(plugin.getDataFolder(), "deleted-networks.log");
+        try (java.io.FileWriter writer = new java.io.FileWriter(archiveFile, true)) {
+            writer.write("[" + new java.util.Date() + "] DELETED NETWORK: " + networkName + "\n");
+            for (java.util.Map.Entry<java.util.UUID, PlayerStat> entry : network.getPlayerStats().entrySet()) {
+                PlayerStat stat = entry.getValue();
+                writer.write("  - " + stat.getPlayerName() + " (" + entry.getKey() + "): deposited=" + stat.getItemsDeposited() + " withdrawn=" + stat.getItemsWithdrawn() + "\n");
+            }
+            writer.write("\n");
+        } catch (java.io.IOException e) {
+            plugin.getLogger().warning("Could not write to deleted-networks log: " + e.getMessage());
+        }
+    }
+
     private void clearNetworkChestContents(Network network) {
         for (Location location : network.getChestLocations()) {
             if (!(location.getBlock().getState() instanceof Chest chest)) {

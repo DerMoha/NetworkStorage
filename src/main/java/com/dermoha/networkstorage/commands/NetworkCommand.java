@@ -15,12 +15,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class NetworkCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list", "delete", "confirm-delete");
+    private final Map<java.util.UUID, PendingDelete> pendingDeletes = new java.util.HashMap<>();
+    private static final long DELETE_CONFIRMATION_WINDOW_MS = 30_000L;
 
     public NetworkCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -37,12 +40,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
         Player player = (Player) sender;
 
         if (args.length == 0) {
-            player.sendMessage(lang.getMessage("network.help.title"));
-            player.sendMessage(lang.getMessage("network.help.create"));
-            player.sendMessage(lang.getMessage("network.help.edit"));
-            player.sendMessage(lang.getMessage("network.help.rename"));
-            player.sendMessage(lang.getMessage("network.help.select"));
-            player.sendMessage(lang.getMessage("network.help.list"));
+            sendHelp(player);
             return true;
         }
 
@@ -88,18 +86,66 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             case "list":
                 handleListCommand(player);
                 break;
+            case "delete":
+                handleDeleteCommand(player, args);
+                break;
+            case "confirm-delete":
+                handleConfirmDeleteCommand(player);
+                break;
             default:
                 player.sendMessage(String.format(lang.getMessage("unknown_subcommand"), subCommand));
-                player.sendMessage(lang.getMessage("network.help.title"));
-                player.sendMessage(lang.getMessage("network.help.create"));
-                player.sendMessage(lang.getMessage("network.help.edit"));
-                player.sendMessage(lang.getMessage("network.help.rename"));
-                player.sendMessage(lang.getMessage("network.help.select"));
-                player.sendMessage(lang.getMessage("network.help.list"));
+                sendHelp(player);
                 break;
         }
 
         return true;
+    }
+
+    private void sendHelp(Player player) {
+        player.sendMessage(lang.getMessage("network.help.title"));
+        player.sendMessage(lang.getMessage("network.help.create"));
+        player.sendMessage(lang.getMessage("network.help.edit"));
+        player.sendMessage(lang.getMessage("network.help.rename"));
+        player.sendMessage(lang.getMessage("network.help.select"));
+        player.sendMessage(lang.getMessage("network.help.list"));
+        player.sendMessage(lang.getMessage("network.help.delete"));
+    }
+
+    private void handleDeleteCommand(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(lang.getMessage("network.delete.usage"));
+            return;
+        }
+        Network network = plugin.getNetworkManager().findOwnedNetwork(player, args[1]);
+        if (network == null) {
+            boolean isAdmin = plugin.getConfigManager().hasPrivilege(player, "networkstorage.admin");
+            if (!isAdmin) {
+                player.sendMessage(String.format(lang.getMessage("network.delete.not_found"), args[1]));
+                return;
+            }
+            network = plugin.getNetworkManager().getNetwork(args[1]);
+            if (network == null) {
+                player.sendMessage(String.format(lang.getMessage("network.delete.not_found"), args[1]));
+                return;
+            }
+        }
+        pendingDeletes.put(player.getUniqueId(), new PendingDelete(network.getName(), System.currentTimeMillis() + DELETE_CONFIRMATION_WINDOW_MS));
+        player.sendMessage(String.format(lang.getMessage("network.delete.confirm_warning"), network.getName()));
+        player.sendMessage(String.format(lang.getMessage("network.delete.confirm_warning_details"), network.getChestLocations().size(), network.getTerminalLocations().size(), network.getSenderChestLocations().size()));
+        player.sendMessage(lang.getMessage("network.delete.confirm_prompt"));
+    }
+
+    private void handleConfirmDeleteCommand(Player player) {
+        PendingDelete pending = pendingDeletes.remove(player.getUniqueId());
+        if (pending == null) {
+            player.sendMessage(lang.getMessage("network.delete.no_pending"));
+            return;
+        }
+        if (pending.expiresAt() < System.currentTimeMillis()) {
+            player.sendMessage(lang.getMessage("network.delete.expired"));
+            return;
+        }
+        plugin.getNetworkManager().deleteNetwork(player, pending.networkName());
     }
 
     @Override
@@ -112,7 +158,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             return StringUtil.copyPartialMatches(args[0], SUBCOMMANDS, new ArrayList<>());
         }
 
-        if (args.length == 2 && (args[0].equalsIgnoreCase("select") || args[0].equalsIgnoreCase("edit"))) {
+        if (args.length == 2 && (args[0].equalsIgnoreCase("select") || args[0].equalsIgnoreCase("edit") || args[0].equalsIgnoreCase("delete"))) {
             List<String> networkNames = plugin.getNetworkManager().getOwnedNetworks(player).stream()
                     .map(Network::getName)
                     .toList();
@@ -127,6 +173,9 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
         }
 
         return Collections.emptyList();
+    }
+
+    private record PendingDelete(String networkName, long expiresAt) {
     }
 
     private void handleSelectCommand(Player player, String[] args) {
