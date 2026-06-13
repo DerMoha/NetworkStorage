@@ -22,7 +22,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list", "delete", "confirm-delete");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list", "delete", "confirm-delete", "description");
     private final Map<java.util.UUID, PendingDelete> pendingDeletes = new java.util.HashMap<>();
     private static final long DELETE_CONFIRMATION_WINDOW_MS = NetworkStorageConstants.DELETE_CONFIRMATION_WINDOW_MS;
 
@@ -93,6 +93,9 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             case "confirm-delete":
                 handleConfirmDeleteCommand(player);
                 break;
+            case "description":
+                handleDescriptionCommand(player, args);
+                break;
             default:
                 player.sendMessage(String.format(lang.getMessage("unknown_subcommand"), subCommand));
                 sendHelp(player);
@@ -110,6 +113,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("network.help.select"));
         player.sendMessage(lang.getMessage("network.help.list"));
         player.sendMessage(lang.getMessage("network.help.delete"));
+        player.sendMessage(lang.getMessage("network.help.description"));
     }
 
     private void handleDeleteCommand(Player player, String[] args) {
@@ -147,6 +151,28 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             return;
         }
         plugin.getNetworkManager().deleteNetwork(player, pending.networkName());
+    }
+
+    private void handleDescriptionCommand(Player player, String[] args) {
+        if (args.length < 3) {
+            player.sendMessage(lang.getMessage("network.description.usage"));
+            return;
+        }
+        Network network = plugin.getNetworkManager().findOwnedNetwork(player, args[1]);
+        if (network == null) {
+            player.sendMessage(String.format(lang.getMessage("network.description.not_found"), args[1]));
+            return;
+        }
+        StringBuilder description = new StringBuilder();
+        for (int i = 2; i < args.length; i++) {
+            if (i > 2) {
+                description.append(' ');
+            }
+            description.append(args[i]);
+        }
+        network.setDescription(description.toString());
+        plugin.getNetworkManager().saveNetworks();
+        player.sendMessage(String.format(lang.getMessage("network.description.success"), network.getName(), network.getDescription()));
     }
 
     @Override

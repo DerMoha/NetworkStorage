@@ -14,7 +14,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Network {
 
+    public static final int MAX_DESCRIPTION_LENGTH = 128;
+
     private String name;
+    private String description = "";
     private final UUID owner;
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
@@ -58,6 +61,21 @@ public class Network {
 
     public void setName(String name) {
         this.name = name;
+        this.dirty = true;
+    }
+
+    public String getDescription() {
+        return description == null ? "" : description;
+    }
+
+    public void setDescription(String description) {
+        if (description == null) {
+            this.description = "";
+        } else {
+            this.description = description.length() > MAX_DESCRIPTION_LENGTH
+                    ? description.substring(0, MAX_DESCRIPTION_LENGTH)
+                    : description;
+        }
         this.dirty = true;
     }
 

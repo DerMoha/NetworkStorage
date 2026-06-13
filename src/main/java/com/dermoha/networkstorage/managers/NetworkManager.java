@@ -115,6 +115,11 @@ public class NetworkManager {
                             }
                         }
 
+                        String description = netSection.getString("description", "");
+                        if (description != null && !description.isEmpty()) {
+                            network.setDescription(description);
+                        }
+
                         // Load player stats
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
                         if (statsSection != null) {
@@ -389,6 +394,10 @@ public class NetworkManager {
             newConfig.set(path + ".sender-chests", serializedSenderChests);
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
+
+            if (network.getDescription() != null && !network.getDescription().isEmpty()) {
+                newConfig.set(path + ".description", network.getDescription());
+            }
 
             for (PlayerStat stat : network.getPlayerStats().values()) {
                 String statPath = path + ".stats." + stat.getPlayerUUID().toString();
