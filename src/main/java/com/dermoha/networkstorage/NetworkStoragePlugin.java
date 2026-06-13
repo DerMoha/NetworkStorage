@@ -17,6 +17,7 @@ import com.dermoha.networkstorage.managers.TerminalSessions;
 import com.dermoha.networkstorage.storage.DefaultMovementEvents;
 import com.dermoha.networkstorage.storage.MovementEvents;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
@@ -58,7 +59,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
-    private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = 30_000L;
+    private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = NetworkStorageConstants.BSTATS_STORED_ITEM_CACHE_TTL_MS;
 
     private volatile long cachedStoredItemCount = 0L;
     private volatile long cachedStoredItemCountAtMs = 0L;

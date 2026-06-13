@@ -6,6 +6,7 @@ import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -27,7 +28,7 @@ import java.util.stream.Collectors;
 
 public class StorageCommand implements CommandExecutor, TabCompleter {
 
-    private static final long RESET_CONFIRMATION_WINDOW_MS = 30_000L;
+    private static final long RESET_CONFIRMATION_WINDOW_MS = NetworkStorageConstants.RESET_CONFIRMATION_WINDOW_MS;
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;

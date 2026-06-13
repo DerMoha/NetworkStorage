@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.storage;
 
 import com.dermoha.networkstorage.stats.PlayerStat;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Chest;
@@ -27,7 +28,7 @@ public class Network {
 
     private transient volatile Map<ItemStack, Integer> itemCache;
     private transient volatile long itemCacheTime;
-    private static final long ITEM_CACHE_TTL_MS = 500;
+    private static final long ITEM_CACHE_TTL_MS = NetworkStorageConstants.ITEM_CACHE_TTL_MS;
     private final java.util.concurrent.atomic.AtomicLong totalStoredAmount = new java.util.concurrent.atomic.AtomicLong(0L);
 
     public Network(String name, UUID owner, NetworkAccessRules accessRules) {

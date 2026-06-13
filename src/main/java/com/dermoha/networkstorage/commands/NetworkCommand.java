@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -23,7 +24,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
     private final LanguageManager lang;
     private static final List<String> SUBCOMMANDS = Arrays.asList("create", "edit", "rename", "select", "list", "delete", "confirm-delete");
     private final Map<java.util.UUID, PendingDelete> pendingDeletes = new java.util.HashMap<>();
-    private static final long DELETE_CONFIRMATION_WINDOW_MS = 30_000L;
+    private static final long DELETE_CONFIRMATION_WINDOW_MS = NetworkStorageConstants.DELETE_CONFIRMATION_WINDOW_MS;
 
     public NetworkCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
