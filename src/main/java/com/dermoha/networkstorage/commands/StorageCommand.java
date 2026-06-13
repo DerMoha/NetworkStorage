@@ -341,11 +341,13 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
 
         if (network == null) {
             player.sendMessage(lang.getMessage("no_network_reset"));
+            player.sendMessage(lang.getMessage("get_wand_hint"));
             return;
         }
 
         if (!network.getOwner().equals(player.getUniqueId())) {
             player.sendMessage(lang.getMessage("trust.not_owner"));
+            player.sendMessage(String.format(lang.getMessage("reset.owner_hint"), network.getName()));
             return;
         }
 
