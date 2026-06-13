@@ -196,8 +196,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getCommand("network").setTabCompleter(networkCommand);
         PluginCommand networkStorageCommand = getCommand("networkstorage");
         networkStorageCommand.setExecutor((sender, command, label, args) -> {
-            if (args.length == 0 || !args[0].equalsIgnoreCase("reload")) {
-                sender.sendMessage("§cUsage: /networkstorage reload");
+            if (args.length == 0) {
+                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect>");
                 return true;
             }
 
@@ -206,11 +206,85 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 return true;
             }
 
-            sender.sendMessage(languageManager.getMessage("reload.start"));
-            reload();
-            sender.sendMessage(languageManager.getMessage("reload.success"));
+            String sub = args[0].toLowerCase();
+            switch (sub) {
+                case "reload":
+                    sender.sendMessage(languageManager.getMessage("reload.start"));
+                    reload();
+                    sender.sendMessage(languageManager.getMessage("reload.success"));
+                    break;
+                case "list":
+                    handleAdminList(sender);
+                    break;
+                case "info":
+                    handleAdminInfo(sender, args);
+                    break;
+                case "inspect":
+                    handleAdminInspect(sender, args);
+                    break;
+                default:
+                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect>");
+            }
             return true;
         });
+    }
+
+    private void handleAdminList(org.bukkit.command.CommandSender sender) {
+        sender.sendMessage("§6=== All Networks ===");
+        for (Network network : networkManager.getAllNetworks()) {
+            sender.sendMessage(String.format("§e%s §7(owner: §f%s§7, chests: §f%d§7, terminals: §f%d§7, senders: §f%d§7)",
+                    network.getName(),
+                    networkManager.getNetworkOwnerName(network),
+                    network.getChestLocations().size(),
+                    network.getTerminalLocations().size(),
+                    network.getSenderChestLocations().size()));
+        }
+    }
+
+    private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /networkstorage info <network>");
+            return;
+        }
+        Network network = networkManager.getNetwork(args[1]);
+        if (network == null) {
+            sender.sendMessage("§cNetwork not found: " + args[1]);
+            return;
+        }
+        sender.sendMessage("§6=== Network " + network.getName() + " ===");
+        sender.sendMessage("§eOwner: §f" + networkManager.getNetworkOwnerName(network));
+        sender.sendMessage("§eChests: §f" + network.getChestLocations().size());
+        sender.sendMessage("§eTerminals: §f" + network.getTerminalLocations().size());
+        sender.sendMessage("§eSender chests: §f" + network.getSenderChestLocations().size());
+        sender.sendMessage("§eTrusted: §f" + network.getTrustedPlayers().size());
+        sender.sendMessage("§eDescription: §f" + (network.getDescription().isEmpty() ? "(none)" : network.getDescription()));
+        sender.sendMessage("§eStored items: §f" + network.getTotalStoredAmount());
+    }
+
+    private void handleAdminInspect(org.bukkit.command.CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /networkstorage inspect <network>");
+            return;
+        }
+        Network network = networkManager.getNetwork(args[1]);
+        if (network == null) {
+            sender.sendMessage("§cNetwork not found: " + args[1]);
+            return;
+        }
+        sender.sendMessage("§6=== Locations for " + network.getName() + " ===");
+        for (org.bukkit.Location loc : network.getChestLocations()) {
+            sender.sendMessage("§7Chest: §f" + formatLocation(loc));
+        }
+        for (org.bukkit.Location loc : network.getTerminalLocations()) {
+            sender.sendMessage("§bTerminal: §f" + formatLocation(loc));
+        }
+        for (org.bukkit.Location loc : network.getSenderChestLocations()) {
+            sender.sendMessage("§aSender: §f" + formatLocation(loc));
+        }
+    }
+
+    private String formatLocation(org.bukkit.Location loc) {
+        return loc.getWorld().getName() + " " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
     }
 
     private void registerListeners() {
