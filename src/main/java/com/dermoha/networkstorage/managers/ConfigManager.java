@@ -53,6 +53,7 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("custom-model-data.gui.terminal.info", 10105);
         config.addDefault("custom-model-data.gui.terminal.stats", 10106);
         config.addDefault("custom-model-data.gui.terminal.refresh", 10107);
+        config.addDefault("custom-model-data.gui.terminal.deposit-all", 10108);
         config.addDefault("custom-model-data.gui.stats.back", 10201);
         config.addDefault("custom-model-data.gui.network-select.item", 10301);
         config.addDefault("custom-model-data.gui.wireless-select.item", 10401);
