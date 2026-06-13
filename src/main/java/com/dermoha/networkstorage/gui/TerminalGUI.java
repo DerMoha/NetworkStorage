@@ -273,13 +273,7 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public String formatNumber(long number) {
-        if (number >= 1000000) {
-            return String.format("%.1fM", number / 1000000.0);
-        } else if (number >= 1000) {
-            return String.format("%.1fK", number / 1000.0);
-        } else {
-            return String.valueOf(number);
-        }
+        return ItemUtils.formatNumber(number);
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {

@@ -6,6 +6,7 @@ import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.ItemUtils;
 import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -359,13 +360,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private String formatNumber(long number) {
-        if (number >= 1000000) {
-            return String.format("%.1fM", number / 1000000.0);
-        } else if (number >= 1000) {
-            return String.format("%.1fK", number / 1000.0);
-        } else {
-            return String.valueOf(number);
-        }
+        return ItemUtils.formatNumber(number);
     }
 
     private record PendingReset(String networkName, long expiresAt) {
