@@ -17,6 +17,7 @@
         <paper.version>26.1.2.build.53-stable</paper.version>
         <bstats.version>3.2.1</bstats.version>
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
+        <sqlite-jdbc.version>3.46.0.0</sqlite-jdbc.version>
     </properties>
 
     <build>
@@ -39,6 +40,10 @@
                         <relocation>
                             <pattern>org.bstats</pattern>
                             <shadedPattern>com.dermoha.networkstorage.lib.bstats</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>org.sqlite</pattern>
+                            <shadedPattern>com.dermoha.networkstorage.lib.sqlite</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>
@@ -78,6 +83,11 @@
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
             <version>${bstats.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>${sqlite-jdbc.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
