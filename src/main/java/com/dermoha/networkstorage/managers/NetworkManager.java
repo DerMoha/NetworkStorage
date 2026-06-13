@@ -34,6 +34,7 @@ public class NetworkManager {
     private final File playerStateFile;
     private final Object renameLock = new Object();
     private final Object diskWriteLock = new Object();
+    private com.dermoha.networkstorage.storage.RollingBackupManager backupManager;
     private int networkSaveGeneration = 0;
     private int playerStateSaveGeneration = 0;
     private static final String GLOBAL_NETWORK_NAME = "Global";
@@ -45,6 +46,8 @@ public class NetworkManager {
         this.lang = plugin.getLanguageManager();
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
         this.playerStateFile = new File(plugin.getDataFolder(), "player-state.yml");
+        this.backupManager = new com.dermoha.networkstorage.storage.RollingBackupManager(plugin);
+        this.backupManager.initialize();
         ensureDataFileExists(networksFile, "networks.yml");
         ensureDataFileExists(playerStateFile, "player-state.yml");
         loadNetworks();
@@ -461,10 +464,16 @@ public class NetworkManager {
         synchronized (diskWriteLock) {
             networkSaveGeneration++;
             playerStateSaveGeneration++;
+            if (networksFile.length() > 0) {
+                backupManager.createBackup(networksFile);
+            }
             if (saveNetworksSnapshot(networksSnapshot)) {
                 for (Network network : savedNetworks) {
                     network.setDirty(false);
                 }
+            }
+            if (playerStateFile.exists() && playerStateFile.length() > 0) {
+                backupManager.createBackup(playerStateFile);
             }
             savePlayerStateSnapshot(playerStateSnapshot);
         }
