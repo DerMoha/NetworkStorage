@@ -6,6 +6,7 @@ import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
+import com.dermoha.networkstorage.listeners.HopperIntegrationListener;
 import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
 import com.dermoha.networkstorage.listeners.NetworkContainerListener;
 import com.dermoha.networkstorage.listeners.WandListener;
@@ -57,6 +58,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private StorageCommand storageCommand;
     private NetworkCommand networkCommand;
     private com.dermoha.networkstorage.api.NetworkStorageService apiService;
+    private HopperIntegrationListener hopperIntegrationListener;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
@@ -212,12 +214,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
         inventoryInteractionListener = new InventoryInteractionListener(this);
         wandListener = new WandListener(this);
         wirelessTerminalListener = new WirelessTerminalListener(this);
+        hopperIntegrationListener = new HopperIntegrationListener(this);
 
         getServer().getPluginManager().registerEvents(terminalSessions, this);
         getServer().getPluginManager().registerEvents(networkContainerListener, this);
         getServer().getPluginManager().registerEvents(inventoryInteractionListener, this);
         getServer().getPluginManager().registerEvents(wandListener, this);
         getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
+        getServer().getPluginManager().registerEvents(hopperIntegrationListener, this);
     }
 
     private void startTasks() {
@@ -250,6 +254,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (wirelessTerminalListener != null) {
             HandlerList.unregisterAll(wirelessTerminalListener);
             wirelessTerminalListener = null;
+        }
+        if (hopperIntegrationListener != null) {
+            HandlerList.unregisterAll(hopperIntegrationListener);
+            hopperIntegrationListener = null;
         }
     }
 

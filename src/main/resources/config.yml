@@ -32,6 +32,7 @@ enable-trust-system: true
 # Prevent players from directly opening tracked storage/sender chests unless they can access
 # that network. Protection plugins still run first and can deny interaction independently.
 protect-network-containers: true
+enable-hopper-integration: true
 
 # Item materials used for plugin tools. Must be valid Bukkit Material names.
 wand-material: BLAZE_ROD

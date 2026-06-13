@@ -39,6 +39,7 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
         config.addDefault("protect-network-containers", true);
+        config.addDefault("enable-hopper-integration", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wand-material", "BLAZE_ROD");
@@ -148,6 +149,10 @@ public class ConfigManager implements NetworkAccessRules {
 
     public boolean isNetworkContainerProtectionEnabled() {
         return config.getBoolean("protect-network-containers");
+    }
+
+    public boolean isHopperIntegrationEnabled() {
+        return config.getBoolean("enable-hopper-integration");
     }
 
     public int getAutoSaveInterval() {
