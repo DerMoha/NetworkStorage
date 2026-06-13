@@ -772,6 +772,7 @@ public class NetworkManager {
         }
 
         for (Network network : networksToPurge) {
+            archiveDeletedNetworkStats(network.getName(), network);
             clearNetworkChestContents(network);
             resetNetworkInternal(network);
         }
