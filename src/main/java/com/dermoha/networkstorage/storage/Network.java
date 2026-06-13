@@ -185,8 +185,9 @@ public class Network {
 
     public Map<ItemStack, Integer> getNetworkItems() {
         long now = System.currentTimeMillis();
-        if (itemCache != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
-            return new HashMap<>(itemCache);
+        Map<ItemStack, Integer> cached = itemCache;
+        if (cached != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
+            return new HashMap<>(cached);
         }
 
         Map<ItemStack, Integer> networkItems = new HashMap<>();
@@ -201,8 +202,8 @@ public class Network {
             }
         }
 
-        itemCache = new HashMap<>(networkItems);
-        itemCacheTime = now;
+        this.itemCache = new HashMap<>(networkItems);
+        this.itemCacheTime = now;
         return networkItems;
     }
 
