@@ -222,8 +222,15 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 case "inspect":
                     handleAdminInspect(sender, args);
                     break;
+                case "config":
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage("§cConfig editor requires a player.");
+                        return true;
+                    }
+                    new com.dermoha.networkstorage.gui.ConfigEditorGUI(this).open((Player) sender);
+                    break;
                 default:
-                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect>");
+                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config>");
             }
             return true;
         });
