@@ -349,6 +349,12 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(lang.getMessage("help_step3"));
         player.sendMessage(lang.getMessage("help_step4"));
         player.sendMessage(lang.getMessage("help_step5"));
+        player.sendMessage("");
+        player.sendMessage(lang.getMessage("help_wireless_title"));
+        player.sendMessage(lang.getMessage("help_wireless_step1"));
+        player.sendMessage(lang.getMessage("help_wireless_step2"));
+        player.sendMessage(lang.getMessage("help_wireless_step3"));
+        player.sendMessage(lang.getMessage("help_wireless_step4"));
     }
 
     private String formatNumber(long number) {
