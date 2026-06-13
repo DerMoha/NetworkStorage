@@ -171,6 +171,16 @@ public class NetworkManager {
                     || !Double.isFinite(location.getZ())) {
                 throw new IllegalArgumentException("invalid or unloaded world/coordinates");
             }
+            String worldName = location.getWorld().getName();
+            if (plugin.getServer().getWorld(worldName) == null) {
+                throw new IllegalArgumentException("world '" + worldName + "' is not registered on this server");
+            }
+            if (Math.abs(location.getX()) > 3.0E7
+                    || Math.abs(location.getZ()) > 3.0E7
+                    || location.getY() < plugin.getServer().getWorld(worldName).getMinHeight() - 1024
+                    || location.getY() > plugin.getServer().getWorld(worldName).getMaxHeight() + 1024) {
+                throw new IllegalArgumentException("coordinates out of world bounds");
+            }
             return location;
         } catch (Exception e) {
             plugin.getLogger().warning("Skipping invalid " + locationType + " location in network '" + networkName + "': " + e.getMessage());
