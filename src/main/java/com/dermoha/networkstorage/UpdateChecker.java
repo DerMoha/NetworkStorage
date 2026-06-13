@@ -2,6 +2,10 @@ package com.dermoha.networkstorage;
 
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.managers.ConfigManager;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -9,13 +13,10 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class UpdateChecker {
 
     private static final String MODRINTH_API_URL = "https://api.modrinth.com/v2/project/MFLw2RTS/version";
-    private static final Pattern VERSION_PATTERN = Pattern.compile("\"version_number\":\"([^\"]+)\"");
 
     private final NetworkStoragePlugin plugin;
     private final ConfigManager configManager;
@@ -62,22 +63,24 @@ public class UpdateChecker {
             }
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+                JsonElement parsed = JsonParser.parseReader(reader);
+                if (!parsed.isJsonArray()) {
+                    return null;
                 }
-
-                String json = response.toString();
-                Matcher matcher = VERSION_PATTERN.matcher(json);
-                if (matcher.find()) {
-                    return matcher.group(1);
+                JsonArray versions = parsed.getAsJsonArray();
+                if (versions.isEmpty()) {
+                    return null;
                 }
+                JsonObject first = versions.get(0).getAsJsonObject();
+                JsonElement versionNumber = first.get("version_number");
+                if (versionNumber == null || versionNumber.isJsonNull()) {
+                    return null;
+                }
+                return versionNumber.getAsString();
             }
         } finally {
             connection.disconnect();
         }
-        return null;
     }
 
     private boolean isNewerVersion(String latest, String current) {
