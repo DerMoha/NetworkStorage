@@ -24,43 +24,82 @@ public class LanguageManager {
     }
 
     private void loadAndCheckLangFile() {
-        String fileName = "lang_" + lang + ".yml";
-        InputStream defaultStream = plugin.getResource(fileName);
-        if (defaultStream == null) {
-            plugin.getLogger().warning("Unsupported language '" + lang + "'. Falling back to English.");
-            lang = "en";
-            fileName = "lang_en.yml";
-            defaultStream = plugin.getResource(fileName);
-        }
+        String requestedLang = lang;
+        String fileName = "lang_" + requestedLang + ".yml";
 
-        if (defaultStream == null) {
+        // Pick the reference config used to fill in missing keys. Prefer the
+        // JAR's lang_<code>.yml (preserves current behavior for shipped
+        // languages). Fall back to lang_en.yml for user-supplied languages.
+        FileConfiguration reference = loadJarConfig(fileName);
+        FileConfiguration englishReference = loadJarConfig("lang_en.yml");
+        if (reference == null && englishReference == null) {
             plugin.getLogger().severe("Default language file 'lang_en.yml' is missing from the JAR. Cannot load translations.");
             langConfig = new YamlConfiguration();
             return;
         }
-
-        langFile = new File(plugin.getDataFolder(), fileName);
-
-        // If the user's file doesn't exist, create it from the JAR's default.
-        if (!langFile.exists()) {
-            plugin.saveResource(fileName, false);
+        if (reference == null) {
+            reference = englishReference;
+            plugin.getLogger().info("Language '" + requestedLang + "' has no bundled file in the JAR. Drop 'lang_"
+                    + requestedLang + ".yml' into plugins/NetworkStorage/ to provide custom translations; missing keys will be filled in from English.");
         }
-        langConfig = YamlConfiguration.loadConfiguration(langFile);
 
-        // Load the default language file from the JAR to use as a reference.
-        FileConfiguration defaultLangConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultStream));
+        // Resolve the user file. If it doesn't exist, copy the JAR default
+        // (if present). If neither exists, fall back to English.
+        File userFile = new File(plugin.getDataFolder(), fileName);
+        if (!userFile.exists()) {
+            if (plugin.getResource(fileName) != null) {
+                plugin.saveResource(fileName, false);
+            } else {
+                plugin.getLogger().warning("No translation file for language '" + requestedLang + "'. Expected '"
+                        + fileName + "' in plugins/NetworkStorage/. Falling back to English.");
+                requestedLang = "en";
+                fileName = "lang_en.yml";
+                userFile = new File(plugin.getDataFolder(), fileName);
+                if (!userFile.exists()) {
+                    plugin.saveResource(fileName, false);
+                }
+                reference = englishReference;
+            }
+        }
 
-        // Check for missing keys and add them.
-        Set<String> defaultKeys = defaultLangConfig.getKeys(true);
+        lang = requestedLang;
+        langFile = userFile;
+
+        try {
+            langConfig = YamlConfiguration.loadConfiguration(langFile);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to parse '" + fileName + "': " + e.getMessage() + ". Falling back to English.");
+            lang = "en";
+            fileName = "lang_en.yml";
+            userFile = new File(plugin.getDataFolder(), fileName);
+            if (!userFile.exists()) {
+                plugin.saveResource(fileName, false);
+            }
+            langFile = userFile;
+            try {
+                langConfig = YamlConfiguration.loadConfiguration(langFile);
+            } catch (Exception ex) {
+                plugin.getLogger().severe("Failed to parse fallback 'lang_en.yml': " + ex.getMessage());
+                langConfig = new YamlConfiguration();
+                return;
+            }
+            reference = englishReference;
+        }
+
+        // Merge missing keys from the reference into the loaded config so
+        // partial translations still work end-to-end.
+        if (reference == null) {
+            return;
+        }
+        Set<String> referenceKeys = reference.getKeys(true);
         boolean updated = false;
-        for (String key : defaultKeys) {
+        for (String key : referenceKeys) {
             if (!langConfig.isSet(key)) {
-                langConfig.set(key, defaultLangConfig.get(key));
+                langConfig.set(key, reference.get(key));
                 updated = true;
             }
         }
 
-        // If we added any missing keys, save the users file.
         if (updated) {
             try {
                 langConfig.save(langFile);
@@ -68,6 +107,19 @@ public class LanguageManager {
             } catch (IOException e) {
                 plugin.getLogger().severe("Could not save updated language file '" + fileName + "': " + e.getMessage());
             }
+        }
+    }
+
+    private FileConfiguration loadJarConfig(String fileName) {
+        InputStream stream = plugin.getResource(fileName);
+        if (stream == null) {
+            return null;
+        }
+        try (InputStreamReader reader = new InputStreamReader(stream)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not read '" + fileName + "' from JAR: " + e.getMessage());
+            return null;
         }
     }
 

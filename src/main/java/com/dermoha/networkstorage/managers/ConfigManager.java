@@ -2,6 +2,7 @@ package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.storage.NetworkAccessRules;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -39,6 +40,8 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("enable-permissions", true);
         config.addDefault("enable-trust-system", true);
         config.addDefault("protect-network-containers", true);
+        config.addDefault("enable-hopper-integration", true);
+        config.addDefault("enable-comparator-output", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wand-material", "BLAZE_ROD");
@@ -53,11 +56,14 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("custom-model-data.gui.terminal.info", 10105);
         config.addDefault("custom-model-data.gui.terminal.stats", 10106);
         config.addDefault("custom-model-data.gui.terminal.refresh", 10107);
+        config.addDefault("custom-model-data.gui.terminal.deposit-all", 10108);
         config.addDefault("custom-model-data.gui.stats.back", 10201);
         config.addDefault("custom-model-data.gui.network-select.item", 10301);
         config.addDefault("custom-model-data.gui.wireless-select.item", 10401);
         config.addDefault("update-check.enabled", true);
         config.addDefault("update-check.notify-admins", true);
+        config.addDefault("update-check.interval-hours", NetworkStorageConstants.DEFAULT_UPDATE_CHECK_INTERVAL_HOURS);
+        config.addDefault("update-check.notify-permission", "");
         config.options().copyDefaults(true);
     }
 
@@ -158,6 +164,14 @@ public class ConfigManager implements NetworkAccessRules {
         return config.getBoolean("protect-network-containers");
     }
 
+    public boolean isHopperIntegrationEnabled() {
+        return config.getBoolean("enable-hopper-integration");
+    }
+
+    public boolean isComparatorOutputEnabled() {
+        return config.getBoolean("enable-comparator-output");
+    }
+
     public int getAutoSaveInterval() {
         return getClampedInt("auto-save-interval-minutes", 5, 1, 10_080);
     }
@@ -172,6 +186,18 @@ public class ConfigManager implements NetworkAccessRules {
 
     public boolean shouldNotifyAdminsOnUpdate() {
         return config.getBoolean("update-check.notify-admins", true);
+    }
+
+    public int getUpdateCheckIntervalHours() {
+        return getClampedInt(
+                "update-check.interval-hours",
+                NetworkStorageConstants.DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
+                0,
+                NetworkStorageConstants.MAX_UPDATE_CHECK_INTERVAL_HOURS);
+    }
+
+    public String getUpdateNotifyPermission() {
+        return config.getString("update-check.notify-permission", "");
     }
 
     public void reloadConfig() {

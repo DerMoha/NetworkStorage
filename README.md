@@ -56,3 +56,7 @@ Trust checks apply to terminals and wireless access. Physical storage chests are
 
 *   **Display:** The names of items in the terminal are always displayed in the language you have set in your Minecraft client (e.g., German, French, etc.).
 *   **Search:** The search function works with the internal, English material names (e.g., `diamond`, `stone`, `iron_ingot`) or with custom names you have given an item using an anvil. This means you must search in English, even if the items are displayed in your own language.
+
+## Contributing
+
+Found a bug or have a feature request? Just open an issue and I'll take a look.

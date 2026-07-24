@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.storage;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.util.ItemUtils;
+import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -28,6 +29,7 @@ public final class DefaultMovementEvents implements MovementEvents {
         } else {
             player.sendMessage(String.format(lang.getMessage("network.deposit.partial"), deposited, displayName, returned));
         }
+        player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7f, 1.2f);
     }
 
     @Override
@@ -47,6 +49,7 @@ public final class DefaultMovementEvents implements MovementEvents {
         } else if (result.returned() > 0) {
             player.sendMessage(lang.getMessage("terminal.inventory_full_returned"));
         }
+        player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7f, 0.9f);
     }
 
     @Override

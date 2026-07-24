@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Chest;
 import org.bukkit.block.Container;
@@ -11,6 +12,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,6 +35,7 @@ public class NetworkManager {
     private final File playerStateFile;
     private final Object renameLock = new Object();
     private final Object diskWriteLock = new Object();
+    private com.dermoha.networkstorage.storage.RollingBackupManager backupManager;
     private int networkSaveGeneration = 0;
     private int playerStateSaveGeneration = 0;
     private static final String GLOBAL_NETWORK_NAME = "Global";
@@ -44,6 +47,8 @@ public class NetworkManager {
         this.lang = plugin.getLanguageManager();
         this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
         this.playerStateFile = new File(plugin.getDataFolder(), "player-state.yml");
+        this.backupManager = new com.dermoha.networkstorage.storage.RollingBackupManager(plugin);
+        this.backupManager.initialize();
         ensureDataFileExists(networksFile, "networks.yml");
         ensureDataFileExists(playerStateFile, "player-state.yml");
         loadNetworks();
@@ -114,6 +119,29 @@ public class NetworkManager {
                             }
                         }
 
+                        ConfigurationSection timedTrustSection = netSection.getConfigurationSection("trusted-expiry");
+                        if (timedTrustSection != null) {
+                            long now = System.currentTimeMillis();
+                            for (String uuidString : timedTrustSection.getKeys(false)) {
+                                try {
+                                    UUID trustedId = UUID.fromString(uuidString);
+                                    long expiresAt = timedTrustSection.getLong(uuidString);
+                                    if (expiresAt > now) {
+                                        network.addTrustedPlayerWithExpiry(trustedId, expiresAt);
+                                    } else {
+                                        plugin.getLogger().info("Skipping expired trust for " + uuidString + " in network '" + networkName + "'.");
+                                    }
+                                } catch (IllegalArgumentException e) {
+                                    plugin.getLogger().warning("Skipping invalid trusted-expiry UUID '" + uuidString + "' in network '" + networkName + "'.");
+                                }
+                            }
+                        }
+
+                        String description = netSection.getString("description", "");
+                        if (description != null && !description.isEmpty()) {
+                            network.setDescription(description);
+                        }
+
                         // Load player stats
                         ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
                         if (statsSection != null) {
@@ -133,6 +161,7 @@ public class NetworkManager {
 
                         network.setDirty(false);
                         networks.put(networkName, network);
+                        recomputeNetworkTotal(network);
                         if (isGlobalMode && GLOBAL_NETWORK_NAME.equals(networkName)) {
                             globalNetworkLoaded = true;
                         }
@@ -169,6 +198,16 @@ public class NetworkManager {
                     || !Double.isFinite(location.getZ())) {
                 throw new IllegalArgumentException("invalid or unloaded world/coordinates");
             }
+            String worldName = location.getWorld().getName();
+            if (plugin.getServer().getWorld(worldName) == null) {
+                throw new IllegalArgumentException("world '" + worldName + "' is not registered on this server");
+            }
+            if (Math.abs(location.getX()) > 3.0E7
+                    || Math.abs(location.getZ()) > 3.0E7
+                    || location.getY() < plugin.getServer().getWorld(worldName).getMinHeight() - 1024
+                    || location.getY() > plugin.getServer().getWorld(worldName).getMaxHeight() + 1024) {
+                throw new IllegalArgumentException("coordinates out of world bounds");
+            }
             return location;
         } catch (Exception e) {
             plugin.getLogger().warning("Skipping invalid " + locationType + " location in network '" + networkName + "': " + e.getMessage());
@@ -189,6 +228,24 @@ public class NetworkManager {
                 locationIndex.put(loc, network);
             }
         }
+    }
+
+    private void recomputeNetworkTotal(Network network) {
+        long total = 0L;
+        for (Location location : network.getChestLocations()) {
+            if (!(location.getBlock().getState() instanceof org.bukkit.block.Chest chest)) {
+                continue;
+            }
+            if (location.getWorld() == null || !location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
+                continue;
+            }
+            for (ItemStack item : chest.getInventory().getContents()) {
+                if (item != null && item.getType() != Material.AIR) {
+                    total += item.getAmount();
+                }
+            }
+        }
+        network.setTotalStoredAmount(total);
     }
 
     private void loadPlayerState() {
@@ -360,6 +417,17 @@ public class NetworkManager {
 
             newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
 
+            Map<UUID, Long> timedTrusts = network.getTrustedPlayersWithExpiry();
+            if (!timedTrusts.isEmpty()) {
+                for (Map.Entry<UUID, Long> entry : timedTrusts.entrySet()) {
+                    newConfig.set(path + ".trusted-expiry." + entry.getKey().toString(), entry.getValue());
+                }
+            }
+
+            if (network.getDescription() != null && !network.getDescription().isEmpty()) {
+                newConfig.set(path + ".description", network.getDescription());
+            }
+
             for (PlayerStat stat : network.getPlayerStats().values()) {
                 String statPath = path + ".stats." + stat.getPlayerUUID().toString();
                 newConfig.set(statPath + ".name", stat.getPlayerName());
@@ -397,10 +465,16 @@ public class NetworkManager {
         synchronized (diskWriteLock) {
             networkSaveGeneration++;
             playerStateSaveGeneration++;
+            if (networksFile.length() > 0) {
+                backupManager.createBackup(networksFile);
+            }
             if (saveNetworksSnapshot(networksSnapshot)) {
                 for (Network network : savedNetworks) {
                     network.setDirty(false);
                 }
+            }
+            if (playerStateFile.exists() && playerStateFile.length() > 0) {
+                backupManager.createBackup(playerStateFile);
             }
             savePlayerStateSnapshot(playerStateSnapshot);
         }
@@ -548,6 +622,14 @@ public class NetworkManager {
 
     public Collection<Network> getAllNetworks() {
         return networks.values();
+    }
+
+    public Map<String, Network> getNetworks() {
+        return networks;
+    }
+
+    public Map<UUID, String> getSelectedWirelessNetworks() {
+        return selectedWirelessNetworks;
     }
 
     public Network getNetworkByLocation(Location location) {
@@ -752,6 +834,7 @@ public class NetworkManager {
         }
 
         for (Network network : networksToPurge) {
+            archiveDeletedNetworkStats(network.getName(), network);
             clearNetworkChestContents(network);
             resetNetworkInternal(network);
         }
@@ -771,6 +854,67 @@ public class NetworkManager {
         return networksToPurge.size();
     }
 
+    public synchronized boolean deleteNetwork(Player player, String networkName) {
+        if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            player.sendMessage(lang.getMessage("network.delete.global_mode"));
+            return false;
+        }
+        if (GLOBAL_NETWORK_NAME.equals(networkName)) {
+            player.sendMessage(lang.getMessage("network.delete.protected"));
+            return false;
+        }
+        Network network = networks.get(networkName);
+        if (network == null) {
+            player.sendMessage(String.format(lang.getMessage("network.delete.not_found"), networkName));
+            return false;
+        }
+        if (!network.getOwner().equals(player.getUniqueId())
+                && !plugin.getConfigManager().hasPrivilege(player, "networkstorage.admin")) {
+            player.sendMessage(lang.getMessage("network.delete.permission"));
+            return false;
+        }
+
+        archiveDeletedNetworkStats(networkName, network);
+        clearNetworkChestContents(network);
+        resetNetworkInternal(network);
+        networks.remove(networkName);
+
+        for (Map.Entry<UUID, String> entry : selectedNetworks.entrySet()) {
+            if (networkName.equals(entry.getValue())) {
+                entry.setValue(null);
+            }
+        }
+        selectedNetworks.values().removeIf(Objects::isNull);
+        for (Map.Entry<UUID, String> entry : selectedWirelessNetworks.entrySet()) {
+            if (networkName.equals(entry.getValue())) {
+                entry.setValue(null);
+            }
+        }
+        selectedWirelessNetworks.values().removeIf(Objects::isNull);
+
+        saveNetworks();
+        savePlayerState();
+        player.sendMessage(String.format(lang.getMessage("network.delete.success"), networkName));
+        return true;
+    }
+
+    private void archiveDeletedNetworkStats(String networkName, Network network) {
+        if (network.getPlayerStats().isEmpty()) {
+            return;
+        }
+        File archiveFile = new File(plugin.getDataFolder(), "deleted-networks.log");
+        try (java.io.FileWriter writer = new java.io.FileWriter(archiveFile, true)) {
+            writer.write("[" + new java.util.Date() + "] DELETED NETWORK: " + networkName + "\n");
+            for (java.util.Map.Entry<java.util.UUID, PlayerStat> entry : network.getPlayerStats().entrySet()) {
+                PlayerStat stat = entry.getValue();
+                writer.write("  - " + stat.getPlayerName() + " (" + entry.getKey() + "): deposited=" + stat.getItemsDeposited() + " withdrawn=" + stat.getItemsWithdrawn() + "\n");
+            }
+            writer.write("\n");
+        } catch (java.io.IOException e) {
+            plugin.getLogger().warning("Could not write to deleted-networks log: " + e.getMessage());
+        }
+    }
+
     private void clearNetworkChestContents(Network network) {
         for (Location location : network.getChestLocations()) {
             if (!(location.getBlock().getState() instanceof Container container)) {
@@ -779,6 +923,7 @@ public class NetworkManager {
             container.getInventory().clear();
             container.update();
         }
+        network.resetTotalStoredAmount();
     }
 
     public void resetNetwork(Network network) {

@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.storage;
 
 import com.dermoha.networkstorage.stats.PlayerStat;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Container;
@@ -13,7 +14,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Network {
 
+    public static final int MAX_DESCRIPTION_LENGTH = 128;
+
     private String name;
+    private String description = "";
+    private final Map<UUID, Long> trustedPlayersWithExpiry = new java.util.concurrent.ConcurrentHashMap<>();
     private final UUID owner;
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
@@ -25,9 +30,10 @@ public class Network {
     private final NetworkMovement movement;
     private transient boolean dirty = false;
 
-    private transient Map<ItemStack, Integer> itemCache;
-    private transient long itemCacheTime;
-    private static final long ITEM_CACHE_TTL_MS = 500;
+    private transient volatile Map<ItemStack, Integer> itemCache;
+    private transient volatile long itemCacheTime;
+    private static final long ITEM_CACHE_TTL_MS = NetworkStorageConstants.ITEM_CACHE_TTL_MS;
+    private final java.util.concurrent.atomic.AtomicLong totalStoredAmount = new java.util.concurrent.atomic.AtomicLong(0L);
 
     public Network(String name, UUID owner, NetworkAccessRules accessRules) {
         this(name, owner, accessRules, MovementEvents.NOOP);
@@ -56,6 +62,21 @@ public class Network {
 
     public void setName(String name) {
         this.name = name;
+        this.dirty = true;
+    }
+
+    public String getDescription() {
+        return description == null ? "" : description;
+    }
+
+    public void setDescription(String description) {
+        if (description == null) {
+            this.description = "";
+        } else {
+            this.description = description.length() > MAX_DESCRIPTION_LENGTH
+                    ? description.substring(0, MAX_DESCRIPTION_LENGTH)
+                    : description;
+        }
         this.dirty = true;
     }
 
@@ -163,6 +184,7 @@ public class Network {
             return true;
         }
         if (accessRules.isTrustSystemEnabled()) {
+            pruneExpiredTrusts();
             return trustedPlayers.contains(playerUUID);
         }
         return true;
@@ -174,18 +196,48 @@ public class Network {
 
     public void addTrustedPlayer(UUID playerUUID) {
         trustedPlayers.add(playerUUID);
+        trustedPlayersWithExpiry.remove(playerUUID);
+        this.dirty = true;
+    }
+
+    public void addTrustedPlayerWithExpiry(UUID playerUUID, long expiresAt) {
+        trustedPlayers.add(playerUUID);
+        trustedPlayersWithExpiry.put(playerUUID, expiresAt);
         this.dirty = true;
     }
 
     public void removeTrustedPlayer(UUID playerUUID) {
         trustedPlayers.remove(playerUUID);
+        trustedPlayersWithExpiry.remove(playerUUID);
         this.dirty = true;
+    }
+
+    public Map<UUID, Long> getTrustedPlayersWithExpiry() {
+        return new java.util.HashMap<>(trustedPlayersWithExpiry);
+    }
+
+    public void pruneExpiredTrusts() {
+        long now = System.currentTimeMillis();
+        boolean changed = false;
+        java.util.Iterator<java.util.Map.Entry<UUID, Long>> iterator = trustedPlayersWithExpiry.entrySet().iterator();
+        while (iterator.hasNext()) {
+            java.util.Map.Entry<UUID, Long> entry = iterator.next();
+            if (entry.getValue() <= now) {
+                trustedPlayers.remove(entry.getKey());
+                iterator.remove();
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.dirty = true;
+        }
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {
         long now = System.currentTimeMillis();
-        if (itemCache != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
-            return new HashMap<>(itemCache);
+        Map<ItemStack, Integer> cached = itemCache;
+        if (cached != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
+            return new HashMap<>(cached);
         }
 
         Map<ItemStack, Integer> networkItems = new HashMap<>();
@@ -199,8 +251,8 @@ public class Network {
             }
         }
 
-        itemCache = new HashMap<>(networkItems);
-        itemCacheTime = now;
+        this.itemCache = new HashMap<>(networkItems);
+        this.itemCacheTime = now;
         return networkItems;
     }
 
@@ -217,6 +269,22 @@ public class Network {
 
     public void invalidateItemCache() {
         this.itemCache = null;
+    }
+
+    public long getTotalStoredAmount() {
+        return totalStoredAmount.get();
+    }
+
+    public void adjustTotalStoredAmount(long delta) {
+        totalStoredAmount.addAndGet(delta);
+    }
+
+    public void resetTotalStoredAmount() {
+        totalStoredAmount.set(0L);
+    }
+
+    public void setTotalStoredAmount(long value) {
+        totalStoredAmount.set(Math.max(0L, value));
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
@@ -243,9 +311,13 @@ public class Network {
                 }
             }
         }
+        int actuallyRemoved = amount - remaining;
+        if (actuallyRemoved > 0) {
+            adjustTotalStoredAmount(-actuallyRemoved);
+        }
         invalidateItemCache();
         ItemStack result = itemToRemove.clone();
-        result.setAmount(amount - remaining);
+        result.setAmount(actuallyRemoved);
         return result;
     }
 
@@ -263,6 +335,11 @@ public class Network {
                     remaining = result.get(0);
                 }
             }
+        }
+        int originalAmount = itemToAdd.getAmount();
+        int added = remaining == null ? originalAmount : originalAmount - remaining.getAmount();
+        if (added > 0) {
+            adjustTotalStoredAmount(added);
         }
         invalidateItemCache();
         return remaining;
