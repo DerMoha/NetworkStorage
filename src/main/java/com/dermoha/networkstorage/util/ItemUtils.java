@@ -71,7 +71,7 @@ public final class ItemUtils {
                 if (!displayName.isEmpty()) {
                     displayName.append(" ");
                 }
-                displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1)).append(word.substring(1));
+                displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
             }
         }
         return displayName.toString();
