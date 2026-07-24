@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.1.2.build.74-stable</paper.version>
         <bstats.version>3.2.1</bstats.version>
-        <junit.jupiter.version>5.11.4</junit.jupiter.version>
+        <junit.jupiter.version>6.1.2</junit.jupiter.version>
         <sqlite-jdbc.version>3.46.0.0</sqlite-jdbc.version>
         <placeholderapi.version>2.11.6</placeholderapi.version>
     </properties>
@@ -24,6 +24,11 @@
     <build>
         <defaultGoal>clean package</defaultGoal>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
