@@ -18,7 +18,7 @@
         <bstats.version>3.2.1</bstats.version>
         <junit.jupiter.version>6.1.2</junit.jupiter.version>
         <sqlite-jdbc.version>3.46.0.0</sqlite-jdbc.version>
-        <placeholderapi.version>2.11.6</placeholderapi.version>
+        <placeholderapi.version>2.12.3</placeholderapi.version>
     </properties>
 
     <build>
@@ -78,7 +78,7 @@
         </repository>
         <repository>
             <id>placeholderapi</id>
-            <url>https://repo.extendthereach.com/content/repositories/placeholderapi/</url>
+            <url>https://repo.helpch.at/releases/</url>
         </repository>
     </repositories>
 
@@ -91,7 +91,7 @@
         </dependency>
         <dependency>
             <groupId>me.clip</groupId>
-            <artifactId>PlaceholderAPI</artifactId>
+            <artifactId>placeholderapi</artifactId>
             <version>${placeholderapi.version}</version>
             <scope>provided</scope>
         </dependency>
