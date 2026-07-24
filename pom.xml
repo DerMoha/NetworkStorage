@@ -18,6 +18,7 @@
         <bstats.version>3.2.1</bstats.version>
         <junit.jupiter.version>5.11.4</junit.jupiter.version>
         <sqlite-jdbc.version>3.46.0.0</sqlite-jdbc.version>
+        <placeholderapi.version>2.11.6</placeholderapi.version>
     </properties>
 
     <build>
@@ -70,6 +71,10 @@
             <id>papermc-repo</id>
             <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
+        <repository>
+            <id>placeholderapi</id>
+            <url>https://repo.extendthereach.com/content/repositories/placeholderapi/</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -77,6 +82,12 @@
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
             <version>${paper.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>me.clip</groupId>
+            <artifactId>PlaceholderAPI</artifactId>
+            <version>${placeholderapi.version}</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
