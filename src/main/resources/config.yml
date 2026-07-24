@@ -32,6 +32,8 @@ enable-trust-system: true
 # Prevent players from directly opening tracked storage/sender chests unless they can access
 # that network. Protection plugins still run first and can deny interaction independently.
 protect-network-containers: true
+enable-hopper-integration: true
+enable-comparator-output: true
 
 # Item materials used for plugin tools. Must be valid Bukkit Material names.
 wand-material: BLAZE_ROD
@@ -43,6 +45,16 @@ terminal-block-type: CHEST
 
 # Langauge for Plugin-messages (de or en)
 language: en
+
+# Periodic update checks against Modrinth. OPs (and players with
+# notify-permission if set) are notified in chat on join, with the cached
+# result. interval-hours=0 disables the periodic scheduler (only checks on
+# /networkstorage update and on plugin enable).
+update-check:
+  enabled: true
+  notify-admins: true
+  interval-hours: 6
+  notify-permission: ""
 
 # Custom model data values used for optional resource-pack overrides.
 # Set any entry to a blank value to disable that override.

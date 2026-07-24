@@ -126,4 +126,13 @@ public final class ItemUtils {
 
         return displayName;
     }
+    public static String formatNumber(long number) {
+        if (number >= 1_000_000) {
+            return String.format("%.1fM", number / 1_000_000.0);
+        }
+        if (number >= 1_000) {
+            return String.format("%.1fK", number / 1_000.0);
+        }
+        return String.valueOf(number);
+    }
 }

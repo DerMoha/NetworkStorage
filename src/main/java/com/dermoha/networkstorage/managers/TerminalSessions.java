@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.entity.Player;
@@ -104,7 +105,7 @@ public class TerminalSessions implements Listener {
                 player.sendMessage(lang.getMessage("search.timeout"));
             }
             searchTaskIds.remove(playerId);
-        }, 600L).getTaskId();
+        }, NetworkStorageConstants.SEARCH_TIMEOUT_TICKS).getTaskId();
         searchTaskIds.put(playerId, taskId);
     }
 

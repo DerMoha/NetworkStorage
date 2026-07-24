@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.ConfigEditorGUI;
 import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
@@ -54,6 +55,14 @@ public class InventoryInteractionListener implements Listener {
             event.setCancelled(true);
             if (rawSlot >= 0 && rawSlot < topSize) {
                 statsGUI.handleClick(event.getSlot());
+            }
+            return;
+        }
+
+        if (holder instanceof ConfigEditorGUI configEditor) {
+            event.setCancelled(true);
+            if (rawSlot >= 0 && rawSlot < topSize) {
+                configEditor.handleClick(event);
             }
             return;
         }

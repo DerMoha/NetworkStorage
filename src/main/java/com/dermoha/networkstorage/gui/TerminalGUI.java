@@ -38,6 +38,7 @@ public class TerminalGUI implements InventoryHolder {
     private static final int SLOT_SORT = 47;
     private static final int SLOT_INFO = 48;
     private static final int SLOT_STATS = 49;
+    private static final int SLOT_DEPOSIT_ALL = 50;
     private static final int SLOT_REFRESH = 52;
     private static final int SLOT_NEXT_PAGE = 53;
 
@@ -126,7 +127,13 @@ public class TerminalGUI implements InventoryHolder {
                 break;
         }
 
-        int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
+        int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
+        if (currentPage >= totalPages) {
+            currentPage = totalPages - 1;
+        }
+        if (currentPage < 0) {
+            currentPage = 0;
+        }
         int startIndex = currentPage * ITEMS_PER_PAGE;
         int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.size());
 
@@ -215,6 +222,17 @@ public class TerminalGUI implements InventoryHolder {
         );
         inventory.setItem(SLOT_REFRESH, refreshButton);
 
+        ItemStack depositAllButton = createGuiControlItem(
+                Material.HOPPER,
+                lang.getMessage("terminal.deposit_all.title"),
+                Arrays.asList(
+                        lang.getMessage("terminal.deposit_all.lore1"),
+                        lang.getMessage("terminal.deposit_all.lore2")
+                ),
+                "custom-model-data.gui.terminal.deposit-all"
+        );
+        inventory.setItem(SLOT_DEPOSIT_ALL, depositAllButton);
+
         if (page < totalPages - 1) {
             ItemStack nextButton = createGuiControlItem(
                     Material.ARROW,
@@ -294,13 +312,7 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public String formatNumber(long number) {
-        if (number >= 1000000) {
-            return String.format("%.1fM", number / 1000000.0);
-        } else if (number >= 1000) {
-            return String.format("%.1fK", number / 1000.0);
-        } else {
-            return String.valueOf(number);
-        }
+        return ItemUtils.formatNumber(number);
     }
 
     public void handleClick(int slot, boolean isRightClick, boolean isShiftClick, boolean isLeftClick) {
@@ -315,7 +327,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_NEXT_PAGE) {
-            int totalPages = (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE);
+            int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
             if (currentPage < totalPages - 1) {
                 currentPage++;
                 updateInventory();
@@ -353,6 +365,11 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
+        if (slot == SLOT_DEPOSIT_ALL) {
+            handleDepositAll();
+            return;
+        }
+
         if (slot >= 0 && slot < ITEMS_PER_PAGE) {
             int itemIndex = (currentPage * ITEMS_PER_PAGE) + slot;
             if (itemIndex < sortedItems.size()) {
@@ -378,6 +395,32 @@ public class TerminalGUI implements InventoryHolder {
 
     private void handleItemExtraction(ItemStack itemType, int amountToTake) {
         network.getMovement().withdrawToPlayer(player, itemType, amountToTake, this);
+    }
+
+    private void handleDepositAll() {
+        if (!ensureAccess()) {
+            return;
+        }
+        int deposited = 0;
+        int slotsScanned = 0;
+        org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+        for (int slot = 0; slot < inv.getSize(); slot++) {
+            ItemStack stack = inv.getItem(slot);
+            if (stack == null || stack.getType() == Material.AIR) {
+                continue;
+            }
+            slotsScanned++;
+            int originalAmount = stack.getAmount();
+            com.dermoha.networkstorage.storage.NetworkMovement.DepositResult result =
+                    network.getMovement().depositFromPlayerToTerminal(player, new com.dermoha.networkstorage.storage.NetworkMovement.ItemSource.InvSlotSource(player, slot), this);
+            deposited += result.deposited();
+        }
+        if (deposited > 0) {
+            player.sendMessage(String.format(lang.getMessage("terminal.deposit_all.summary"), deposited, slotsScanned));
+        } else {
+            player.sendMessage(lang.getMessage("terminal.deposit_all.nothing"));
+        }
+        updateInventory();
     }
 
     private void cycleSortType() {

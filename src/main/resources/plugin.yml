@@ -4,6 +4,7 @@ main: com.dermoha.networkstorage.NetworkStoragePlugin
 api-version: 1.21
 author: DerMoha
 description: A networked storage system for Minecraft servers, make sharing storage easy!
+softdepend: [PlaceholderAPI]
 
 commands:
   storage:
@@ -12,11 +13,11 @@ commands:
     aliases: [ns, netstorage]
   network:
     description: Manages networks
-    usage: /<command> [create|edit|rename|select|list]
+    usage: /<command> [create|edit|rename|select|list|delete|confirm-delete|description]
     aliases: [net]
   networkstorage:
     description: Admin commands for NetworkStorage
-    usage: /<command> [reload]
+    usage: /<command> [reload|list|info|inspect|config|update]
 
 permissions:
   networkstorage.*:

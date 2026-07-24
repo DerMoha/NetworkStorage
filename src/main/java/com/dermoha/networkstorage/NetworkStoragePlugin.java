@@ -6,8 +6,11 @@ import com.dermoha.networkstorage.gui.NetworkSelectGUI;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
 import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
+import com.dermoha.networkstorage.listeners.ComparatorOutputListener;
+import com.dermoha.networkstorage.listeners.HopperIntegrationListener;
 import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
 import com.dermoha.networkstorage.listeners.NetworkContainerListener;
+import com.dermoha.networkstorage.listeners.UpdateJoinListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
@@ -17,6 +20,7 @@ import com.dermoha.networkstorage.managers.TerminalSessions;
 import com.dermoha.networkstorage.storage.DefaultMovementEvents;
 import com.dermoha.networkstorage.storage.MovementEvents;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
@@ -39,6 +43,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.Iterator;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.ToIntFunction;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -55,9 +61,23 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private WirelessTerminalListener wirelessTerminalListener;
     private StorageCommand storageCommand;
     private NetworkCommand networkCommand;
+    private com.dermoha.networkstorage.api.NetworkStorageService apiService;
+    private HopperIntegrationListener hopperIntegrationListener;
+    private ComparatorOutputListener comparatorOutputListener;
+    private com.dermoha.networkstorage.integrations.PlaceholderAPIHook placeholderAPIHook;
+    private com.dermoha.networkstorage.UpdateChecker updateChecker;
+    private com.dermoha.networkstorage.listeners.UpdateJoinListener updateJoinListener;
+    private Metrics metrics;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
+    private int trustExpiryTaskId = -1;
+    private int updateCheckTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
+    private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = NetworkStorageConstants.BSTATS_STORED_ITEM_CACHE_TTL_MS;
+
+    private volatile long cachedStoredItemCount = 0L;
+    private volatile long cachedStoredItemCountAtMs = 0L;
+    private final Object storedItemCountCacheLock = new Object();
 
     @Override
     public void onEnable() {
@@ -67,7 +87,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         registerListeners();
         registerRecipes();
         startTasks();
-        checkForUpdates();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -100,14 +119,26 @@ public class NetworkStoragePlugin extends JavaPlugin {
         languageManager = new LanguageManager(this, configManager.getLanguage());
         movementEvents = new DefaultMovementEvents(this, languageManager);
         networkManager = new NetworkManager(this);
+        apiService = new com.dermoha.networkstorage.api.DefaultNetworkStorageService(this);
+        placeholderAPIHook = new com.dermoha.networkstorage.integrations.PlaceholderAPIHook(this);
+        updateChecker = new com.dermoha.networkstorage.UpdateChecker(this);
     }
 
     private void initializeMetrics() {
-        Metrics metrics = new Metrics(this, BSTATS_PLUGIN_ID);
+        metrics = new Metrics(this, BSTATS_PLUGIN_ID);
         metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name().toLowerCase()));
         metrics.addCustomChart(new SingleLineChart("tracked_chests", this::getTrackedChestCount));
-        metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", this::getTrackedChestCountDistribution));
+        metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", () -> Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1)));
         metrics.addCustomChart(new SingleLineChart("stored_items", this::getStoredItemCount));
+        metrics.addCustomChart(new AdvancedPie("networks_per_server", () -> Map.of(networksBucket(networkManager.getNetworks().size()), 1)));
+        metrics.addCustomChart(new SingleLineChart("wireless_terminal_users", () -> networkManager.getSelectedWirelessNetworks().size()));
+        metrics.addCustomChart(new SingleLineChart("terminal_count", () -> sumN(n -> n.getTerminalLocations().size())));
+        metrics.addCustomChart(new SingleLineChart("sender_chest_count", () -> sumN(n -> n.getSenderChestLocations().size())));
+        metrics.addCustomChart(new SingleLineChart("trusted_players_total", () -> sumN(n -> n.getTrustedPlayers().size())));
+        metrics.addCustomChart(new SimplePie("permissions_enabled", () -> configManager.isPermissionsEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("trust_system_enabled", () -> configManager.isTrustSystemEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("hopper_integration_enabled", () -> configManager.isHopperIntegrationEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("update_status", () -> updateChecker.getStatus()));
     }
 
     private int getTrackedChestCount() {
@@ -119,40 +150,76 @@ public class NetworkStoragePlugin extends JavaPlugin {
         return trackedChestCount;
     }
 
-    private Map<String, Integer> getTrackedChestCountDistribution() {
-        return Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1);
+    private int sumN(ToIntFunction<Network> f) {
+        int total = 0;
+        for (Network network : networkManager.getAllNetworks()) {
+            total += f.applyAsInt(network);
+        }
+        return total;
     }
 
-    private String getTrackedChestCountBucket(int trackedChestCount) {
-        if (trackedChestCount == 0) {
+    private String getTrackedChestCountBucket(int n) {
+        if (n == 0) {
             return "0";
         }
-        if (trackedChestCount < 10) {
+        if (n < 10) {
             return "1-9";
         }
-        if (trackedChestCount < 25) {
+        if (n < 25) {
             return "10-24";
         }
-        if (trackedChestCount < 50) {
+        if (n < 50) {
             return "25-49";
         }
-        if (trackedChestCount < 100) {
+        if (n < 100) {
             return "50-99";
         }
-        if (trackedChestCount < 250) {
-            return "100-249";
+        return "100+";
+    }
+
+    private String networksBucket(int n) {
+        if (n == 0) {
+            return "0";
         }
-        return "250+";
+        if (n == 1) {
+            return "1";
+        }
+        if (n <= 5) {
+            return "2-5";
+        }
+        if (n <= 15) {
+            return "6-15";
+        }
+        if (n <= 50) {
+            return "16-50";
+        }
+        return "50+";
     }
 
     private int getStoredItemCount() {
-        long storedItemCount = 0;
-        for (Network network : networkManager.getAllNetworks()) {
-            for (int amount : network.getNetworkItems().values()) {
-                storedItemCount += amount;
-            }
+        long now = System.currentTimeMillis();
+        long cachedAt;
+        long cached;
+        synchronized (storedItemCountCacheLock) {
+            cachedAt = cachedStoredItemCountAtMs;
+            cached = cachedStoredItemCount;
         }
-        return (int) Math.min(Integer.MAX_VALUE, storedItemCount);
+        if (cachedAt > 0 && (now - cachedAt) < BSTATS_STORED_ITEM_CACHE_TTL_MS) {
+            return (int) Math.min(Integer.MAX_VALUE, cached);
+        }
+        return refreshStoredItemCountCache();
+    }
+
+    private int refreshStoredItemCountCache() {
+        long total = 0L;
+        for (Network network : networkManager.getAllNetworks()) {
+            total += network.getTotalStoredAmount();
+        }
+        synchronized (storedItemCountCacheLock) {
+            cachedStoredItemCount = total;
+            cachedStoredItemCountAtMs = System.currentTimeMillis();
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
     }
 
     private void registerCommands() {
@@ -165,8 +232,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getCommand("network").setTabCompleter(networkCommand);
         PluginCommand networkStorageCommand = getCommand("networkstorage");
         networkStorageCommand.setExecutor((sender, command, label, args) -> {
-            if (args.length == 0 || !args[0].equalsIgnoreCase("reload")) {
-                sender.sendMessage("§cUsage: /networkstorage reload");
+            if (args.length == 0) {
+                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
                 return true;
             }
 
@@ -175,11 +242,119 @@ public class NetworkStoragePlugin extends JavaPlugin {
                 return true;
             }
 
-            sender.sendMessage(languageManager.getMessage("reload.start"));
-            reload();
-            sender.sendMessage(languageManager.getMessage("reload.success"));
+            String sub = args[0].toLowerCase();
+            switch (sub) {
+                case "reload":
+                    sender.sendMessage(languageManager.getMessage("reload.start"));
+                    reload();
+                    sender.sendMessage(languageManager.getMessage("reload.success"));
+                    break;
+                case "list":
+                    handleAdminList(sender);
+                    break;
+                case "info":
+                    handleAdminInfo(sender, args);
+                    break;
+                case "inspect":
+                    handleAdminInspect(sender, args);
+                    break;
+                case "config":
+                    if (!(sender instanceof Player)) {
+                        sender.sendMessage("§cConfig editor requires a player.");
+                        return true;
+                    }
+                    new com.dermoha.networkstorage.gui.ConfigEditorGUI(this).open((Player) sender);
+                    break;
+                case "update":
+                    handleAdminUpdate(sender);
+                    break;
+                default:
+                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
+            }
             return true;
         });
+    }
+
+    private void handleAdminList(org.bukkit.command.CommandSender sender) {
+        sender.sendMessage("§6=== All Networks ===");
+        for (Network network : networkManager.getAllNetworks()) {
+            sender.sendMessage(String.format("§e%s §7(owner: §f%s§7, chests: §f%d§7, terminals: §f%d§7, senders: §f%d§7)",
+                    network.getName(),
+                    networkManager.getNetworkOwnerName(network),
+                    network.getChestLocations().size(),
+                    network.getTerminalLocations().size(),
+                    network.getSenderChestLocations().size()));
+        }
+    }
+
+    private void handleAdminUpdate(org.bukkit.command.CommandSender sender) {
+        if (updateChecker == null) {
+            sender.sendMessage("§c[NetworkStorage] Update checker is not initialized.");
+            return;
+        }
+        updateChecker.reportChecking(sender);
+        CompletableFuture<UpdateChecker.Result> future = updateChecker.checkNow();
+        future.whenComplete((result, error) -> Bukkit.getScheduler().runTask(this, () -> {
+            if (error != null) {
+                sender.sendMessage("§c[NetworkStorage] Update check failed: " + error.getMessage());
+                return;
+            }
+            if (result == null) {
+                sender.sendMessage("§c[NetworkStorage] Update check returned no result.");
+                return;
+            }
+            if (result.getStatus() == UpdateChecker.Status.DISABLED) {
+                sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
+                return;
+            }
+            updateChecker.reportManualResult(sender);
+        }));
+    }
+
+    private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /networkstorage info <network>");
+            return;
+        }
+        Network network = networkManager.getNetwork(args[1]);
+        if (network == null) {
+            sender.sendMessage("§cNetwork not found: " + args[1]);
+            return;
+        }
+        sender.sendMessage("§6=== Network " + network.getName() + " ===");
+        sender.sendMessage("§eOwner: §f" + networkManager.getNetworkOwnerName(network));
+        sender.sendMessage("§eChests: §f" + network.getChestLocations().size());
+        sender.sendMessage("§eTerminals: §f" + network.getTerminalLocations().size());
+        sender.sendMessage("§eSender chests: §f" + network.getSenderChestLocations().size());
+        sender.sendMessage("§eTrusted: §f" + network.getTrustedPlayers().size());
+        sender.sendMessage("§eDescription: §f" + (network.getDescription().isEmpty() ? "(none)" : network.getDescription()));
+        sender.sendMessage("§eStored items: §f" + network.getTotalStoredAmount());
+    }
+
+    private void handleAdminInspect(org.bukkit.command.CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage("§cUsage: /networkstorage inspect <network>");
+            return;
+        }
+        Network network = networkManager.getNetwork(args[1]);
+        if (network == null) {
+            sender.sendMessage("§cNetwork not found: " + args[1]);
+            return;
+        }
+        sender.sendMessage("§6=== Locations for " + network.getName() + " ===");
+        for (org.bukkit.Location loc : network.getChestLocations()) {
+            sender.sendMessage("§7Chest: §f" + formatLocation(loc));
+        }
+        for (org.bukkit.Location loc : network.getTerminalLocations()) {
+            sender.sendMessage("§bTerminal: §f" + formatLocation(loc));
+        }
+        for (org.bukkit.Location loc : network.getSenderChestLocations()) {
+            sender.sendMessage("§aSender: §f" + formatLocation(loc));
+        }
+    }
+
+    private String formatLocation(org.bukkit.Location loc) {
+        return loc.getWorld().getName() + " " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
     }
 
     private void registerListeners() {
@@ -188,21 +363,48 @@ public class NetworkStoragePlugin extends JavaPlugin {
         inventoryInteractionListener = new InventoryInteractionListener(this);
         wandListener = new WandListener(this);
         wirelessTerminalListener = new WirelessTerminalListener(this);
+        hopperIntegrationListener = new HopperIntegrationListener(this);
+        comparatorOutputListener = new ComparatorOutputListener(this);
+        updateJoinListener = new UpdateJoinListener(this, updateChecker);
 
         getServer().getPluginManager().registerEvents(terminalSessions, this);
         getServer().getPluginManager().registerEvents(networkContainerListener, this);
         getServer().getPluginManager().registerEvents(inventoryInteractionListener, this);
         getServer().getPluginManager().registerEvents(wandListener, this);
         getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
+        getServer().getPluginManager().registerEvents(hopperIntegrationListener, this);
+        getServer().getPluginManager().registerEvents(comparatorOutputListener, this);
+        getServer().getPluginManager().registerEvents(updateJoinListener, this);
     }
 
     private void startTasks() {
         startSenderChestTask();
         startAutoSaveTask();
+        startTrustExpiryTask();
+        startUpdateChecker();
     }
 
-    private void checkForUpdates() {
-        new UpdateChecker(this).checkForUpdates();
+    private void startUpdateChecker() {
+        if (updateChecker == null) {
+            return;
+        }
+        updateChecker.checkNow();
+        if (updateCheckTaskId != -1) {
+            return;
+        }
+        int intervalHours = configManager.getUpdateCheckIntervalHours();
+        if (intervalHours <= 0) {
+            getLogger().info("Update check periodic re-check is disabled (interval-hours=0).");
+            return;
+        }
+        long intervalTicks = (long) intervalHours * NetworkStorageConstants.TICKS_PER_HOUR;
+        updateCheckTaskId = getServer().getScheduler().runTaskTimerAsynchronously(
+                this,
+                () -> updateChecker.checkNow(),
+                intervalTicks,
+                intervalTicks
+        ).getTaskId();
+        getLogger().info("Update check scheduled every " + intervalHours + " hour(s).");
     }
 
     private void unregisterRuntimeComponents() {
@@ -226,6 +428,18 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (wirelessTerminalListener != null) {
             HandlerList.unregisterAll(wirelessTerminalListener);
             wirelessTerminalListener = null;
+        }
+        if (hopperIntegrationListener != null) {
+            HandlerList.unregisterAll(hopperIntegrationListener);
+            hopperIntegrationListener = null;
+        }
+        if (comparatorOutputListener != null) {
+            HandlerList.unregisterAll(comparatorOutputListener);
+            comparatorOutputListener = null;
+        }
+        if (updateJoinListener != null) {
+            HandlerList.unregisterAll(updateJoinListener);
+            updateJoinListener = null;
         }
     }
 
@@ -258,6 +472,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (autoSaveTaskId != -1) {
             getServer().getScheduler().cancelTask(autoSaveTaskId);
             autoSaveTaskId = -1;
+        }
+        if (trustExpiryTaskId != -1) {
+            getServer().getScheduler().cancelTask(trustExpiryTaskId);
+            trustExpiryTaskId = -1;
+        }
+        if (updateCheckTaskId != -1) {
+            getServer().getScheduler().cancelTask(updateCheckTaskId);
+            updateCheckTaskId = -1;
         }
     }
 
@@ -431,6 +653,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
+    private void startTrustExpiryTask() {
+        trustExpiryTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
+            for (Network network : networkManager.getAllNetworks()) {
+                network.pruneExpiredTrusts();
+            }
+        }, 1200L, 1200L).getTaskId();
+    }
+
     public NetworkManager getNetworkManager() {
         return networkManager;
     }
@@ -453,5 +683,17 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public WirelessTerminalListener getWirelessTerminalListener() {
         return wirelessTerminalListener;
+    }
+
+    public com.dermoha.networkstorage.api.NetworkStorageService getApiService() {
+        return apiService;
+    }
+
+    public com.dermoha.networkstorage.integrations.PlaceholderAPIHook getPlaceholderAPIHook() {
+        return placeholderAPIHook;
+    }
+
+    public com.dermoha.networkstorage.UpdateChecker getUpdateChecker() {
+        return updateChecker;
     }
 }
