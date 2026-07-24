@@ -10,6 +10,7 @@ import com.dermoha.networkstorage.listeners.ComparatorOutputListener;
 import com.dermoha.networkstorage.listeners.HopperIntegrationListener;
 import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
 import com.dermoha.networkstorage.listeners.NetworkContainerListener;
+import com.dermoha.networkstorage.listeners.UpdateJoinListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
@@ -42,6 +43,8 @@ import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.Iterator;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.ToIntFunction;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
@@ -62,9 +65,12 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private HopperIntegrationListener hopperIntegrationListener;
     private ComparatorOutputListener comparatorOutputListener;
     private com.dermoha.networkstorage.integrations.PlaceholderAPIHook placeholderAPIHook;
+    private com.dermoha.networkstorage.UpdateChecker updateChecker;
+    private com.dermoha.networkstorage.listeners.UpdateJoinListener updateJoinListener;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private int trustExpiryTaskId = -1;
+    private int updateCheckTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
     private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = NetworkStorageConstants.BSTATS_STORED_ITEM_CACHE_TTL_MS;
 
@@ -80,7 +86,6 @@ public class NetworkStoragePlugin extends JavaPlugin {
         registerListeners();
         registerRecipes();
         startTasks();
-        checkForUpdates();
 
         getLogger().info("NetworkStorage Plugin has been enabled!");
     }
@@ -115,6 +120,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         networkManager = new NetworkManager(this);
         apiService = new com.dermoha.networkstorage.api.DefaultNetworkStorageService(this);
         placeholderAPIHook = new com.dermoha.networkstorage.integrations.PlaceholderAPIHook(this);
+        updateChecker = new com.dermoha.networkstorage.UpdateChecker(this);
     }
 
     private void initializeMetrics() {
@@ -197,7 +203,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         PluginCommand networkStorageCommand = getCommand("networkstorage");
         networkStorageCommand.setExecutor((sender, command, label, args) -> {
             if (args.length == 0) {
-                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect>");
+                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
                 return true;
             }
 
@@ -229,8 +235,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     }
                     new com.dermoha.networkstorage.gui.ConfigEditorGUI(this).open((Player) sender);
                     break;
+                case "update":
+                    handleAdminUpdate(sender);
+                    break;
                 default:
-                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config>");
+                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
             }
             return true;
         });
@@ -246,6 +255,30 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     network.getTerminalLocations().size(),
                     network.getSenderChestLocations().size()));
         }
+    }
+
+    private void handleAdminUpdate(org.bukkit.command.CommandSender sender) {
+        if (updateChecker == null) {
+            sender.sendMessage("§c[NetworkStorage] Update checker is not initialized.");
+            return;
+        }
+        updateChecker.reportChecking(sender);
+        CompletableFuture<UpdateChecker.Result> future = updateChecker.checkNow();
+        future.whenComplete((result, error) -> Bukkit.getScheduler().runTask(this, () -> {
+            if (error != null) {
+                sender.sendMessage("§c[NetworkStorage] Update check failed: " + error.getMessage());
+                return;
+            }
+            if (result == null) {
+                sender.sendMessage("§c[NetworkStorage] Update check returned no result.");
+                return;
+            }
+            if (result.getStatus() == UpdateChecker.Status.DISABLED) {
+                sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
+                return;
+            }
+            updateChecker.reportManualResult(sender);
+        }));
     }
 
     private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
@@ -302,6 +335,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         wirelessTerminalListener = new WirelessTerminalListener(this);
         hopperIntegrationListener = new HopperIntegrationListener(this);
         comparatorOutputListener = new ComparatorOutputListener(this);
+        updateJoinListener = new UpdateJoinListener(this, updateChecker);
 
         getServer().getPluginManager().registerEvents(terminalSessions, this);
         getServer().getPluginManager().registerEvents(networkContainerListener, this);
@@ -310,16 +344,37 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(wirelessTerminalListener, this);
         getServer().getPluginManager().registerEvents(hopperIntegrationListener, this);
         getServer().getPluginManager().registerEvents(comparatorOutputListener, this);
+        getServer().getPluginManager().registerEvents(updateJoinListener, this);
     }
 
     private void startTasks() {
         startSenderChestTask();
         startAutoSaveTask();
         startTrustExpiryTask();
+        startUpdateChecker();
     }
 
-    private void checkForUpdates() {
-        new UpdateChecker(this).checkForUpdates();
+    private void startUpdateChecker() {
+        if (updateChecker == null) {
+            return;
+        }
+        updateChecker.checkNow();
+        if (updateCheckTaskId != -1) {
+            return;
+        }
+        int intervalHours = configManager.getUpdateCheckIntervalHours();
+        if (intervalHours <= 0) {
+            getLogger().info("Update check periodic re-check is disabled (interval-hours=0).");
+            return;
+        }
+        long intervalTicks = (long) intervalHours * NetworkStorageConstants.TICKS_PER_HOUR;
+        updateCheckTaskId = getServer().getScheduler().runTaskTimerAsynchronously(
+                this,
+                () -> updateChecker.checkNow(),
+                intervalTicks,
+                intervalTicks
+        ).getTaskId();
+        getLogger().info("Update check scheduled every " + intervalHours + " hour(s).");
     }
 
     private void unregisterRuntimeComponents() {
@@ -351,6 +406,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (comparatorOutputListener != null) {
             HandlerList.unregisterAll(comparatorOutputListener);
             comparatorOutputListener = null;
+        }
+        if (updateJoinListener != null) {
+            HandlerList.unregisterAll(updateJoinListener);
+            updateJoinListener = null;
         }
     }
 
@@ -387,6 +446,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (trustExpiryTaskId != -1) {
             getServer().getScheduler().cancelTask(trustExpiryTaskId);
             trustExpiryTaskId = -1;
+        }
+        if (updateCheckTaskId != -1) {
+            getServer().getScheduler().cancelTask(updateCheckTaskId);
+            updateCheckTaskId = -1;
         }
     }
 
@@ -598,5 +661,9 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     public com.dermoha.networkstorage.integrations.PlaceholderAPIHook getPlaceholderAPIHook() {
         return placeholderAPIHook;
+    }
+
+    public com.dermoha.networkstorage.UpdateChecker getUpdateChecker() {
+        return updateChecker;
     }
 }
