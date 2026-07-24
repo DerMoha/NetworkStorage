@@ -623,6 +623,14 @@ public class NetworkManager {
         return networks.values();
     }
 
+    public Map<String, Network> getNetworks() {
+        return networks;
+    }
+
+    public Map<UUID, String> getSelectedWirelessNetworks() {
+        return selectedWirelessNetworks;
+    }
+
     public Network getNetworkByLocation(Location location) {
         Location normalizedLocation = getNormalizedLocation(location);
 

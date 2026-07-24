@@ -67,6 +67,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private com.dermoha.networkstorage.integrations.PlaceholderAPIHook placeholderAPIHook;
     private com.dermoha.networkstorage.UpdateChecker updateChecker;
     private com.dermoha.networkstorage.listeners.UpdateJoinListener updateJoinListener;
+    private Metrics metrics;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private int trustExpiryTaskId = -1;
@@ -124,11 +125,20 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private void initializeMetrics() {
-        Metrics metrics = new Metrics(this, BSTATS_PLUGIN_ID);
+        metrics = new Metrics(this, BSTATS_PLUGIN_ID);
         metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name().toLowerCase()));
         metrics.addCustomChart(new SingleLineChart("tracked_chests", this::getTrackedChestCount));
-        metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", this::getTrackedChestCountDistribution));
+        metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", () -> Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1)));
         metrics.addCustomChart(new SingleLineChart("stored_items", this::getStoredItemCount));
+        metrics.addCustomChart(new AdvancedPie("networks_per_server", () -> Map.of(networksBucket(networkManager.getNetworks().size()), 1)));
+        metrics.addCustomChart(new SingleLineChart("wireless_terminal_users", () -> networkManager.getSelectedWirelessNetworks().size()));
+        metrics.addCustomChart(new SingleLineChart("terminal_count", () -> sumN(n -> n.getTerminalLocations().size())));
+        metrics.addCustomChart(new SingleLineChart("sender_chest_count", () -> sumN(n -> n.getSenderChestLocations().size())));
+        metrics.addCustomChart(new SingleLineChart("trusted_players_total", () -> sumN(n -> n.getTrustedPlayers().size())));
+        metrics.addCustomChart(new SimplePie("permissions_enabled", () -> configManager.isPermissionsEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("trust_system_enabled", () -> configManager.isTrustSystemEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("hopper_integration_enabled", () -> configManager.isHopperIntegrationEnabled() ? "true" : "false"));
+        metrics.addCustomChart(new SimplePie("update_status", () -> updateChecker.getStatus()));
     }
 
     private int getTrackedChestCount() {
@@ -140,30 +150,50 @@ public class NetworkStoragePlugin extends JavaPlugin {
         return trackedChestCount;
     }
 
-    private Map<String, Integer> getTrackedChestCountDistribution() {
-        return Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1);
+    private int sumN(ToIntFunction<Network> f) {
+        int total = 0;
+        for (Network network : networkManager.getAllNetworks()) {
+            total += f.applyAsInt(network);
+        }
+        return total;
     }
 
-    private String getTrackedChestCountBucket(int trackedChestCount) {
-        if (trackedChestCount == 0) {
+    private String getTrackedChestCountBucket(int n) {
+        if (n == 0) {
             return "0";
         }
-        if (trackedChestCount < 10) {
+        if (n < 10) {
             return "1-9";
         }
-        if (trackedChestCount < 25) {
+        if (n < 25) {
             return "10-24";
         }
-        if (trackedChestCount < 50) {
+        if (n < 50) {
             return "25-49";
         }
-        if (trackedChestCount < 100) {
+        if (n < 100) {
             return "50-99";
         }
-        if (trackedChestCount < 250) {
-            return "100-249";
+        return "100+";
+    }
+
+    private String networksBucket(int n) {
+        if (n == 0) {
+            return "0";
         }
-        return "250+";
+        if (n == 1) {
+            return "1";
+        }
+        if (n <= 5) {
+            return "2-5";
+        }
+        if (n <= 15) {
+            return "6-15";
+        }
+        if (n <= 50) {
+            return "16-50";
+        }
+        return "50+";
     }
 
     private int getStoredItemCount() {
