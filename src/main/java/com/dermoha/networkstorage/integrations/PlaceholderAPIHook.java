@@ -16,6 +16,7 @@ public class PlaceholderAPIHook {
         this.enabled = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
         if (enabled) {
             plugin.getLogger().info("PlaceholderAPI detected; placeholders enabled.");
+            new UpdatePlaceholderExpansion(plugin).register();
         }
     }
 

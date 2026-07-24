@@ -2,6 +2,7 @@ package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.storage.NetworkAccessRules;
+import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -61,6 +62,8 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("custom-model-data.gui.wireless-select.item", 10401);
         config.addDefault("update-check.enabled", true);
         config.addDefault("update-check.notify-admins", true);
+        config.addDefault("update-check.interval-hours", NetworkStorageConstants.DEFAULT_UPDATE_CHECK_INTERVAL_HOURS);
+        config.addDefault("update-check.notify-permission", "");
         config.options().copyDefaults(true);
     }
 
@@ -174,6 +177,18 @@ public class ConfigManager implements NetworkAccessRules {
 
     public boolean shouldNotifyAdminsOnUpdate() {
         return config.getBoolean("update-check.notify-admins", true);
+    }
+
+    public int getUpdateCheckIntervalHours() {
+        return getClampedInt(
+                "update-check.interval-hours",
+                NetworkStorageConstants.DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
+                0,
+                NetworkStorageConstants.MAX_UPDATE_CHECK_INTERVAL_HOURS);
+    }
+
+    public String getUpdateNotifyPermission() {
+        return config.getString("update-check.notify-permission", "");
     }
 
     public void reloadConfig() {

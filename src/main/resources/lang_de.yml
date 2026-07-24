@@ -235,3 +235,7 @@ no_permission_reload: "§cDu hast keine Berechtigung, dieses Plugin neu zu laden
 update.available: "§e[NetworkStorage] Eine neue Version (§a%s§e) ist verfuegbar! Aktuelle Version: §c%s"
 update.notify.console: "[NetworkStorage] Update verfuegbar: %s (aktuell: %s)"
 update.check.failed: "§c[NetworkStorage] Update-Pruefung fehlgeschlagen: %s"
+update.up_to_date: "§a[NetworkStorage] Du benutzt die neueste Version (§e%s§a)."
+update.command.latest: "§e[NetworkStorage] Eine neue Version (§a%s§e) ist verfuegbar! Aktuell: §c%s§e. Download: §bhttps://modrinth.com/plugin/networkstorage"
+update.command.checking: "§7[NetworkStorage] Suche nach Updates..."
+update.command.never_checked: "§7[NetworkStorage] Es wurde noch keine Update-Pruefung abgeschlossen. Versuche es gleich nochmal."

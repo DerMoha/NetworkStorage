@@ -15,4 +15,10 @@ public final class NetworkStorageConstants {
     public static final int TICKS_PER_SECOND = 20;
     public static final int SECONDS_PER_MINUTE = 60;
     public static final int MS_PER_SECOND = 1000;
+    public static final int TICKS_PER_HOUR = TICKS_PER_SECOND * SECONDS_PER_MINUTE * 60;
+    public static final int DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 6;
+    public static final int MAX_UPDATE_CHECK_INTERVAL_HOURS = 168;
+    public static final long UPDATE_CHECK_MIN_RESCHEDULE_MS = 30_000L;
+    public static final String UPDATE_USER_AGENT_PREFIX = "DerMoha/NetworkStorage/";
+    public static final String UPDATE_MODRINTH_URL = "https://modrinth.com/plugin/networkstorage";
 }
