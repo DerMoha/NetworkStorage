@@ -7,6 +7,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Chest;
+import org.bukkit.block.Container;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -916,11 +917,11 @@ public class NetworkManager {
 
     private void clearNetworkChestContents(Network network) {
         for (Location location : network.getChestLocations()) {
-            if (!(location.getBlock().getState() instanceof Chest chest)) {
+            if (!(location.getBlock().getState() instanceof Container container)) {
                 continue;
             }
-            chest.getInventory().clear();
-            chest.update();
+            container.getInventory().clear();
+            container.update();
         }
         network.resetTotalStoredAmount();
     }
