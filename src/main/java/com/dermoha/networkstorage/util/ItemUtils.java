@@ -48,8 +48,12 @@ public final class ItemUtils {
     }
 
     public static boolean matchesEnchantment(Enchantment enchantment, int level, String lowerCaseFilter) {
-        String formattedName = formatEnchantmentName(enchantment).toLowerCase();
-        String rawName = enchantment.getKey().getKey().toLowerCase();
+        return matchesEnchantment(enchantment.getKey().getKey(), level, lowerCaseFilter);
+    }
+
+    static boolean matchesEnchantment(String rawName, int level, String lowerCaseFilter) {
+        String formattedName = formatEnchantmentName(rawName).toLowerCase();
+        String normalizedRaw = rawName.toLowerCase();
         String levelStr = String.valueOf(level);
         String romanLevel = toRoman(level).toLowerCase();
 
@@ -58,7 +62,7 @@ public final class ItemUtils {
         boolean hasLevelPart = false;
 
         for (String part : filterParts) {
-            if (formattedName.contains(part) || rawName.contains(part)) {
+            if (formattedName.contains(part) || normalizedRaw.contains(part)) {
                 hasNamePart = true;
             }
             if (part.equals(levelStr) || part.equals(romanLevel)) {
@@ -72,7 +76,10 @@ public final class ItemUtils {
     }
 
     public static String formatEnchantmentName(Enchantment enchantment) {
-        String rawName = enchantment.getKey().getKey();
+        return formatEnchantmentName(enchantment.getKey().getKey());
+    }
+
+    static String formatEnchantmentName(String rawName) {
         String[] words = rawName.replace('_', ' ').toLowerCase().split(" ");
         StringBuilder displayName = new StringBuilder();
 
@@ -81,7 +88,7 @@ public final class ItemUtils {
                 if (!displayName.isEmpty()) {
                     displayName.append(" ");
                 }
-                displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1)).append(word.substring(1));
+                displayName.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
             }
         }
         return displayName.toString();
