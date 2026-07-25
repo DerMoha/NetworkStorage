@@ -3,11 +3,14 @@ package com.dermoha.networkstorage.managers;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.BlockUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.block.Chest;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
+import org.bukkit.block.data.type.Chest;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -233,13 +236,13 @@ public class NetworkManager {
     private void recomputeNetworkTotal(Network network) {
         long total = 0L;
         for (Location location : network.getChestLocations()) {
-            if (!(location.getBlock().getState() instanceof org.bukkit.block.Chest chest)) {
+            if (!(location.getBlock().getState() instanceof Container container)) {
                 continue;
             }
             if (location.getWorld() == null || !location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
                 continue;
             }
-            for (ItemStack item : chest.getInventory().getContents()) {
+            for (ItemStack item : container.getInventory().getContents()) {
                 if (item != null && item.getType() != Material.AIR) {
                     total += item.getAmount();
                 }
@@ -674,10 +677,18 @@ public class NetworkManager {
     }
 
     public Location getNormalizedLocation(Location location) {
-        if (location.getBlock().getState() instanceof Chest chest
-                && chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest doubleChest
-                && doubleChest.getLeftSide() instanceof Chest leftChest) {
-            return leftChest.getLocation();
+        Block block = location.getBlock();
+        if (!plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
+            return location;
+        }
+        if (!(block.getBlockData() instanceof Chest chestData)) {
+            return location;
+        }
+        if (chestData.getType() == Chest.Type.RIGHT) {
+            BlockFace direction = BlockUtils.findOtherChestHalf(Chest.Type.RIGHT, chestData.getFacing());
+            if (direction != null) {
+                return block.getRelative(direction).getLocation();
+            }
         }
         return location;
     }

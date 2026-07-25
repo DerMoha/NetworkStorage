@@ -3,7 +3,6 @@ package com.dermoha.networkstorage.listeners;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.storage.Network;
 import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -23,7 +22,7 @@ public class ComparatorOutputListener implements Listener {
             return;
         }
         Block block = event.getBlock();
-        if (!(block.getState() instanceof Chest chest)) {
+        if (!plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
             return;
         }
         Network network = plugin.getNetworkManager().getNetworkByLocation(block.getLocation());

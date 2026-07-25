@@ -3,18 +3,17 @@ package com.dermoha.networkstorage.listeners;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.util.BlockUtils;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -199,34 +198,15 @@ public class WandListener implements Listener {
     }
 
     private boolean isOtherHalfInNetwork(Block chestBlock, Network network) {
-        if (!(chestBlock.getState() instanceof Chest)) {
-            return false;
-        }
-        Chest chest = (Chest) chestBlock.getState();
-        Inventory inventory = chest.getInventory();
-
-        if (inventory.getHolder() instanceof org.bukkit.block.DoubleChest) {
-            org.bukkit.block.DoubleChest doubleChest = (org.bukkit.block.DoubleChest) inventory.getHolder();
-            Chest left = (Chest) doubleChest.getLeftSide();
-            Chest right = (Chest) doubleChest.getRightSide();
-
-            Location otherHalf = left.getLocation().equals(chestBlock.getLocation()) ? right.getLocation() : left.getLocation();
-            Location normalizedOtherHalf = plugin.getNetworkManager().getNormalizedLocation(otherHalf);
-
-            return network.isChestInNetwork(normalizedOtherHalf) 
-                    || network.isTerminalInNetwork(normalizedOtherHalf) 
-                    || network.isSenderChestInNetwork(normalizedOtherHalf);
-        }
-
-        return false;
+        Location canonical = plugin.getNetworkManager().getNormalizedLocation(chestBlock.getLocation());
+        return network.isChestInNetwork(canonical)
+                || network.isTerminalInNetwork(canonical)
+                || network.isSenderChestInNetwork(canonical);
     }
 
     private String getChestType(Block chestBlock) {
-        if (chestBlock.getState() instanceof Chest) {
-            Chest chest = (Chest) chestBlock.getState();
-            if (chest.getInventory().getSize() == 54) {
-                return "double chest";
-            }
+        if (BlockUtils.getOtherDoubleChestHalf(chestBlock, plugin.getConfigManager()::isNetworkContainerBlock) != null) {
+            return "double chest";
         }
         String typeName = chestBlock.getType().name().toLowerCase().replace("_", " ");
         return typeName;

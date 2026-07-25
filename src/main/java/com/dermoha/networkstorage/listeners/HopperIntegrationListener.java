@@ -4,7 +4,6 @@ import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.storage.NetworkMovement;
 import org.bukkit.block.Block;
-import org.bukkit.block.Chest;
 import org.bukkit.block.Hopper;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -67,7 +66,7 @@ public class HopperIntegrationListener implements Listener {
             return null;
         }
         Block block = container.getBlock();
-        if (!(block.getState() instanceof Chest)) {
+        if (!plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
             return null;
         }
         return plugin.getNetworkManager().getNetworkByLocation(block.getLocation());
