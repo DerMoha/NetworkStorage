@@ -9,13 +9,22 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
+import org.bukkit.block.Container;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 public class NetworkContainerListener implements Listener {
@@ -106,5 +115,67 @@ public class NetworkContainerListener implements Listener {
         if (plugin.getNetworkManager().removeTrackedLocation(network, block.getLocation())) {
             plugin.getNetworkManager().saveNetworks();
         }
+    }
+
+    /**
+     * Inventory events are observed at MONITOR and invalidated on the next
+     * tick, after Bukkit has applied the click/drag/hopper/close mutation.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        invalidateNextTick(event.getClickedInventory());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        invalidateNextTick(event.getInventory());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryMove(InventoryMoveItemEvent event) {
+        invalidateNextTick(event.getSource());
+        invalidateNextTick(event.getDestination());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryClose(InventoryCloseEvent event) {
+        invalidateNextTick(event.getInventory());
+    }
+
+    private void invalidateNextTick(Inventory inventory) {
+        Location location = getContainerLocation(inventory);
+        if (location == null) {
+            return;
+        }
+        org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
+            Network network = plugin.getNetworkManager().getNetworkByLocation(location);
+            if (network != null && (network.isChestInNetwork(location)
+                    || network.isChestInNetwork(plugin.getNetworkManager().getNormalizedLocation(location))
+                    || network.isSenderChestInNetwork(location))) {
+                network.invalidateItemCache();
+                if (plugin.getTerminalSessions() != null) {
+                    plugin.getTerminalSessions().refreshNetwork(network);
+                }
+            }
+        });
+    }
+
+    private Location getContainerLocation(Inventory inventory) {
+        if (inventory == null) {
+            return null;
+        }
+        InventoryHolder holder = inventory.getHolder();
+        if (holder instanceof Container container) {
+            return container.getBlock().getLocation();
+        }
+        if (holder instanceof DoubleChest doubleChest) {
+            if (doubleChest.getLeftSide() instanceof Container left) {
+                return left.getBlock().getLocation();
+            }
+            if (doubleChest.getRightSide() instanceof Container right) {
+                return right.getBlock().getLocation();
+            }
+        }
+        return inventory.getLocation();
     }
 }

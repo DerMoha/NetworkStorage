@@ -56,6 +56,14 @@ public class TerminalSessions implements Listener {
         return terminal.equals(openTerminals.get(player.getUniqueId()));
     }
 
+    public void refreshNetwork(Network network) {
+        for (TerminalGUI terminal : openTerminals.values()) {
+            if (terminal.getNetwork() == network) {
+                terminal.requestRefresh();
+            }
+        }
+    }
+
     public void promptSearch(Player player, TerminalGUI gui) {
         UUID playerId = player.getUniqueId();
         startSearch(player, gui);
