@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.gui;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkScanResult;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -15,6 +16,7 @@ import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class TerminalGUI implements InventoryHolder {
@@ -29,6 +31,12 @@ public class TerminalGUI implements InventoryHolder {
     private SortType sortType = SortType.ALPHABETICAL;
     private List<Map.Entry<ItemStack, Integer>> sortedItems;
     private String searchFilter = "";
+    private boolean refreshPending;
+    private boolean forceScanNextUpdate;
+    private final Consumer<NetworkScanResult> scanCompletionCallback = result -> {
+        forceScanNextUpdate = false;
+        requestRefresh();
+    };
 
     private static final int ITEMS_PER_PAGE = 45;
     private static final int GUI_SIZE = 54;
@@ -58,19 +66,28 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     public void updateInventory() {
+        refreshPending = false;
         inventory.clear();
 
-        Map<ItemStack, Integer> networkItems = network.getNetworkItems();
-        long totalNetworkItems = networkItems.values().stream().mapToLong(Integer::longValue).sum();
-        int uniqueTypes = networkItems.size();
-        double capacity = network.getCapacityPercent();
+        boolean forceScan = forceScanNextUpdate;
+        forceScanNextUpdate = false;
+        NetworkScanResult scan = plugin.getNetworkManager().getNetworkScan(
+                network,
+                forceScan,
+                forceScan || network.getScanResult().status() != com.dermoha.networkstorage.storage.NetworkScanStatus.COMPLETE
+                        ? scanCompletionCallback : null);
+        Map<ItemStack, Integer> networkItems = scan.items();
+        long totalNetworkItems = scan.totalItems();
+        int uniqueTypes = scan.uniqueTypes();
+        double capacity = scan.capacityPercent();
+        boolean showNumericSummary = scan.hasAuthoritativeData() || network.hasLastCompleteScan();
         sortedItems = new ArrayList<>(networkItems.entrySet());
 
         if (!searchFilter.isEmpty()) {
+            String lowerCaseFilter = searchFilter.toLowerCase(Locale.ROOT);
             sortedItems = sortedItems.stream()
                     .filter(entry -> {
                         ItemStack item = entry.getKey();
-                        String lowerCaseFilter = searchFilter.toLowerCase();
 
                         // Check custom display name
                         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
@@ -144,10 +161,16 @@ public class TerminalGUI implements InventoryHolder {
             inventory.setItem(slot, displayItem);
         }
 
-        addControlButtons(currentPage, totalPages, totalNetworkItems, uniqueTypes, capacity);
+        addControlButtons(currentPage, totalPages, totalNetworkItems, uniqueTypes, capacity, scan, showNumericSummary);
     }
 
-    private void addControlButtons(int page, int totalPages, long totalItems, int uniqueTypes, double capacity) {
+    private void addControlButtons(int page,
+                                   int totalPages,
+                                   long totalItems,
+                                   int uniqueTypes,
+                                   double capacity,
+                                   NetworkScanResult scan,
+                                   boolean showNumericSummary) {
         if (page > 0) {
             ItemStack prevButton = createGuiControlItem(
                     Material.ARROW,
@@ -188,20 +211,32 @@ public class TerminalGUI implements InventoryHolder {
         );
         inventory.setItem(SLOT_SORT, sortButton);
 
+        List<String> infoLore = new ArrayList<>();
+        if (showNumericSummary) {
+            infoLore.add(String.format(lang.getMessage("terminal.info.items"), uniqueTypes));
+            infoLore.add(String.format(lang.getMessage("total_items"), formatNumber(totalItems)));
+            infoLore.add(String.format(lang.getMessage("terminal.info.capacity"), String.format("%.1f%%", capacity)));
+            if (!scan.hasAuthoritativeData()) {
+                infoLore.add("§eScan status: §fstale (last complete scan)");
+            }
+        } else {
+            infoLore.add("§6Items: scan pending/incomplete");
+            infoLore.add("§6Capacity: scan pending/incomplete");
+        }
+        infoLore.add(String.format(lang.getMessage("terminal.info.chests"), network.getChestLocations().size()));
+        infoLore.add(String.format(lang.getMessage("terminal.info.terminals"), network.getTerminalLocations().size()));
+        if (scan.status() != com.dermoha.networkstorage.storage.NetworkScanStatus.COMPLETE) {
+            infoLore.add("§eScan status: §f" + scan.status().name().toLowerCase(Locale.ROOT));
+        }
+        infoLore.add("");
+        infoLore.add(lang.getMessage("terminal.info.lore1"));
+        infoLore.add(lang.getMessage("terminal.info.lore2"));
+        infoLore.add(lang.getMessage("terminal.info.lore3"));
+
         ItemStack infoButton = createGuiControlItem(
                 Material.BOOK,
                 lang.getMessage("terminal.info.title"),
-                Arrays.asList(
-                String.format(lang.getMessage("terminal.info.items"), uniqueTypes),
-                String.format(lang.getMessage("total_items"), formatNumber(totalItems)),
-                String.format(lang.getMessage("terminal.info.chests"), network.getChestLocations().size()),
-                String.format(lang.getMessage("terminal.info.terminals"), network.getTerminalLocations().size()),
-                String.format(lang.getMessage("terminal.info.capacity"), String.format("%.1f%%", capacity)),
-                "",
-                lang.getMessage("terminal.info.lore1"),
-                lang.getMessage("terminal.info.lore2"),
-                lang.getMessage("terminal.info.lore3")
-                ),
+                infoLore,
                 "custom-model-data.gui.terminal.info"
         );
         inventory.setItem(SLOT_INFO, infoButton);
@@ -360,6 +395,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_REFRESH) {
+            forceScanNextUpdate = true;
             updateInventory();
             player.sendMessage(lang.getMessage("terminal.refreshed"));
             return;
@@ -410,9 +446,8 @@ public class TerminalGUI implements InventoryHolder {
                 continue;
             }
             slotsScanned++;
-            int originalAmount = stack.getAmount();
             com.dermoha.networkstorage.storage.NetworkMovement.DepositResult result =
-                    network.getMovement().depositFromPlayerToTerminal(player, new com.dermoha.networkstorage.storage.NetworkMovement.ItemSource.InvSlotSource(player, slot), this);
+                    network.getMovement().depositFromPlayer(player, new com.dermoha.networkstorage.storage.NetworkMovement.ItemSource.InvSlotSource(player, slot));
             deposited += result.deposited();
         }
         if (deposited > 0) {
@@ -420,7 +455,7 @@ public class TerminalGUI implements InventoryHolder {
         } else {
             player.sendMessage(lang.getMessage("terminal.deposit_all.nothing"));
         }
-        updateInventory();
+        requestRefresh();
     }
 
     private void cycleSortType() {
@@ -445,6 +480,13 @@ public class TerminalGUI implements InventoryHolder {
 
         player.openInventory(inventory);
         return true;
+    }
+
+    /** Collapses bursts of inventory events into one next-tick render. */
+    public void requestRefresh() {
+        if (refreshPending) return;
+        refreshPending = true;
+        Bukkit.getScheduler().runTask(plugin, this::updateInventory);
     }
 
     private boolean ensureAccess() {

@@ -68,7 +68,7 @@ public class DefaultNetworkStorageService implements NetworkStorageService {
         if (network == null) {
             return 0;
         }
-        return (int) Math.min(Integer.MAX_VALUE, network.getTotalStoredAmount());
+        return (int) Math.min(Integer.MAX_VALUE, network.getLastCompleteStoredAmount());
     }
 
     @Override

@@ -81,7 +81,7 @@ public final class NetworkMovement {
     public DepositResult depositFromPlayerToTerminal(Player player, ItemSource source, TerminalGUI terminal) {
         DepositResult result = depositFromPlayer(player, source);
         if (result.deposited() > 0 || result.returned() > 0) {
-            events.scheduleRefresh(terminal, terminal::updateInventory);
+            events.scheduleRefresh(terminal, terminal::requestRefresh);
         }
         return result;
     }
@@ -126,7 +126,7 @@ public final class NetworkMovement {
             network.recordItemsWithdrawn(player, withdrawn);
         }
         events.sendWithdrawMessage(player, result, template);
-        events.scheduleRefresh(terminal, terminal::updateInventory);
+        events.scheduleRefresh(terminal, terminal::requestRefresh);
 
         return result;
     }

@@ -54,7 +54,7 @@ public class PlaceholderAPIHook {
             case "chests" -> String.valueOf(network.getChestLocations().size());
             case "terminals" -> String.valueOf(network.getTerminalLocations().size());
             case "sender_chests" -> String.valueOf(network.getSenderChestLocations().size());
-            case "items" -> String.valueOf(network.getTotalStoredAmount());
+            case "items" -> String.valueOf(network.getLastCompleteStoredAmount());
             case "capacity" -> String.format("%.1f", network.getCapacityPercent());
             case "name" -> network.getName();
             case "description" -> network.getDescription();

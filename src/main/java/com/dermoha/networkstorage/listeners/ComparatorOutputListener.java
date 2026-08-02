@@ -2,6 +2,7 @@ package com.dermoha.networkstorage.listeners;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkScanResult;
 import org.bukkit.block.Block;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -29,7 +30,8 @@ public class ComparatorOutputListener implements Listener {
         if (network == null) {
             return;
         }
-        double capacity = network.getCapacityPercent();
+        NetworkScanResult scan = plugin.getNetworkManager().getNetworkScan(network, false, null);
+        double capacity = scan.capacityPercent();
         int signalStrength = (int) Math.ceil(capacity / 100.0 * 15.0);
         signalStrength = Math.max(0, Math.min(15, signalStrength));
         event.setNewCurrent(signalStrength);
