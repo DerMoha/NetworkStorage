@@ -20,6 +20,13 @@ import com.dermoha.networkstorage.managers.TerminalSessions;
 import com.dermoha.networkstorage.storage.DefaultMovementEvents;
 import com.dermoha.networkstorage.storage.MovementEvents;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkScanResult;
+import com.dermoha.networkstorage.storage.NetworkScanStatus;
+import com.dermoha.networkstorage.storage.NetworkStorageProvider;
+import com.dermoha.networkstorage.storage.StorageException;
+import com.dermoha.networkstorage.storage.sqlite.SqliteBackupManager;
+import com.dermoha.networkstorage.storage.sqlite.SqliteNetworkStorageProvider;
+import com.dermoha.networkstorage.storage.YamlToSqliteMigrator;
 import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -43,15 +50,18 @@ import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.Iterator;
-import java.util.concurrent.CompletableFuture;
+import java.io.File;
 import java.util.function.ToIntFunction;
 
 public class NetworkStoragePlugin extends JavaPlugin {
 
     private static final int BSTATS_PLUGIN_ID = 28228;
 
+    private java.util.concurrent.CompletableFuture<UpdateChecker.Result> pendingUpdateFuture;
+
     private NetworkManager networkManager;
     private ConfigManager configManager;
+    private NetworkStorageProvider storageProvider;
     private TerminalSessions terminalSessions;
     private LanguageManager languageManager;
     private MovementEvents movementEvents;
@@ -68,20 +78,24 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private com.dermoha.networkstorage.UpdateChecker updateChecker;
     private com.dermoha.networkstorage.listeners.UpdateJoinListener updateJoinListener;
     private Metrics metrics;
+    private SqliteBackupManager backupManager;
     private int senderChestTaskId = -1;
     private int autoSaveTaskId = -1;
     private int trustExpiryTaskId = -1;
     private int updateCheckTaskId = -1;
+    private int storageBackupTaskId = -1;
     private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
-    private static final long BSTATS_STORED_ITEM_CACHE_TTL_MS = NetworkStorageConstants.BSTATS_STORED_ITEM_CACHE_TTL_MS;
-
-    private volatile long cachedStoredItemCount = 0L;
-    private volatile long cachedStoredItemCountAtMs = 0L;
-    private final Object storedItemCountCacheLock = new Object();
 
     @Override
     public void onEnable() {
-        createManagers();
+        try {
+            createManagers();
+        } catch (RuntimeException e) {
+            getLogger().log(java.util.logging.Level.SEVERE,
+                    "NetworkStorage refused to enable because storage could not be verified", e);
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         initializeMetrics();
         registerCommands();
         registerListeners();
@@ -93,8 +107,13 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (networkManager != null) {
-            networkManager.saveAllNetworks();
+        cancelStorageBackupTask();
+        if (networkManager != null && !networkManager.flushPersistence()) {
+            getLogger().severe("Final SQLite save failed; pending changes were not cleared and must be retried on the next start.");
+        }
+        if (networkManager != null) networkManager.shutdownPersistence();
+        if (storageProvider != null) {
+            storageProvider.shutdown();
         }
         closePluginInventories();
         unregisterRuntimeComponents();
@@ -102,26 +121,85 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
 
-    public void reload() {
-        networkManager.saveAllNetworks();
+    public boolean reload() {
+        cancelStorageBackupTask();
+        if (networkManager != null && !networkManager.flushPersistence()) {
+            getLogger().severe("Reload aborted because the current SQLite snapshot could not be committed.");
+            return false;
+        }
+        if (networkManager != null) networkManager.cancelScheduledScans();
+        if (networkManager != null) networkManager.shutdownPersistence();
+        if (storageProvider != null) {
+            storageProvider.shutdown();
+        }
         closePluginInventories();
         cancelScheduledTasks();
         unregisterRuntimeComponents();
-        createManagers();
+        try {
+            createManagers();
+        } catch (RuntimeException e) {
+            getLogger().log(java.util.logging.Level.SEVERE,
+                    "Reload failed storage verification; disabling the plugin", e);
+            getServer().getPluginManager().disablePlugin(this);
+            return false;
+        }
         registerCommands();
         registerListeners();
         registerRecipes();
         startTasks();
+        return true;
     }
 
     private void createManagers() {
         configManager = new ConfigManager(this);
         languageManager = new LanguageManager(this, configManager.getLanguage());
         movementEvents = new DefaultMovementEvents(this, languageManager);
-        networkManager = new NetworkManager(this);
+
+        File databaseFile = new File(getDataFolder(), "networks.db");
+        SqliteNetworkStorageProvider.ensureDriver();
+        SqliteNetworkStorageProvider.DatabaseLayout layout =
+                SqliteNetworkStorageProvider.inspectLayout(databaseFile);
+        if (layout == SqliteNetworkStorageProvider.DatabaseLayout.UNKNOWN) {
+            throw new StorageException("The SQLite database layout is unknown or corrupt; refusing startup");
+        }
+
+        File yamlNetworks = new File(getDataFolder(), "networks.yml");
+        File yamlPlayerState = new File(getDataFolder(), "player-state.yml");
+        File migrationLock = new File(getDataFolder(), "migration.lock");
+        if (migrationLock.exists()) {
+            throw new StorageException("migration.lock is present; refusing to enable until the previous migration is inspected");
+        }
+        boolean hasYamlSource = hasFileData(yamlNetworks) || hasFileData(yamlPlayerState);
+        YamlToSqliteMigrator migrator = new YamlToSqliteMigrator(this,
+                yamlNetworks, yamlPlayerState, databaseFile);
+        if (layout == SqliteNetworkStorageProvider.DatabaseLayout.PACKED_LEGACY) {
+            if (hasYamlSource) {
+                throw new StorageException("Legacy packed SQLite and live YAML sources coexist; refusing an ambiguous cutover");
+            }
+            getLogger().info("Detected legacy packed SQLite storage; converting it before enabling gameplay features...");
+            migrator.migrateLegacyDatabase(databaseFile);
+        } else if ((layout == SqliteNetworkStorageProvider.DatabaseLayout.ABSENT
+                || layout == SqliteNetworkStorageProvider.DatabaseLayout.EMPTY) && hasYamlSource) {
+            getLogger().info("Detected existing YAML data; migrating it before enabling gameplay features...");
+            migrator.migrateYaml();
+        }
+
+        SqliteNetworkStorageProvider sqlite = new SqliteNetworkStorageProvider(this, databaseFile);
+        sqlite.initialize();
+        if (hasYamlSource && !"COMPLETE".equals(sqlite.getMetadata("migration_state"))) {
+            sqlite.shutdown();
+            throw new StorageException("YAML source files remain beside a SQLite database without completed migration metadata");
+        }
+        storageProvider = sqlite;
+        backupManager = new SqliteBackupManager(this, sqlite);
+        networkManager = new NetworkManager(this, sqlite);
         apiService = new com.dermoha.networkstorage.api.DefaultNetworkStorageService(this);
         placeholderAPIHook = new com.dermoha.networkstorage.integrations.PlaceholderAPIHook(this);
         updateChecker = new com.dermoha.networkstorage.UpdateChecker(this);
+    }
+
+    private boolean hasFileData(File file) {
+        return file.isFile() && file.length() > 0;
     }
 
     private void initializeMetrics() {
@@ -130,6 +208,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         metrics.addCustomChart(new SingleLineChart("tracked_chests", this::getTrackedChestCount));
         metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", () -> Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1)));
         metrics.addCustomChart(new SingleLineChart("stored_items", this::getStoredItemCount));
+        metrics.addCustomChart(new SimplePie("stored_items_scan_status", networkManager::getScanStatusForMetrics));
         metrics.addCustomChart(new AdvancedPie("networks_per_server", () -> Map.of(networksBucket(networkManager.getNetworks().size()), 1)));
         metrics.addCustomChart(new SingleLineChart("wireless_terminal_users", () -> networkManager.getSelectedWirelessNetworks().size()));
         metrics.addCustomChart(new SingleLineChart("terminal_count", () -> sumN(n -> n.getTerminalLocations().size())));
@@ -197,29 +276,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private int getStoredItemCount() {
-        long now = System.currentTimeMillis();
-        long cachedAt;
-        long cached;
-        synchronized (storedItemCountCacheLock) {
-            cachedAt = cachedStoredItemCountAtMs;
-            cached = cachedStoredItemCount;
-        }
-        if (cachedAt > 0 && (now - cachedAt) < BSTATS_STORED_ITEM_CACHE_TTL_MS) {
-            return (int) Math.min(Integer.MAX_VALUE, cached);
-        }
-        return refreshStoredItemCountCache();
-    }
-
-    private int refreshStoredItemCountCache() {
-        long total = 0L;
-        for (Network network : networkManager.getAllNetworks()) {
-            total += network.getTotalStoredAmount();
-        }
-        synchronized (storedItemCountCacheLock) {
-            cachedStoredItemCount = total;
-            cachedStoredItemCountAtMs = System.currentTimeMillis();
-        }
-        return (int) Math.min(Integer.MAX_VALUE, total);
+        return networkManager.getStoredItemCountForMetrics();
     }
 
     private void registerCommands() {
@@ -233,7 +290,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         PluginCommand networkStorageCommand = getCommand("networkstorage");
         networkStorageCommand.setExecutor((sender, command, label, args) -> {
             if (args.length == 0) {
-                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
+                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|rescan|config|storage|update>");
                 return true;
             }
 
@@ -246,14 +303,20 @@ public class NetworkStoragePlugin extends JavaPlugin {
             switch (sub) {
                 case "reload":
                     sender.sendMessage(languageManager.getMessage("reload.start"));
-                    reload();
-                    sender.sendMessage(languageManager.getMessage("reload.success"));
+                    if (reload()) {
+                        sender.sendMessage(languageManager.getMessage("reload.success"));
+                    } else {
+                        sender.sendMessage("§cNetworkStorage reload failed; SQLite remains fail-closed.");
+                    }
                     break;
                 case "list":
                     handleAdminList(sender);
                     break;
                 case "info":
                     handleAdminInfo(sender, args);
+                    break;
+                case "rescan":
+                    handleAdminRescan(sender, args);
                     break;
                 case "inspect":
                     handleAdminInspect(sender, args);
@@ -265,11 +328,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     }
                     new com.dermoha.networkstorage.gui.ConfigEditorGUI(this).open((Player) sender);
                     break;
+                case "storage":
+                    handleAdminStorage(sender);
+                    break;
                 case "update":
                     handleAdminUpdate(sender);
                     break;
                 default:
-                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|config|update>");
+                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|rescan|config|storage|update>");
             }
             return true;
         });
@@ -287,28 +353,51 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
+    private void handleAdminStorage(org.bukkit.command.CommandSender sender) {
+        if (storageProvider == null) {
+            sender.sendMessage("§c[NetworkStorage] No storage provider is initialized.");
+            return;
+        }
+        Map<String, Object> snap = storageProvider.snapshot();
+        sender.sendMessage("§6§lNetworkStorage — Storage");
+        for (Map.Entry<String, Object> entry : snap.entrySet()) {
+            sender.sendMessage("  §7" + entry.getKey() + ": §f" + entry.getValue());
+        }
+        File lock = new File(getDataFolder(), "migration.lock");
+        if (lock.exists()) {
+            sender.sendMessage("  §c⚠ migration.lock present — migration did not finish cleanly");
+        }
+    }
+
     private void handleAdminUpdate(org.bukkit.command.CommandSender sender) {
         if (updateChecker == null) {
             sender.sendMessage("§c[NetworkStorage] Update checker is not initialized.");
             return;
         }
         updateChecker.reportChecking(sender);
-        CompletableFuture<UpdateChecker.Result> future = updateChecker.checkNow();
-        future.whenComplete((result, error) -> Bukkit.getScheduler().runTask(this, () -> {
-            if (error != null) {
-                sender.sendMessage("§c[NetworkStorage] Update check failed: " + error.getMessage());
-                return;
-            }
-            if (result == null) {
-                sender.sendMessage("§c[NetworkStorage] Update check returned no result.");
-                return;
-            }
-            if (result.getStatus() == UpdateChecker.Status.DISABLED) {
-                sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
-                return;
-            }
-            updateChecker.reportManualResult(sender);
-        }));
+        if (pendingUpdateFuture != null && !pendingUpdateFuture.isDone()) {
+            sender.sendMessage("§7[NetworkStorage] Update check already in progress.");
+            return;
+        }
+        pendingUpdateFuture = updateChecker.checkNow();
+        pendingUpdateFuture.whenComplete((result, error) -> {
+            pendingUpdateFuture = null;
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (error != null) {
+                    sender.sendMessage("§c[NetworkStorage] Update check failed: " + error.getMessage());
+                    return;
+                }
+                if (result == null) {
+                    sender.sendMessage("§c[NetworkStorage] Update check returned no result.");
+                    return;
+                }
+                if (result.getStatus() == UpdateChecker.Status.DISABLED) {
+                    sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
+                    return;
+                }
+                updateChecker.reportManualResult(sender);
+            });
+        });
     }
 
     private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
@@ -321,6 +410,17 @@ public class NetworkStoragePlugin extends JavaPlugin {
             sender.sendMessage("§cNetwork not found: " + args[1]);
             return;
         }
+        NetworkScanResult scan = networkManager.getNetworkScan(network, true,
+                result -> sendAdminInfo(sender, network, result));
+        sender.sendMessage("§7Network scan pending; current stored-item totals are not yet authoritative.");
+        if (scan.status() == NetworkScanStatus.COMPLETE) {
+            sendAdminInfo(sender, network, scan);
+        }
+    }
+
+    private void sendAdminInfo(org.bukkit.command.CommandSender sender,
+                               Network network,
+                               NetworkScanResult scan) {
         sender.sendMessage("§6=== Network " + network.getName() + " ===");
         sender.sendMessage("§eOwner: §f" + networkManager.getNetworkOwnerName(network));
         sender.sendMessage("§eChests: §f" + network.getChestLocations().size());
@@ -328,7 +428,40 @@ public class NetworkStoragePlugin extends JavaPlugin {
         sender.sendMessage("§eSender chests: §f" + network.getSenderChestLocations().size());
         sender.sendMessage("§eTrusted: §f" + network.getTrustedPlayers().size());
         sender.sendMessage("§eDescription: §f" + (network.getDescription().isEmpty() ? "(none)" : network.getDescription()));
-        sender.sendMessage("§eStored items: §f" + network.getTotalStoredAmount());
+        sender.sendMessage("§eScan status: §f" + scan.status());
+        sender.sendMessage("§eContainers found: §f" + scan.containersFound() + "/" + scan.registeredLocations());
+        if (scan.hasAuthoritativeData()) {
+            sender.sendMessage("§eStored items: §f" + String.format(java.util.Locale.ROOT, "%,d", scan.totalItems()));
+            sender.sendMessage("§eUnique item types: §f" + scan.uniqueTypes());
+        } else if (network.hasLastCompleteScan()) {
+            sender.sendMessage("§eStored items: §f" + String.format(java.util.Locale.ROOT, "%,d", scan.totalItems()) + " §7(stale last complete scan)");
+            sender.sendMessage("§eUnique item types: §f" + scan.uniqueTypes() + " §7(stale last complete scan)");
+        } else {
+            sender.sendMessage("§eStored items: §6scan pending/incomplete");
+            sender.sendMessage("§eUnique item types: §6scan pending/incomplete");
+        }
+        for (String warning : scan.warnings()) {
+            sender.sendMessage("§cWarning: " + warning);
+        }
+    }
+
+    private void handleAdminRescan(org.bukkit.command.CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            networkManager.rescanAllNetworks();
+            sender.sendMessage("§7Scheduled scans for all " + networkManager.getAllNetworks().size() + " network(s).");
+            return;
+        }
+
+        Network network = networkManager.getAllNetworks().stream()
+                .filter(candidate -> candidate.getName().equalsIgnoreCase(args[1]))
+                .findFirst()
+                .orElse(null);
+        if (network == null) {
+            sender.sendMessage("§cNetwork not found: " + args[1]);
+            return;
+        }
+        networkManager.rescanNetwork(network);
+        sender.sendMessage("§7Scheduled a fresh scan for network " + network.getName() + ".");
     }
 
     private void handleAdminInspect(org.bukkit.command.CommandSender sender, String[] args) {
@@ -354,7 +487,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
     }
 
     private String formatLocation(org.bukkit.Location loc) {
-        return loc.getWorld().getName() + " " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
+        if (loc == null) {
+            return "<invalid-location>";
+        }
+        String world = loc.getWorld() == null ? "<unavailable-world>" : loc.getWorld().getName();
+        return world + " " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
     }
 
     private void registerListeners() {
@@ -381,7 +518,27 @@ public class NetworkStoragePlugin extends JavaPlugin {
         startSenderChestTask();
         startAutoSaveTask();
         startTrustExpiryTask();
+        startStorageBackupTask();
         startUpdateChecker();
+    }
+
+    private void startStorageBackupTask() {
+        if (backupManager == null) {
+            return;
+        }
+        int intervalHours = configManager.getStorageBackupIntervalHours();
+        if (intervalHours <= 0) {
+            getLogger().info("SQLite backup scheduler is disabled (storage.backup-interval-hours=0).");
+            return;
+        }
+        long intervalTicks = (long) intervalHours * NetworkStorageConstants.TICKS_PER_HOUR;
+        storageBackupTaskId = getServer().getScheduler().runTaskTimerAsynchronously(
+                this,
+                backupManager::createBackup,
+                intervalTicks,
+                intervalTicks
+        ).getTaskId();
+        getLogger().info("SQLite backups scheduled every " + intervalHours + " hour(s); retaining three verified copies.");
     }
 
     private void startUpdateChecker() {
@@ -480,6 +637,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (updateCheckTaskId != -1) {
             getServer().getScheduler().cancelTask(updateCheckTaskId);
             updateCheckTaskId = -1;
+        }
+        cancelStorageBackupTask();
+    }
+
+    private void cancelStorageBackupTask() {
+        if (storageBackupTaskId != -1) {
+            getServer().getScheduler().cancelTask(storageBackupTaskId);
+            storageBackupTaskId = -1;
         }
     }
 
@@ -624,7 +789,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
             for (Network network : networkManager.getAllNetworks()) {
                 for (Location senderLoc : network.getSenderChestLocations()) {
 
-                    if (!senderLoc.getWorld().isChunkLoaded(senderLoc.getBlockX() >> 4, senderLoc.getBlockZ() >> 4)) {
+                    if (!networkManager.ensureLocationChunkLoaded(senderLoc)) {
+                        getLogger().warning("Sender chest chunk could not be loaded for " + network.getName() + ": " + senderLoc);
                         continue;
                     }
 
@@ -647,8 +813,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (interval > 0) {
             autoSaveTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Auto-saving network data...");
-                networkManager.saveAllNetworks();
-                getLogger().info("Auto-save complete.");
+                if (networkManager.saveAllNetworks()) {
+                    getLogger().info("Auto-save complete.");
+                } else {
+                    getLogger().severe("Auto-save failed; the SQLite snapshot remains pending for retry.");
+                }
             }, interval, interval).getTaskId();
         }
     }

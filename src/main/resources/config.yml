@@ -88,3 +88,10 @@ wireless-terminal-recipe:
     C: "COMPASS"
     S: "NETHER_STAR"
     D: "DIAMOND_BLOCK"
+
+# Storage is SQLite-only.
+storage:
+  # Coalesce normal metadata writes without blocking the server thread.
+  write-debounce-ms: 1500
+  # Keep three verified point-in-time backups. Set to 0 to disable scheduling.
+  backup-interval-hours: 24

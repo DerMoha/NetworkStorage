@@ -1,11 +1,6 @@
 package com.dermoha.networkstorage.storage;
 
-import com.dermoha.networkstorage.stats.PlayerStat;
-import org.bukkit.Location;
-import org.bukkit.OfflinePlayer;
-
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -15,15 +10,25 @@ public interface NetworkStorageProvider {
 
     void shutdown();
 
-    void loadNetworks(Map<String, Network> networks,
-                      Map<Location, Network> locationIndex,
-                      Map<UUID, String> selectedNetworks,
-                      Map<UUID, String> selectedWirelessNetworks,
-                      OfflinePlayer offlinePlayerLookup);
+    String getBackendName();
 
-    void saveNetworks(Collection<Network> networks);
+    int getSchemaVersion();
 
-    void savePlayerState(Map<UUID, String> selectedNetworks, Map<UUID, String> selectedWirelessNetworks);
+    boolean isEmpty();
 
     boolean isAvailable();
+
+    void loadNetworks(Map<String, Network> networks,
+                      Map<UUID, String> selectedNetworks,
+                      Map<UUID, String> selectedWirelessNetworks);
+
+    boolean saveSnapshot(Collection<Network> networks,
+                         Map<UUID, String> selectedNetworks,
+                         Map<UUID, String> selectedWirelessNetworks);
+
+    default boolean saveSnapshot(StorageSnapshot snapshot) {
+        throw new UnsupportedOperationException("Detached snapshots are not supported by this provider");
+    }
+
+    Map<String, Object> snapshot();
 }

@@ -50,7 +50,15 @@ Trust checks apply to terminals and wireless access. Physical storage chests are
 ### Safety Compatibility
 
 *   Storage wands and wireless terminals must be created by this plugin. Items that only match the display name are rejected intentionally, because renamed legacy items cannot be distinguished from forged items.
-*   New network names are limited to 1-32 characters: letters, numbers, spaces, underscores, hyphens, and apostrophes. This keeps names safe for YAML-backed storage.
+*   New network names are limited to 1-32 characters: letters, numbers, spaces, underscores, hyphens, and apostrophes.
+
+### SQLite storage and migration
+
+NetworkStorage uses SQLite as its only runtime storage backend. On the first startup after upgrading, existing `networks.yml` and `player-state.yml` files are strictly validated and imported into a temporary database. The database is integrity-checked and atomically promoted before listeners or gameplay tasks start. The YAML files are retained as timestamped `.pre-sqlite-*` recovery copies and then archived as `.migrated-*`; a failed migration leaves the original files, a recoverable temporary database, and `migration.lock`, and the plugin stays disabled until the failure is inspected.
+
+SQLite is configured for WAL mode, full synchronous durability, foreign-key enforcement, and a 5-second busy timeout. Keep `networks.db` and its backups on local storage; do not put the plugin data directory on NFS, SMB, or another network filesystem because SQLite WAL requires local shared-memory semantics.
+
+The plugin creates three verified point-in-time SQLite backups by default (`storage.backup-interval-hours`). Backups use SQLite's online backup command and are checked before older copies are rotated. Before the first production rollout, stop the server and retain a complete copy of the plugin data directory.
 
 ### Language and Item Search
 
