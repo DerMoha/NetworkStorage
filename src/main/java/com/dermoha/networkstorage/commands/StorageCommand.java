@@ -6,6 +6,7 @@ import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.managers.ConfigManager;
 import com.dermoha.networkstorage.managers.LanguageManager;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkScanResult;
 import com.dermoha.networkstorage.util.ItemUtils;
 import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
@@ -156,6 +157,10 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         } else {
             network.addTrustedPlayer(target.getUniqueId());
         }
+        if (!plugin.getNetworkManager().saveNetworks()) {
+            player.sendMessage("§cThe trust change could not be committed to SQLite. It remains pending and will be retried automatically.");
+            return;
+        }
         player.sendMessage(String.format(lang.getMessage("trust.success"), target.getName()));
         if (durationMs > 0) {
             player.sendMessage(String.format(lang.getMessage("trust.success_timed"), formatDuration(durationMs)));
@@ -252,6 +257,10 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         network.removeTrustedPlayer(target.getUniqueId());
+        if (!plugin.getNetworkManager().saveNetworks()) {
+            player.sendMessage("§cThe trust change could not be committed to SQLite. It remains pending and will be retried automatically.");
+            return;
+        }
         player.sendMessage(String.format(lang.getMessage("untrust.success"), target.getName()));
 
         if (target.isOnline()) {
@@ -312,6 +321,16 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
 
         String activeWirelessNetwork = plugin.getNetworkManager().getSelectedWirelessNetworkName(player);
 
+        plugin.getNetworkManager().getNetworkScan(network, true,
+                result -> sendInfoResult(player, network, activeWirelessNetwork, result));
+        player.sendMessage("§7Network scan pending; item totals will be shown when the scan completes.");
+    }
+
+    private void sendInfoResult(Player player,
+                                Network network,
+                                String activeWirelessNetwork,
+                                NetworkScanResult scan) {
+
         player.sendMessage(lang.getMessage("network_info_title"));
         player.sendMessage(String.format(lang.getMessage("active_network"), network.getName()));
         player.sendMessage(String.format(lang.getMessage("network_id"), network.getName()));
@@ -322,13 +341,22 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(String.format(lang.getMessage("wireless_active_network"), activeWirelessNetwork));
         }
 
-        long totalItems = network.getNetworkItems().values().stream().mapToLong(Integer::longValue).sum();
-        int uniqueTypes = network.getNetworkItems().size();
-        double capacity = network.getCapacityPercent();
-
-        player.sendMessage(String.format(lang.getMessage("total_items"), formatNumber(totalItems)));
-        player.sendMessage(String.format(lang.getMessage("unique_types"), uniqueTypes));
-        player.sendMessage(String.format(lang.getMessage("terminal.info.capacity"), String.format("%.1f%%", capacity)));
+        player.sendMessage("§eScan status: §f" + scan.status());
+        if (scan.hasAuthoritativeData() || network.hasLastCompleteScan()) {
+            player.sendMessage(String.format(lang.getMessage("total_items"), formatNumber(scan.totalItems())));
+            player.sendMessage(String.format(lang.getMessage("unique_types"), scan.uniqueTypes()));
+            player.sendMessage(String.format(lang.getMessage("terminal.info.capacity"), String.format("%.1f%%", scan.capacityPercent())));
+            if (!scan.hasAuthoritativeData()) {
+                player.sendMessage("§eThe displayed item totals are from the last complete scan.");
+            }
+        } else {
+            player.sendMessage("§6Stored items: scan pending/incomplete");
+            player.sendMessage("§6Unique item types: scan pending/incomplete");
+            player.sendMessage("§6Capacity: scan pending/incomplete");
+        }
+        for (String warning : scan.warnings()) {
+            player.sendMessage("§cWarning: " + warning);
+        }
     }
 
     private void handleResetCommand(Player player) {
@@ -382,7 +410,10 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         int terminalCount = network.getTerminalLocations().size();
         int senderChestCount = network.getSenderChestLocations().size();
 
-        plugin.getNetworkManager().resetNetwork(network);
+        if (!plugin.getNetworkManager().resetNetwork(network)) {
+            player.sendMessage("§cThe reset could not be committed to SQLite. The change remains pending and will be retried automatically.");
+            return;
+        }
         pendingResets.remove(player.getUniqueId());
         player.sendMessage(String.format(lang.getMessage("reset.success"), chestCount, terminalCount, senderChestCount, network.getName()));
     }

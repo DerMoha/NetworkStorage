@@ -1,9 +1,10 @@
 package com.dermoha.networkstorage.storage;
 
 import com.dermoha.networkstorage.stats.PlayerStat;
-import com.dermoha.networkstorage.util.NetworkStorageConstants;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Container;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -11,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Network {
 
@@ -30,10 +32,11 @@ public class Network {
     private final NetworkMovement movement;
     private transient boolean dirty = false;
 
-    private transient volatile Map<ItemStack, Integer> itemCache;
-    private transient volatile long itemCacheTime;
-    private static final long ITEM_CACHE_TTL_MS = NetworkStorageConstants.ITEM_CACHE_TTL_MS;
-    private final java.util.concurrent.atomic.AtomicLong totalStoredAmount = new java.util.concurrent.atomic.AtomicLong(0L);
+    private transient volatile NetworkScanResult scanResult;
+    private transient volatile NetworkScanResult lastCompleteScan;
+    private transient volatile long contentVersion;
+    private transient volatile Runnable contentChangeListener = () -> {};
+    private final AtomicLong totalStoredAmount = new AtomicLong(0L);
 
     public Network(String name, UUID owner, NetworkAccessRules accessRules) {
         this(name, owner, accessRules, MovementEvents.NOOP);
@@ -45,11 +48,15 @@ public class Network {
         this.accessRules = accessRules;
         this.movementEvents = movementEvents;
         this.movement = new NetworkMovement(this, movementEvents);
-        this.chestLocations = new HashSet<>();
-        this.terminalLocations = new HashSet<>();
-        this.senderChestLocations = new HashSet<>();
+        // Bukkit locations may be null in a corrupt/partially-migrated
+        // registration. Keep those entries so the scanner can report them as
+        // INCOMPLETE instead of failing while loading the network.
+        this.chestLocations = Collections.synchronizedSet(new HashSet<>());
+        this.terminalLocations = Collections.synchronizedSet(new HashSet<>());
+        this.senderChestLocations = Collections.synchronizedSet(new HashSet<>());
         this.playerStats = new ConcurrentHashMap<>();
-        this.trustedPlayers = new HashSet<>();
+        this.trustedPlayers = ConcurrentHashMap.newKeySet();
+        this.scanResult = NetworkScanResult.pending(name, 0, 0, null);
     }
 
     public NetworkMovement getMovement() {
@@ -85,15 +92,21 @@ public class Network {
     }
 
     public Set<Location> getChestLocations() {
-        return new HashSet<>(chestLocations);
+        synchronized (chestLocations) {
+            return new HashSet<>(chestLocations);
+        }
     }
 
     public Set<Location> getTerminalLocations() {
-        return new HashSet<>(terminalLocations);
+        synchronized (terminalLocations) {
+            return new HashSet<>(terminalLocations);
+        }
     }
 
     public Set<Location> getSenderChestLocations() {
-        return new HashSet<>(senderChestLocations);
+        synchronized (senderChestLocations) {
+            return new HashSet<>(senderChestLocations);
+        }
     }
 
     public Map<UUID, PlayerStat> getPlayerStats() {
@@ -113,15 +126,17 @@ public class Network {
     }
 
     public void addChest(Location location) {
-        chestLocations.add(location);
-        this.dirty = true;
-        invalidateItemCache();
+        if (chestLocations.add(location)) {
+            this.dirty = true;
+            markContentsChanged();
+        }
     }
 
     public void removeChest(Location location) {
-        chestLocations.remove(location);
-        this.dirty = true;
-        invalidateItemCache();
+        if (chestLocations.remove(location)) {
+            this.dirty = true;
+            markContentsChanged();
+        }
     }
 
     public void addTerminal(Location location) {
@@ -135,15 +150,17 @@ public class Network {
     }
 
     public void addSenderChest(Location location) {
-        senderChestLocations.add(location);
-        this.dirty = true;
-        invalidateItemCache();
+        if (senderChestLocations.add(location)) {
+            this.dirty = true;
+            markContentsChanged();
+        }
     }
 
     public void removeSenderChest(Location location) {
-        senderChestLocations.remove(location);
-        this.dirty = true;
-        invalidateItemCache();
+        if (senderChestLocations.remove(location)) {
+            this.dirty = true;
+            markContentsChanged();
+        }
     }
 
     public boolean isChestInNetwork(Location location) {
@@ -234,41 +251,81 @@ public class Network {
     }
 
     public Map<ItemStack, Integer> getNetworkItems() {
-        long now = System.currentTimeMillis();
-        Map<ItemStack, Integer> cached = itemCache;
-        if (cached != null && (now - itemCacheTime) < ITEM_CACHE_TTL_MS) {
-            return new HashMap<>(cached);
-        }
-
-        Map<ItemStack, Integer> networkItems = new HashMap<>();
-        for (Location chestLoc : chestLocations) {
-            if (chestLoc.getBlock().getState() instanceof Container container) {
-                for (ItemStack item : container.getInventory().getContents()) {
-                    if (item != null && item.getType() != Material.AIR) {
-                        addToNetworkMap(networkItems, item);
-                    }
-                }
-            }
-        }
-
-        this.itemCache = new HashMap<>(networkItems);
-        this.itemCacheTime = now;
-        return networkItems;
-    }
-
-    private void addToNetworkMap(Map<ItemStack, Integer> map, ItemStack item) {
-        ItemStack keyItem = item.clone();
-        keyItem.setAmount(1);
-        Integer existing = map.get(keyItem);
-        if (existing != null) {
-            map.put(keyItem, existing + item.getAmount());
-        } else {
-            map.put(keyItem, item.getAmount());
-        }
+        return getScanResult().items();
     }
 
     public void invalidateItemCache() {
-        this.itemCache = null;
+        markContentsChanged();
+    }
+
+    public void setContentChangeListener(Runnable listener) {
+        this.contentChangeListener = listener == null ? () -> {} : listener;
+    }
+
+    public long getContentVersion() {
+        return contentVersion;
+    }
+
+    public void beginScan(int registeredLocations, int uniqueChunks) {
+        this.scanResult = NetworkScanResult.pending(name, registeredLocations, uniqueChunks, lastCompleteScan);
+    }
+
+    public void applyScanResult(NetworkScanResult result) {
+        if (result == null) {
+            return;
+        }
+        if (result.status() == NetworkScanStatus.PENDING) {
+            scanResult = NetworkScanResult.pending(
+                    name, result.registeredLocations(), result.uniqueChunks(), lastCompleteScan);
+            return;
+        }
+        if (result.status() == NetworkScanStatus.COMPLETE && result.hasAuthoritativeData()) {
+            lastCompleteScan = result;
+            scanResult = result;
+            setTotalStoredAmount(result.totalItems());
+            return;
+        }
+        scanResult = NetworkScanResult.incomplete(
+                name,
+                result.registeredLocations(),
+                result.uniqueChunks(),
+                result.loadedChunks(),
+                result.containersFound(),
+                result.totalItems(),
+                result.totalSlots(),
+                result.usedSlots(),
+                result.items(),
+                result.warnings(),
+                lastCompleteScan);
+    }
+
+    public NetworkScanResult getScanResult() {
+        NetworkScanResult current = scanResult;
+        return current == null ? NetworkScanResult.pending(name, chestLocations.size(), 0, lastCompleteScan) : current;
+    }
+
+    public NetworkScanResult getLastCompleteScan() {
+        return lastCompleteScan;
+    }
+
+    public boolean hasCompleteScan() {
+        return lastCompleteScan != null && getScanResult().status() == NetworkScanStatus.COMPLETE;
+    }
+
+    public boolean hasLastCompleteScan() {
+        return lastCompleteScan != null;
+    }
+
+    public long getLastCompleteStoredAmount() {
+        return lastCompleteScan == null ? 0L : lastCompleteScan.totalItems();
+    }
+
+    private void markContentsChanged() {
+        contentVersion++;
+        NetworkScanResult previous = lastCompleteScan;
+        scanResult = NetworkScanResult.pending(name, chestLocations.size(),
+                previous == null ? 0 : previous.uniqueChunks(), previous);
+        contentChangeListener.run();
     }
 
     public long getTotalStoredAmount() {
@@ -288,12 +345,13 @@ public class Network {
     }
 
     public ItemStack removeFromNetwork(ItemStack itemToRemove, int amount) {
+        requirePrimaryThread();
         if (amount < 0) {
             throw new IllegalArgumentException("Amount cannot be negative: " + amount);
         }
         int remaining = amount;
 
-        for (Location chestLoc : chestLocations) {
+        for (Location chestLoc : getLoadedChestLocations()) {
             if (remaining <= 0) break;
             if (chestLoc.getBlock().getState() instanceof Container container) {
                 Inventory inv = container.getInventory();
@@ -322,9 +380,10 @@ public class Network {
     }
 
     public ItemStack addToNetwork(ItemStack itemToAdd) {
+        requirePrimaryThread();
         if (itemToAdd == null || itemToAdd.getType() == Material.AIR) return null;
         ItemStack remaining = itemToAdd.clone();
-        for (Location chestLoc : chestLocations) {
+        for (Location chestLoc : getLoadedChestLocations()) {
             if (remaining.getAmount() <= 0) break;
             if (chestLoc.getBlock().getState() instanceof Container container) {
                 HashMap<Integer, ItemStack> result = container.getInventory().addItem(remaining);
@@ -346,19 +405,42 @@ public class Network {
     }
 
     public double getCapacityPercent() {
-        int totalSlots = 0;
-        int usedSlots = 0;
-        for (Location chestLoc : chestLocations) {
-            if (chestLoc.getBlock().getState() instanceof Container container) {
-                Inventory inv = container.getInventory();
-                totalSlots += inv.getSize();
-                for (ItemStack item : inv.getContents()) {
-                    if (item != null && item.getType() != Material.AIR) {
-                        usedSlots++;
+        return getScanResult().capacityPercent();
+    }
+
+    private List<Location> getLoadedChestLocations() {
+        Map<ChunkKey, Boolean> loadedChunks = new HashMap<>();
+        List<Location> loadedLocations = new ArrayList<>();
+        for (Location location : getChestLocations()) {
+            if (location == null || location.getWorld() == null) {
+                continue;
+            }
+            ChunkKey key = new ChunkKey(location.getWorld().getUID(),
+                    location.getBlockX() >> 4, location.getBlockZ() >> 4);
+            boolean loaded = loadedChunks.computeIfAbsent(key, ignored -> {
+                try {
+                    World world = location.getWorld();
+                    if (!world.isChunkLoaded(key.chunkX(), key.chunkZ())) {
+                        world.loadChunk(key.chunkX(), key.chunkZ(), false);
                     }
+                    return world.isChunkLoaded(key.chunkX(), key.chunkZ());
+                } catch (RuntimeException ignoredException) {
+                    return false;
                 }
+            });
+            if (loaded) {
+                loadedLocations.add(location);
             }
         }
-        return totalSlots > 0 ? (double) usedSlots * 100.0 / totalSlots : 0.0;
+        return loadedLocations;
+    }
+
+    private void requirePrimaryThread() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("Network storage world and inventory access must run on the Bukkit main thread");
+        }
+    }
+
+    private record ChunkKey(UUID worldId, int chunkX, int chunkZ) {
     }
 }

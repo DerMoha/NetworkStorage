@@ -65,6 +65,8 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("update-check.notify-admins", true);
         config.addDefault("update-check.interval-hours", NetworkStorageConstants.DEFAULT_UPDATE_CHECK_INTERVAL_HOURS);
         config.addDefault("update-check.notify-permission", "");
+        config.addDefault("storage.backup-interval-hours", 24);
+        config.addDefault("storage.write-debounce-ms", 1500);
         config.options().copyDefaults(true);
     }
 
@@ -192,6 +194,14 @@ public class ConfigManager implements NetworkAccessRules {
 
     public String getUpdateNotifyPermission() {
         return config.getString("update-check.notify-permission", "");
+    }
+
+    public int getStorageBackupIntervalHours() {
+        return getClampedInt("storage.backup-interval-hours", 24, 0, 8_760);
+    }
+
+    public int getStorageWriteDebounceMs() {
+        return getClampedInt("storage.write-debounce-ms", 1500, 250, 10_000);
     }
 
     public void reloadConfig() {

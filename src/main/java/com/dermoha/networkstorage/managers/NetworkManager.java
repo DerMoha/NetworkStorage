@@ -1,221 +1,90 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
-import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkStorageProvider;
+import com.dermoha.networkstorage.storage.PersistenceCoordinator;
+import com.dermoha.networkstorage.storage.NetworkScanResult;
+import com.dermoha.networkstorage.storage.NetworkScanStatus;
+import com.dermoha.networkstorage.storage.StorageSnapshot;
+import com.dermoha.networkstorage.storage.StorageValues;
 import com.dermoha.networkstorage.util.BlockUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
 import org.bukkit.block.data.type.Chest;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.*;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+import java.util.logging.Level;
 
 public class NetworkManager {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private final Map<String, Network> networks = new HashMap<>();
+    private final NetworkStorageProvider provider;
+    private final PersistenceCoordinator persistence;
+    private final Map<String, Network> networks = new ConcurrentHashMap<>();
     private final Map<Location, Network> locationIndex = new HashMap<>();
-    private final Map<UUID, String> selectedNetworks = new HashMap<>();
-    private final Map<UUID, String> selectedWirelessNetworks = new HashMap<>();
-    private final File networksFile;
-    private final File playerStateFile;
+    private final Map<UUID, String> selectedNetworks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> selectedWirelessNetworks = new ConcurrentHashMap<>();
+    private final Set<String> dirtyNetworks = ConcurrentHashMap.newKeySet();
+    private final NetworkContentScanner contentScanner = new NetworkContentScanner();
+    private final Map<Network, ScanJob> scanJobs = new java.util.IdentityHashMap<>();
+    private final Set<Network> attachedNetworks = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    private boolean scansCancelled;
+    private volatile boolean storageDirty;
+    private volatile boolean playerStateDirty;
     private final Object renameLock = new Object();
-    private final Object diskWriteLock = new Object();
-    private com.dermoha.networkstorage.storage.RollingBackupManager backupManager;
-    private int networkSaveGeneration = 0;
-    private int playerStateSaveGeneration = 0;
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
-    private static final Pattern SAFE_NETWORK_NAME = Pattern.compile("^[A-Za-z0-9 _'-]{1,32}$");
 
-    public NetworkManager(NetworkStoragePlugin plugin) {
+    public NetworkManager(NetworkStoragePlugin plugin, NetworkStorageProvider provider) {
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
-        this.networksFile = new File(plugin.getDataFolder(), "networks.yml");
-        this.playerStateFile = new File(plugin.getDataFolder(), "player-state.yml");
-        this.backupManager = new com.dermoha.networkstorage.storage.RollingBackupManager(plugin);
-        this.backupManager.initialize();
-        ensureDataFileExists(networksFile, "networks.yml");
-        ensureDataFileExists(playerStateFile, "player-state.yml");
-        loadNetworks();
-        loadPlayerState();
+        this.provider = provider;
+        this.persistence = new PersistenceCoordinator(provider, plugin.getLogger(),
+                plugin.getConfigManager().getStorageWriteDebounceMs());
+        loadAll();
         pruneInvalidPlayerState();
-    }
-
-    private void ensureDataFileExists(File file, String fileName) {
-        if (file.exists()) {
-            return;
-        }
-
-        try {
-            plugin.getDataFolder().mkdirs();
-            file.createNewFile();
-        } catch (IOException e) {
-            plugin.getLogger().severe("Could not create " + fileName + ": " + e.getMessage());
+        for (Network network : networks.values()) {
+            attachNetwork(network);
+            requestScan(network, true, null);
         }
     }
 
-    private void loadNetworks() {
+    public NetworkStorageProvider getStorageProvider() {
+        return provider;
+    }
+
+    private void loadAll() {
+        provider.loadNetworks(networks, selectedNetworks, selectedWirelessNetworks);
+
         boolean isGlobalMode = plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL;
-        boolean globalNetworkLoaded = false;
-        FileConfiguration networksConfig = YamlConfiguration.loadConfiguration(networksFile);
-        ConfigurationSection networksSection = networksConfig.getConfigurationSection("networks");
-        if (networksSection != null) {
-            for (String networkName : networksSection.getKeys(false)) {
-                ConfigurationSection netSection = networksSection.getConfigurationSection(networkName);
-                if (netSection != null) {
-                    try {
-                        String ownerString = netSection.getString("owner");
-                        if (ownerString == null) {
-                            throw new IllegalArgumentException("missing owner UUID");
-                        }
-                        UUID owner = UUID.fromString(ownerString);
-                        Network network = new Network(networkName, owner, plugin.getConfigManager(), plugin.getMovementEvents());
-
-                        List<Map<?, ?>> chestLocationsMaps = netSection.getMapList("chests");
-                        for (Map<?, ?> locMap : chestLocationsMaps) {
-                            Location location = deserializeSavedLocation(locMap, networkName, "chest");
-                            if (location != null) {
-                                network.addChest(location);
-                            }
-                        }
-
-                        List<Map<?, ?>> terminalLocationsMaps = netSection.getMapList("terminals");
-                        for (Map<?, ?> locMap : terminalLocationsMaps) {
-                            Location location = deserializeSavedLocation(locMap, networkName, "terminal");
-                            if (location != null) {
-                                network.addTerminal(location);
-                            }
-                        }
-
-                        List<Map<?, ?>> senderChestLocationsMaps = netSection.getMapList("sender-chests");
-                        for (Map<?, ?> locMap : senderChestLocationsMaps) {
-                            Location location = deserializeSavedLocation(locMap, networkName, "sender chest");
-                            if (location != null) {
-                                network.addSenderChest(location);
-                            }
-                        }
-
-                        List<String> trustedUuids = netSection.getStringList("trusted");
-                        for (String trustedUuid : trustedUuids) {
-                            try {
-                                network.addTrustedPlayer(UUID.fromString(trustedUuid));
-                            } catch (IllegalArgumentException e) {
-                                plugin.getLogger().warning("Skipping invalid trusted UUID '" + trustedUuid + "' in network '" + networkName + "'.");
-                            }
-                        }
-
-                        ConfigurationSection timedTrustSection = netSection.getConfigurationSection("trusted-expiry");
-                        if (timedTrustSection != null) {
-                            long now = System.currentTimeMillis();
-                            for (String uuidString : timedTrustSection.getKeys(false)) {
-                                try {
-                                    UUID trustedId = UUID.fromString(uuidString);
-                                    long expiresAt = timedTrustSection.getLong(uuidString);
-                                    if (expiresAt > now) {
-                                        network.addTrustedPlayerWithExpiry(trustedId, expiresAt);
-                                    } else {
-                                        plugin.getLogger().info("Skipping expired trust for " + uuidString + " in network '" + networkName + "'.");
-                                    }
-                                } catch (IllegalArgumentException e) {
-                                    plugin.getLogger().warning("Skipping invalid trusted-expiry UUID '" + uuidString + "' in network '" + networkName + "'.");
-                                }
-                            }
-                        }
-
-                        String description = netSection.getString("description", "");
-                        if (description != null && !description.isEmpty()) {
-                            network.setDescription(description);
-                        }
-
-                        // Load player stats
-                        ConfigurationSection statsSection = netSection.getConfigurationSection("stats");
-                        if (statsSection != null) {
-                            for (String uuidString : statsSection.getKeys(false)) {
-                                try {
-                                    UUID playerUUID = UUID.fromString(uuidString);
-                                    String name = statsSection.getString(uuidString + ".name");
-                                    long deposited = Math.max(0L, statsSection.getLong(uuidString + ".deposited"));
-                                    long withdrawn = Math.max(0L, statsSection.getLong(uuidString + ".withdrawn"));
-                                    PlayerStat stat = new PlayerStat(playerUUID, name, deposited, withdrawn);
-                                    network.getPlayerStats().put(playerUUID, stat);
-                                } catch (IllegalArgumentException e) {
-                                    plugin.getLogger().warning("Skipping invalid stats UUID '" + uuidString + "' in network '" + networkName + "'.");
-                                }
-                            }
-                        }
-
-                        network.setDirty(false);
-                        networks.put(networkName, network);
-                        recomputeNetworkTotal(network);
-                        if (isGlobalMode && GLOBAL_NETWORK_NAME.equals(networkName)) {
-                            globalNetworkLoaded = true;
-                        }
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Could not load network '" + networkName + "': " + e.getMessage());
-                    }
-                }
-            }
-        }
-
-        if (isGlobalMode && !globalNetworkLoaded) {
+        if (isGlobalMode && !networks.containsKey(GLOBAL_NETWORK_NAME)) {
             Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
-            globalNetwork.setDirty(true);
+            markDirty(GLOBAL_NETWORK_NAME);
             plugin.getLogger().info("Created new global network in memory. It will be saved on next auto-save.");
         }
 
         rebuildLocationIndex();
-    }
-
-    private Location deserializeSavedLocation(Map<?, ?> locMap, String networkName, String locationType) {
-        try {
-            Map<String, Object> serializedLocation = new HashMap<>();
-            for (Map.Entry<?, ?> entry : locMap.entrySet()) {
-                if (entry.getKey() instanceof String key) {
-                    serializedLocation.put(key, entry.getValue());
-                }
-            }
-
-            Location location = Location.deserialize(serializedLocation);
-            if (location.getWorld() == null
-                    || !Double.isFinite(location.getX())
-                    || !Double.isFinite(location.getY())
-                    || !Double.isFinite(location.getZ())) {
-                throw new IllegalArgumentException("invalid or unloaded world/coordinates");
-            }
-            String worldName = location.getWorld().getName();
-            if (plugin.getServer().getWorld(worldName) == null) {
-                throw new IllegalArgumentException("world '" + worldName + "' is not registered on this server");
-            }
-            if (Math.abs(location.getX()) > 3.0E7
-                    || Math.abs(location.getZ()) > 3.0E7
-                    || location.getY() < plugin.getServer().getWorld(worldName).getMinHeight() - 1024
-                    || location.getY() > plugin.getServer().getWorld(worldName).getMaxHeight() + 1024) {
-                throw new IllegalArgumentException("coordinates out of world bounds");
-            }
-            return location;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Skipping invalid " + locationType + " location in network '" + networkName + "': " + e.getMessage());
-            return null;
-        }
     }
 
     private void rebuildLocationIndex() {
@@ -233,50 +102,10 @@ public class NetworkManager {
         }
     }
 
-    private void recomputeNetworkTotal(Network network) {
-        long total = 0L;
-        for (Location location : network.getChestLocations()) {
-            if (!(location.getBlock().getState() instanceof Container container)) {
-                continue;
-            }
-            if (location.getWorld() == null || !location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4)) {
-                continue;
-            }
-            for (ItemStack item : container.getInventory().getContents()) {
-                if (item != null && item.getType() != Material.AIR) {
-                    total += item.getAmount();
-                }
-            }
-        }
-        network.setTotalStoredAmount(total);
-    }
-
-    private void loadPlayerState() {
-        selectedNetworks.clear();
-        selectedWirelessNetworks.clear();
-
-        FileConfiguration playerStateConfig = YamlConfiguration.loadConfiguration(playerStateFile);
-        ConfigurationSection playersSection = playerStateConfig.getConfigurationSection("players");
-        if (playersSection == null) {
-            return;
-        }
-
-        for (String uuidString : playersSection.getKeys(false)) {
-            try {
-                UUID playerId = UUID.fromString(uuidString);
-                String basePath = "players." + uuidString;
-                String selectedOwnedNetwork = playerStateConfig.getString(basePath + ".selected-owned-network");
-                String selectedWirelessNetwork = playerStateConfig.getString(basePath + ".selected-wireless-network");
-
-                if (selectedOwnedNetwork != null && !selectedOwnedNetwork.isBlank()) {
-                    selectedNetworks.put(playerId, selectedOwnedNetwork);
-                }
-                if (selectedWirelessNetwork != null && !selectedWirelessNetwork.isBlank()) {
-                    selectedWirelessNetworks.put(playerId, selectedWirelessNetwork);
-                }
-            } catch (IllegalArgumentException e) {
-                plugin.getLogger().warning("Skipping invalid player-state entry for UUID '" + uuidString + "'.");
-            }
+    private void markDirty(String name) {
+        storageDirty = true;
+        if (name != null) {
+            dirtyNetworks.add(name);
         }
     }
 
@@ -303,209 +132,414 @@ public class NetworkManager {
         }
 
         if (changed) {
+            requestPlayerStateSave();
+        }
+    }
+
+    public boolean saveNetworks() {
+        requirePrimaryThread();
+        if (!hasPendingChanges()) {
+            return true;
+        }
+        return saveSnapshotNow();
+    }
+
+    public boolean saveAllNetworks() {
+        requirePrimaryThread();
+        return saveSnapshotNow();
+    }
+
+    public boolean savePlayerState() {
+        requirePrimaryThread();
+        playerStateDirty = true;
+        return saveSnapshotNow();
+    }
+
+    private void requestPlayerStateSave() {
+        if (Bukkit.isPrimaryThread()) {
             savePlayerState();
-        }
-    }
-
-    private void savePlayerState() {
-        FileConfiguration newConfig = createPlayerStateSnapshot();
-        int saveGeneration;
-        synchronized (diskWriteLock) {
-            saveGeneration = ++playerStateSaveGeneration;
-        }
-
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            synchronized (diskWriteLock) {
-                if (saveGeneration != playerStateSaveGeneration) {
-                    return;
-                }
-                savePlayerStateSnapshot(newConfig);
-            }
-        });
-    }
-
-    private FileConfiguration createPlayerStateSnapshot() {
-        FileConfiguration newConfig = new YamlConfiguration();
-        Set<UUID> playerIds = new HashSet<>();
-        playerIds.addAll(selectedNetworks.keySet());
-        playerIds.addAll(selectedWirelessNetworks.keySet());
-
-        for (UUID playerId : playerIds) {
-            String basePath = "players." + playerId;
-
-            if (selectedNetworks.containsKey(playerId)) {
-                newConfig.set(basePath + ".selected-owned-network", selectedNetworks.get(playerId));
-            }
-            if (selectedWirelessNetworks.containsKey(playerId)) {
-                newConfig.set(basePath + ".selected-wireless-network", selectedWirelessNetworks.get(playerId));
-            }
-        }
-
-        return newConfig;
-    }
-
-    private void savePlayerStateSnapshot(FileConfiguration newConfig) {
-        try {
-            Path tempFile = playerStateFile.toPath().resolveSibling(playerStateFile.getName() + ".tmp");
-            newConfig.save(tempFile.toFile());
-
-            try {
-                Files.move(tempFile, playerStateFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException atomicMoveFailure) {
-                Files.move(tempFile, playerStateFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException e) {
-            plugin.getLogger().severe("Could not save player state to " + playerStateFile);
-            plugin.getLogger().severe(e.getMessage());
-        }
-    }
-
-    public void saveNetworks() {
-        boolean hasDirtyNetworks = networks.values().stream().anyMatch(Network::isDirty);
-        if (!hasDirtyNetworks) {
             return;
         }
-        saveNetworksAsync();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            playerStateDirty = true;
+            saveSnapshotNow();
+        });
     }
 
-    private void saveNetworksAsync() {
-        List<Network> savedNetworks = new ArrayList<>(networks.values());
-        FileConfiguration newConfig = createNetworksSnapshot(savedNetworks);
-        for (Network network : savedNetworks) {
-            network.setDirty(false);
+    private boolean hasPendingChanges() {
+        if (storageDirty || playerStateDirty) {
+            return true;
         }
+        return networks.values().stream().anyMatch(Network::isDirty);
+    }
 
-        int saveGeneration;
-        synchronized (diskWriteLock) {
-            saveGeneration = ++networkSaveGeneration;
+    private boolean saveSnapshotNow() {
+        // Capture Bukkit-owned state on the main thread; SQLite receives only detached values.
+        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks));
+        return true;
+    }
+
+    public boolean flushPersistence() {
+        requirePrimaryThread();
+        // Always capture the newest server-thread view before shutdown/reload waits for durability.
+        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks));
+        boolean saved = persistence.flush(Duration.ofSeconds(30));
+        if (saved) {
+            for (Network network : networks.values()) network.setDirty(false);
+            dirtyNetworks.clear();
+            storageDirty = false;
+            playerStateDirty = false;
         }
+        return saved;
+    }
 
-        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-            synchronized (diskWriteLock) {
-                if (saveGeneration != networkSaveGeneration) {
-                    return;
-                }
-                if (!saveNetworksSnapshot(newConfig)) {
-                    for (Network network : savedNetworks) {
-                        network.setDirty(true);
-                    }
-                }
+    public void shutdownPersistence() {
+        cancelScheduledScans();
+        persistence.close();
+    }
+
+    /**
+     * Connects a network's content mutations to the coalesced main-thread
+     * scanner.  The callback deliberately does not read Bukkit state; it only
+     * schedules the scan if a caller ever mutates a network off-thread.
+     */
+    private void attachNetwork(Network network) {
+        if (network == null || !attachedNetworks.add(network)) {
+            return;
+        }
+        network.setContentChangeListener(() -> {
+            if (Bukkit.isPrimaryThread()) {
+                requestScan(network, false, null);
+            } else {
+                Bukkit.getScheduler().runTask(plugin, () -> requestScan(network, false, null));
             }
         });
     }
 
-    private FileConfiguration createNetworksSnapshot(List<Network> savedNetworks) {
-        FileConfiguration newConfig = new YamlConfiguration();
-        for (Network network : savedNetworks) {
-            String path = "networks." + network.getName();
-            newConfig.set(path + ".owner", network.getOwner().toString());
-
-            List<Map<String, Object>> serializedChests = new ArrayList<>();
-            for (Location loc : network.getChestLocations()) {
-                serializedChests.add(loc.serialize());
-            }
-            newConfig.set(path + ".chests", serializedChests);
-
-            List<Map<String, Object>> serializedTerminals = new ArrayList<>();
-            for (Location loc : network.getTerminalLocations()) {
-                serializedTerminals.add(loc.serialize());
-            }
-            newConfig.set(path + ".terminals", serializedTerminals);
-
-            List<Map<String, Object>> serializedSenderChests = new ArrayList<>();
-            for (Location loc : network.getSenderChestLocations()) {
-                serializedSenderChests.add(loc.serialize());
-            }
-            newConfig.set(path + ".sender-chests", serializedSenderChests);
-
-            newConfig.set(path + ".trusted", network.getTrustedPlayers().stream().map(UUID::toString).collect(Collectors.toList()));
-
-            Map<UUID, Long> timedTrusts = network.getTrustedPlayersWithExpiry();
-            if (!timedTrusts.isEmpty()) {
-                for (Map.Entry<UUID, Long> entry : timedTrusts.entrySet()) {
-                    newConfig.set(path + ".trusted-expiry." + entry.getKey().toString(), entry.getValue());
-                }
-            }
-
-            if (network.getDescription() != null && !network.getDescription().isEmpty()) {
-                newConfig.set(path + ".description", network.getDescription());
-            }
-
-            for (PlayerStat stat : network.getPlayerStats().values()) {
-                String statPath = path + ".stats." + stat.getPlayerUUID().toString();
-                newConfig.set(statPath + ".name", stat.getPlayerName());
-                newConfig.set(statPath + ".deposited", stat.getItemsDeposited());
-                newConfig.set(statPath + ".withdrawn", stat.getItemsWithdrawn());
-            }
+    private void requirePrimaryThread() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("Network storage scans and Bukkit world access must run on the main thread");
         }
-
-        return newConfig;
     }
 
-    private boolean saveNetworksSnapshot(FileConfiguration newConfig) {
-        try {
-            Path tempFile = networksFile.toPath().resolveSibling(networksFile.getName() + ".tmp");
-            newConfig.save(tempFile.toFile());
+    private void requestScan(Network network,
+                             boolean refresh,
+                             Consumer<NetworkScanResult> completionCallback) {
+        getNetworkScan(network, refresh, completionCallback);
+    }
 
-            try {
-                Files.move(tempFile, networksFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException atomicMoveFailure) {
-                Files.move(tempFile, networksFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    /**
+     * Returns the latest authoritative snapshot, starting a scan when the
+     * snapshot is missing or stale.  A refresh always starts a fresh scan;
+     * otherwise an existing scan is coalesced and allowed to finish.
+     */
+    public NetworkScanResult getNetworkScan(Network network,
+                                             boolean refresh,
+                                             Consumer<NetworkScanResult> completionCallback) {
+        requirePrimaryThread();
+        if (network == null) {
+            return null;
+        }
+        attachNetworkIfNeeded(network);
+
+        ScanJob existing = scanJobs.get(network);
+        if (refresh) {
+            if (existing != null) {
+                restartScan(existing, completionCallback);
+            } else {
+                startScan(network, completionCallback);
             }
-            return true;
-        } catch (IOException e) {
-            plugin.getLogger().severe("Could not save networks to " + networksFile);
-            plugin.getLogger().severe(e.getMessage());
+            return network.getScanResult();
+        }
+
+        NetworkScanResult current = network.getScanResult();
+        if (current.status() == NetworkScanStatus.COMPLETE) {
+            if (completionCallback != null) {
+                completionCallback.accept(current);
+            }
+            return current;
+        }
+
+        // An incomplete result is an actionable diagnostic, not a request to
+        // retry forever on every terminal render.  Content invalidation and
+        // the explicit admin/terminal refresh path both create a fresh scan.
+        if (current.status() == NetworkScanStatus.INCOMPLETE && existing == null) {
+            return current;
+        }
+
+        if (existing == null) {
+            startScan(network, completionCallback);
+        } else if (completionCallback != null) {
+            if (!existing.callbacks().contains(completionCallback)) {
+                existing.callbacks().add(completionCallback);
+            }
+        }
+        return network.getScanResult();
+    }
+
+    public NetworkScanResult getNetworkScan(Network network) {
+        return getNetworkScan(network, false, null);
+    }
+
+    public NetworkScanResult rescanNetwork(Network network) {
+        requirePrimaryThread();
+        if (network == null) {
+            return null;
+        }
+        network.invalidateItemCache();
+        return getNetworkScan(network, true, null);
+    }
+
+    public void rescanAllNetworks() {
+        requirePrimaryThread();
+        for (Network network : getAllNetworks()) {
+            rescanNetwork(network);
+        }
+    }
+
+    private void startScan(Network network, Consumer<NetworkScanResult> callback) {
+        requirePrimaryThread();
+        if (scansCancelled) {
+            return;
+        }
+        NetworkContentScanner.ScanSession session = contentScanner.begin(
+                network.getName(), network.getChestLocations());
+        network.beginScan(session.registeredLocations(), session.uniqueChunks());
+        ScanJob job = new ScanJob(network, session, network.getContentVersion());
+        if (callback != null) {
+            job.callbacks().add(callback);
+        }
+        scanJobs.put(network, job);
+        scheduleScanStep(job);
+    }
+
+    private void restartScan(ScanJob job, Consumer<NetworkScanResult> callback) {
+        requirePrimaryThread();
+        List<Consumer<NetworkScanResult>> callbacks = new ArrayList<>(job.callbacks());
+        if (callback != null) {
+            callbacks.add(callback);
+        }
+        cancelScan(job.network());
+        startScan(job.network(), null);
+        ScanJob replacement = scanJobs.get(job.network());
+        if (replacement != null) {
+            replacement.callbacks().addAll(callbacks);
+        }
+    }
+
+    private void scheduleScanStep(ScanJob job) {
+        job.taskId = plugin.getServer().getScheduler().runTask(plugin, () -> advanceScan(job)).getTaskId();
+    }
+
+    private void advanceScan(ScanJob job) {
+        requirePrimaryThread();
+        if (scanJobs.get(job.network()) != job || scansCancelled) {
+            return;
+        }
+        if (job.network().getContentVersion() != job.contentVersion()) {
+            restartScan(job, null);
+            return;
+        }
+
+        NetworkContentScanner.ScanStep step = contentScanner.advance(
+                job.session(), NetworkContentScanner.DEFAULT_CHUNKS_PER_TICK);
+        if (!step.complete()) {
+            scheduleScanStep(job);
+            return;
+        }
+
+        if (job.network().getContentVersion() != job.contentVersion()) {
+            restartScan(job, null);
+            return;
+        }
+
+        NetworkScanResult result = step.result();
+        job.network().applyScanResult(result);
+        scanJobs.remove(job.network());
+        job.taskId = -1;
+        logScan(job.network(), job.session(), job.network().getScanResult());
+        for (Consumer<NetworkScanResult> callback : List.copyOf(job.callbacks())) {
+            try {
+                callback.accept(job.network().getScanResult());
+            } catch (RuntimeException exception) {
+                plugin.getLogger().log(Level.WARNING,
+                        "NetworkStorage scan completion callback failed for " + job.network().getName(),
+                        exception);
+            }
+        }
+    }
+
+    private void logScan(Network network,
+                         NetworkContentScanner.ScanSession session,
+                         NetworkScanResult result) {
+        if (result.status() == NetworkScanStatus.COMPLETE) {
+            plugin.getLogger().info(String.format(java.util.Locale.ROOT,
+                    "%s scan: %,d registered locations, %,d containers found, %,d items",
+                    network.getName(),
+                    session.registeredLocations(),
+                    session.containersFound(),
+                    result.totalItems()));
+            return;
+        }
+
+        plugin.getLogger().warning(network.getName() + " scan " + result.status()
+                + ": " + session.containersFound() + "/" + session.registeredLocations()
+                + " containers found; item total is not authoritative.");
+        for (String warning : result.warnings()) {
+            plugin.getLogger().warning(warning);
+        }
+    }
+
+    private void cancelScan(Network network) {
+        ScanJob job = scanJobs.remove(network);
+        if (job != null && job.taskId != -1) {
+            plugin.getServer().getScheduler().cancelTask(job.taskId);
+            job.taskId = -1;
+        }
+    }
+
+    private void detachNetwork(Network network) {
+        cancelScan(network);
+        attachedNetworks.remove(network);
+        network.setContentChangeListener(null);
+    }
+
+    public void cancelScheduledScans() {
+        requirePrimaryThread();
+        scansCancelled = true;
+        for (ScanJob job : new ArrayList<>(scanJobs.values())) {
+            if (job.taskId != -1) {
+                plugin.getServer().getScheduler().cancelTask(job.taskId);
+            }
+        }
+        scanJobs.clear();
+    }
+
+    public boolean ensureLocationChunkLoaded(Location location) {
+        requirePrimaryThread();
+        if (location == null || location.getWorld() == null) {
+            return false;
+        }
+        try {
+            int chunkX = location.getBlockX() >> 4;
+            int chunkZ = location.getBlockZ() >> 4;
+            if (!location.getWorld().isChunkLoaded(chunkX, chunkZ)) {
+                location.getWorld().loadChunk(chunkX, chunkZ, false);
+            }
+            return location.getWorld().isChunkLoaded(chunkX, chunkZ);
+        } catch (RuntimeException exception) {
+            plugin.getLogger().log(Level.WARNING,
+                    "Could not load registered location chunk " + location, exception);
             return false;
         }
     }
 
-    public void saveAllNetworks() {
-        List<Network> savedNetworks = new ArrayList<>(networks.values());
-        FileConfiguration networksSnapshot = createNetworksSnapshot(savedNetworks);
-        FileConfiguration playerStateSnapshot = createPlayerStateSnapshot();
+    public int getStoredItemCountForMetrics() {
+        long total = 0L;
+        for (Network network : getAllNetworks()) {
+            NetworkScanResult scan = network.getScanResult();
+            if (scan.status() != NetworkScanStatus.COMPLETE || !scan.hasAuthoritativeData()) {
+                return 0;
+            }
+            total += scan.totalItems();
+        }
+        return (int) Math.min(Integer.MAX_VALUE, total);
+    }
 
-        synchronized (diskWriteLock) {
-            networkSaveGeneration++;
-            playerStateSaveGeneration++;
-            if (networksFile.length() > 0) {
-                backupManager.createBackup(networksFile);
+    public String getScanStatusForMetrics() {
+        boolean pending = false;
+        boolean incomplete = false;
+        for (Network network : getAllNetworks()) {
+            if (network.getScanResult().status() == NetworkScanStatus.INCOMPLETE) {
+                incomplete = true;
+            } else if (network.getScanResult().status() == NetworkScanStatus.PENDING) {
+                pending = true;
             }
-            if (saveNetworksSnapshot(networksSnapshot)) {
-                for (Network network : savedNetworks) {
-                    network.setDirty(false);
-                }
-            }
-            if (playerStateFile.exists() && playerStateFile.length() > 0) {
-                backupManager.createBackup(playerStateFile);
-            }
-            savePlayerStateSnapshot(playerStateSnapshot);
+        }
+        if (incomplete) {
+            return NetworkScanStatus.INCOMPLETE.name().toLowerCase(java.util.Locale.ROOT);
+        }
+        if (pending) {
+            return NetworkScanStatus.PENDING.name().toLowerCase(java.util.Locale.ROOT);
+        }
+        return NetworkScanStatus.COMPLETE.name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static final class ScanJob {
+        private final Network network;
+        private final NetworkContentScanner.ScanSession session;
+        private final long contentVersion;
+        private final List<Consumer<NetworkScanResult>> callbacks = new ArrayList<>();
+        private int taskId = -1;
+
+        private ScanJob(Network network, NetworkContentScanner.ScanSession session, long contentVersion) {
+            this.network = network;
+            this.session = session;
+            this.contentVersion = contentVersion;
+        }
+
+        private Network network() {
+            return network;
+        }
+
+        private NetworkContentScanner.ScanSession session() {
+            return session;
+        }
+
+        private long contentVersion() {
+            return contentVersion;
+        }
+
+        private List<Consumer<NetworkScanResult>> callbacks() {
+            return callbacks;
         }
     }
 
     public void addChestToNetwork(Network network, Location location) {
+        requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
+        attachNetworkIfNeeded(network);
         network.addChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
+        markDirty(network.getName());
     }
 
     public void addTerminalToNetwork(Network network, Location location) {
+        requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
+        attachNetworkIfNeeded(network);
         network.addTerminal(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
+        markDirty(network.getName());
     }
 
     public void addSenderChestToNetwork(Network network, Location location) {
+        requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
+        attachNetworkIfNeeded(network);
         network.addSenderChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
+        markDirty(network.getName());
+    }
+
+    private void attachNetworkIfNeeded(Network network) {
+        // A network loaded at startup is already attached.  This assignment is
+        // harmless for newly-created networks and makes manager entry points
+        // robust for tests and integrations that hand us a fresh Network.
+        if (network != null && !attachedNetworks.contains(network)) {
+            attachNetwork(network);
+        }
     }
 
     public boolean removeTrackedLocation(Network network, Location location) {
+        requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
         boolean changed = removeTrackedLocationExact(network, location);
         if (!normalizedLocation.equals(location)) {
             changed = removeTrackedLocationExact(network, normalizedLocation) || changed;
+        }
+        if (changed) {
+            markDirty(network.getName());
         }
         return changed;
     }
@@ -547,13 +581,18 @@ public class NetworkManager {
             return;
         }
         Network network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
+        attachNetwork(network);
         networks.put(networkName, network);
-        network.setDirty(true);
+        requestScan(network, true, null);
+        markDirty(networkName);
         if (!selectedNetworks.containsKey(player.getUniqueId())) {
             selectedNetworks.put(player.getUniqueId(), networkName);
-            savePlayerState();
+            playerStateDirty = true;
         }
-        saveNetworks();
+        if (!saveNetworks()) {
+            player.sendMessage("§cThe network was created in memory, but SQLite could not commit it. It will be retried automatically.");
+            return;
+        }
         player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
 
@@ -597,6 +636,8 @@ public class NetworkManager {
             network.setName(newName);
             networks.put(newName, network);
             networks.remove(oldName);
+            dirtyNetworks.remove(oldName);
+            markDirty(newName);
             boolean playerStateChanged = false;
             if (oldName.equals(selectedNetworks.get(network.getOwner()))) {
                 selectedNetworks.put(network.getOwner(), newName);
@@ -609,10 +650,13 @@ public class NetworkManager {
                 }
             }
             if (playerStateChanged) {
-                savePlayerState();
+                playerStateDirty = true;
             }
         }
-        saveNetworks();
+        if (!saveNetworks()) {
+            player.sendMessage("§cThe rename could not be committed to SQLite. The change remains pending and will be retried automatically.");
+            return;
+        }
         player.sendMessage(String.format(lang.getMessage("network.rename.success"), oldName, newName));
     }
 
@@ -624,7 +668,7 @@ public class NetworkManager {
     }
 
     public Collection<Network> getAllNetworks() {
-        return networks.values();
+        return List.copyOf(networks.values());
     }
 
     public Map<String, Network> getNetworks() {
@@ -636,9 +680,9 @@ public class NetworkManager {
     }
 
     public Network getNetworkByLocation(Location location) {
-        Location normalizedLocation = getNormalizedLocation(location);
-
+        requirePrimaryThread();
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
+            Location normalizedLocation = getNormalizedLocation(location);
             Network globalNetwork = networks.get(GLOBAL_NETWORK_NAME);
             if (globalNetwork != null && containsTrackedLocation(globalNetwork, location, normalizedLocation)) {
                 return globalNetwork;
@@ -650,6 +694,8 @@ public class NetworkManager {
         if (indexed != null) {
             return indexed;
         }
+
+        Location normalizedLocation = getNormalizedLocation(location);
 
         if (!normalizedLocation.equals(location)) {
             indexed = locationIndex.get(normalizedLocation);
@@ -677,6 +723,7 @@ public class NetworkManager {
     }
 
     public Location getNormalizedLocation(Location location) {
+        requirePrimaryThread();
         Block block = location.getBlock();
         if (!plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
             return location;
@@ -745,8 +792,7 @@ public class NetworkManager {
         }
 
         selectedNetworks.put(player.getUniqueId(), selectedNetwork.getName());
-        savePlayerState();
-        return true;
+        return savePlayerState();
     }
 
     public boolean selectWirelessNetwork(Player player, String networkName) {
@@ -756,8 +802,7 @@ public class NetworkManager {
         }
 
         selectedWirelessNetworks.put(player.getUniqueId(), selectedNetwork.getName());
-        savePlayerState();
-        return true;
+        return savePlayerState();
     }
 
     public Network getSelectedWirelessNetwork(Player player) {
@@ -776,7 +821,7 @@ public class NetworkManager {
         }
 
         selectedWirelessNetworks.remove(player.getUniqueId());
-        savePlayerState();
+        requestPlayerStateSave();
         return null;
     }
 
@@ -809,7 +854,7 @@ public class NetworkManager {
                 return selectedNetwork;
             }
             selectedNetworks.remove(player.getUniqueId());
-            savePlayerState();
+            requestPlayerStateSave();
         }
 
         List<Network> ownedNetworks = getOwnedNetworks(player);
@@ -828,14 +873,16 @@ public class NetworkManager {
                 return null;
             }
             network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
+            attachNetwork(network);
             networks.put(networkName, network);
-            network.setDirty(true);
+            requestScan(network, true, null);
+            markDirty(networkName);
         }
         return network;
     }
 
     public boolean isValidNetworkName(String networkName) {
-        return networkName != null && SAFE_NETWORK_NAME.matcher(networkName).matches();
+        return StorageValues.isValidNetworkName(networkName);
     }
 
     public synchronized int purgeAllNetworksForSeasonReset() {
@@ -847,6 +894,7 @@ public class NetworkManager {
         for (Network network : networksToPurge) {
             archiveDeletedNetworkStats(network.getName(), network);
             clearNetworkChestContents(network);
+            detachNetwork(network);
             resetNetworkInternal(network);
         }
 
@@ -854,10 +902,15 @@ public class NetworkManager {
         locationIndex.clear();
         selectedNetworks.clear();
         selectedWirelessNetworks.clear();
+        dirtyNetworks.clear();
+        storageDirty = true;
+        playerStateDirty = true;
 
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
-            globalNetwork.setDirty(true);
+            attachNetwork(globalNetwork);
+            requestScan(globalNetwork, true, null);
+            markDirty(GLOBAL_NETWORK_NAME);
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
         }
 
@@ -885,10 +938,13 @@ public class NetworkManager {
             return false;
         }
 
-        archiveDeletedNetworkStats(networkName, network);
-        clearNetworkChestContents(network);
+        Set<Location> chestLocationsToClear = network.getChestLocations();
+        detachNetwork(network);
         resetNetworkInternal(network);
         networks.remove(networkName);
+        dirtyNetworks.remove(networkName);
+        storageDirty = true;
+        playerStateDirty = true;
 
         for (Map.Entry<UUID, String> entry : selectedNetworks.entrySet()) {
             if (networkName.equals(entry.getValue())) {
@@ -903,8 +959,12 @@ public class NetworkManager {
         }
         selectedWirelessNetworks.values().removeIf(Objects::isNull);
 
-        saveNetworks();
-        savePlayerState();
+        if (!saveNetworks()) {
+            player.sendMessage("§cThe deletion could not be committed to SQLite. The change remains pending and will be retried automatically.");
+            return false;
+        }
+        archiveDeletedNetworkStats(networkName, network);
+        clearNetworkChestContents(chestLocationsToClear);
         player.sendMessage(String.format(lang.getMessage("network.delete.success"), networkName));
         return true;
     }
@@ -913,11 +973,11 @@ public class NetworkManager {
         if (network.getPlayerStats().isEmpty()) {
             return;
         }
-        File archiveFile = new File(plugin.getDataFolder(), "deleted-networks.log");
+        java.io.File archiveFile = new java.io.File(plugin.getDataFolder(), "deleted-networks.log");
         try (java.io.FileWriter writer = new java.io.FileWriter(archiveFile, true)) {
             writer.write("[" + new java.util.Date() + "] DELETED NETWORK: " + networkName + "\n");
-            for (java.util.Map.Entry<java.util.UUID, PlayerStat> entry : network.getPlayerStats().entrySet()) {
-                PlayerStat stat = entry.getValue();
+            for (java.util.Map.Entry<java.util.UUID, com.dermoha.networkstorage.stats.PlayerStat> entry : network.getPlayerStats().entrySet()) {
+                com.dermoha.networkstorage.stats.PlayerStat stat = entry.getValue();
                 writer.write("  - " + stat.getPlayerName() + " (" + entry.getKey() + "): deposited=" + stat.getItemsDeposited() + " withdrawn=" + stat.getItemsWithdrawn() + "\n");
             }
             writer.write("\n");
@@ -927,19 +987,27 @@ public class NetworkManager {
     }
 
     private void clearNetworkChestContents(Network network) {
-        for (Location location : network.getChestLocations()) {
+        clearNetworkChestContents(network.getChestLocations());
+        network.resetTotalStoredAmount();
+    }
+
+    private void clearNetworkChestContents(Collection<Location> locations) {
+        for (Location location : locations) {
+            if (!ensureLocationChunkLoaded(location)) {
+                continue;
+            }
             if (!(location.getBlock().getState() instanceof Container container)) {
                 continue;
             }
             container.getInventory().clear();
             container.update();
         }
-        network.resetTotalStoredAmount();
     }
 
-    public void resetNetwork(Network network) {
+    public boolean resetNetwork(Network network) {
         resetNetworkInternal(network);
-        saveNetworks();
+        markDirty(network.getName());
+        return saveNetworks();
     }
 
     private void resetNetworkInternal(Network network) {
