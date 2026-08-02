@@ -1,12 +1,12 @@
 package com.dermoha.networkstorage.stats;
 
+import com.dermoha.networkstorage.storage.StorageValues;
+
 import java.util.UUID;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.regex.Pattern;
 
 public class PlayerStat {
 
-    private static final Pattern VALID_PLAYER_NAME = Pattern.compile("^[A-Za-z0-9_]{3,16}$");
     private static final String UNKNOWN_PLAYER_NAME = "Unknown Player";
 
     private final UUID playerUUID;
@@ -30,7 +30,7 @@ public class PlayerStat {
         }
 
         String trimmedName = playerName.trim();
-        if (VALID_PLAYER_NAME.matcher(trimmedName).matches()) {
+        if (StorageValues.isValidPlayerName(trimmedName)) {
             return trimmedName;
         }
 
