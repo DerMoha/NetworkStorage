@@ -56,7 +56,8 @@ public class NetworkContainerListener implements Listener {
         }
 
         ItemStack itemInHand = event.getItem();
-        if (WandListener.isStorageWand(itemInHand, plugin)) {
+        if (WandListener.isStorageWand(itemInHand, plugin)
+                || WirelessTerminalListener.isWirelessTerminal(itemInHand, plugin)) {
             return;
         }
 
