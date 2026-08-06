@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.storage.NetworkScanResult;
+import com.dermoha.networkstorage.storage.StoredLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -36,10 +37,25 @@ public final class NetworkContentScanner {
     }
 
     public ScanSession begin(String networkName, Collection<Location> locations) {
+        return begin(networkName, locations, List.of());
+    }
+
+    public ScanSession begin(String networkName,
+                             Collection<Location> locations,
+                             Collection<StoredLocation> unloadedLocations) {
         requirePrimaryThread();
         Map<ChunkKey, ChunkGroup> grouped = new LinkedHashMap<>();
         List<String> warnings = new ArrayList<>();
-        int registeredLocations = locations == null ? 0 : locations.size();
+        int registeredLocations = (locations == null ? 0 : locations.size())
+                + (unloadedLocations == null ? 0 : unloadedLocations.size());
+
+        if (unloadedLocations != null) {
+            for (StoredLocation location : unloadedLocations) {
+                warnings.add(networkName + ": registered location waits for world '"
+                        + location.world() + "' to load: " + location.x() + ","
+                        + location.y() + "," + location.z());
+            }
+        }
 
         if (locations != null) {
             for (Location location : locations) {

@@ -25,6 +25,9 @@ public class Network {
     private final Set<Location> chestLocations;
     private final Set<Location> terminalLocations;
     private final Set<Location> senderChestLocations;
+    private final Set<StoredLocation> unloadedChestLocations;
+    private final Set<StoredLocation> unloadedTerminalLocations;
+    private final Set<StoredLocation> unloadedSenderChestLocations;
     private final Map<UUID, PlayerStat> playerStats;
     private final Set<UUID> trustedPlayers;
     private final NetworkAccessRules accessRules;
@@ -54,6 +57,9 @@ public class Network {
         this.chestLocations = Collections.synchronizedSet(new HashSet<>());
         this.terminalLocations = Collections.synchronizedSet(new HashSet<>());
         this.senderChestLocations = Collections.synchronizedSet(new HashSet<>());
+        this.unloadedChestLocations = ConcurrentHashMap.newKeySet();
+        this.unloadedTerminalLocations = ConcurrentHashMap.newKeySet();
+        this.unloadedSenderChestLocations = ConcurrentHashMap.newKeySet();
         this.playerStats = new ConcurrentHashMap<>();
         this.trustedPlayers = ConcurrentHashMap.newKeySet();
         this.scanResult = NetworkScanResult.pending(name, 0, 0, null);
@@ -107,6 +113,55 @@ public class Network {
         synchronized (senderChestLocations) {
             return new HashSet<>(senderChestLocations);
         }
+    }
+
+    public Set<StoredLocation> getUnloadedChestLocations() {
+        return Set.copyOf(unloadedChestLocations);
+    }
+
+    public Set<StoredLocation> getUnloadedTerminalLocations() {
+        return Set.copyOf(unloadedTerminalLocations);
+    }
+
+    public Set<StoredLocation> getUnloadedSenderChestLocations() {
+        return Set.copyOf(unloadedSenderChestLocations);
+    }
+
+    public void addUnloadedChest(StoredLocation location) {
+        unloadedChestLocations.add(Objects.requireNonNull(location));
+    }
+
+    public void addUnloadedTerminal(StoredLocation location) {
+        unloadedTerminalLocations.add(Objects.requireNonNull(location));
+    }
+
+    public void addUnloadedSenderChest(StoredLocation location) {
+        unloadedSenderChestLocations.add(Objects.requireNonNull(location));
+    }
+
+    /** Resolves positions for a newly loaded world without treating it as a content mutation. */
+    public boolean resolveUnloadedLocations(World world) {
+        boolean changed = resolveUnloaded(unloadedChestLocations, chestLocations, world);
+        changed |= resolveUnloaded(unloadedTerminalLocations, terminalLocations, world);
+        changed |= resolveUnloaded(unloadedSenderChestLocations, senderChestLocations, world);
+        return changed;
+    }
+
+    public void clearUnloadedLocations() {
+        unloadedChestLocations.clear();
+        unloadedTerminalLocations.clear();
+        unloadedSenderChestLocations.clear();
+    }
+
+    private boolean resolveUnloaded(Set<StoredLocation> unresolved, Set<Location> resolved, World world) {
+        boolean changed = false;
+        for (StoredLocation location : new ArrayList<>(unresolved)) {
+            if (location.world().equals(world.getName()) && unresolved.remove(location)) {
+                resolved.add(location.resolve(world));
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     public Map<UUID, PlayerStat> getPlayerStats() {

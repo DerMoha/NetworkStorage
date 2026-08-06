@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.storage.NetworkScanResult;
+import com.dermoha.networkstorage.storage.StoredLocation;
 import com.dermoha.networkstorage.TestItemStack;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -129,6 +130,18 @@ class NetworkContentScannerTest {
         assertEquals(1, step.result().registeredLocations());
         assertEquals(0, step.result().uniqueChunks());
         assertFalse(step.result().warnings().isEmpty());
+    }
+
+    @Test
+    void unloadedStoredWorldIsReportedAsIncomplete() {
+        NetworkContentScanner scanner = new NetworkContentScanner(() -> true);
+        NetworkContentScanner.ScanSession session = scanner.begin(
+                "Remote", List.of(), List.of(new StoredLocation("season_two", 1, 64, 1)));
+        NetworkContentScanner.ScanStep step = scanner.advance(session, 4);
+
+        assertEquals(com.dermoha.networkstorage.storage.NetworkScanStatus.INCOMPLETE, step.result().status());
+        assertEquals(1, step.result().registeredLocations());
+        assertTrue(step.result().warnings().get(0).contains("season_two"));
     }
 
     private static final class FakeWorld {

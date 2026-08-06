@@ -3,10 +3,13 @@ package com.dermoha.networkstorage.storage.sqlite;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
+import com.dermoha.networkstorage.storage.NetworkAccessRules;
 import com.dermoha.networkstorage.storage.NetworkStorageProvider;
+import com.dermoha.networkstorage.storage.MovementEvents;
 import com.dermoha.networkstorage.storage.StorageException;
 import com.dermoha.networkstorage.storage.StorageSnapshot;
 import com.dermoha.networkstorage.storage.StorageValues;
+import com.dermoha.networkstorage.storage.StoredLocation;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -49,6 +52,7 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
     }
 
     private final NetworkStoragePlugin plugin;
+    private final NetworkAccessRules accessRules;
     private final File databaseFile;
     private final ReentrantLock writeLock = new ReentrantLock();
     private volatile Connection connection;
@@ -64,12 +68,19 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
 
     public SqliteNetworkStorageProvider(NetworkStoragePlugin plugin, File databaseFile) {
         this.plugin = plugin;
+        this.accessRules = plugin.getConfigManager();
         this.databaseFile = databaseFile;
     }
 
     /** Package-independent constructor used by storage integration tests and tooling. */
     public SqliteNetworkStorageProvider(File databaseFile) {
-        this(null, databaseFile);
+        this.plugin = null;
+        this.accessRules = new NetworkAccessRules() {
+            @Override public boolean isGlobalNetworkMode() { return false; }
+            @Override public boolean hasPrivilege(org.bukkit.command.CommandSender sender, String permission) { return false; }
+            @Override public boolean isTrustSystemEnabled() { return true; }
+        };
+        this.databaseFile = databaseFile;
     }
 
     public static void ensureDriver() {
@@ -498,7 +509,8 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                     } catch (IllegalArgumentException e) {
                         throw new SQLException("Stored network '" + name + "' has an invalid owner UUID", e);
                     }
-                    Network network = new Network(name, owner, plugin.getConfigManager(), plugin.getMovementEvents());
+                    Network network = new Network(name, owner, accessRules,
+                            plugin == null ? MovementEvents.NOOP : plugin.getMovementEvents());
                     String description = rs.getString("description");
                     if (description == null) {
                         throw new SQLException("Stored network '" + name + "' has no description value");
@@ -509,9 +521,12 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                     if (description != null && !description.isEmpty()) {
                         network.setDescription(description);
                     }
-                    loadLocationsFor("network_chests", name).forEach(network::addChest);
-                    loadLocationsFor("network_terminals", name).forEach(network::addTerminal);
-                    loadLocationsFor("network_senders", name).forEach(network::addSenderChest);
+                    loadLocationsFor("network_chests", name).forEach(location -> addStoredLocation(
+                            network, location, network::addChest, network::addUnloadedChest));
+                    loadLocationsFor("network_terminals", name).forEach(location -> addStoredLocation(
+                            network, location, network::addTerminal, network::addUnloadedTerminal));
+                    loadLocationsFor("network_senders", name).forEach(location -> addStoredLocation(
+                            network, location, network::addSenderChest, network::addUnloadedSenderChest));
                     loadTrustsFor(name, network);
                     loadStatsFor(name, network);
                     network.setDirty(false);
@@ -545,14 +560,14 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
         }
     }
 
-    private List<Location> loadLocationsFor(String table, String networkName) throws SQLException {
-        List<Location> locations = new ArrayList<>();
+    private List<StoredLocation> loadLocationsFor(String table, String networkName) throws SQLException {
+        List<StoredLocation> locations = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(
                 "SELECT world, x, y, z FROM " + table + " WHERE network_name = ? ORDER BY world, x, y, z")) {
             ps.setString(1, networkName);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    locations.add(materializeLocation(rs.getString("world"),
+                    locations.add(readStoredLocation(rs.getString("world"),
                             rs.getInt("x"), rs.getInt("y"), rs.getInt("z")));
                 }
             }
@@ -560,21 +575,28 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
         return locations;
     }
 
-    private Location materializeLocation(String worldName, int x, int y, int z) throws SQLException {
+    private StoredLocation readStoredLocation(String worldName, int x, int y, int z) throws SQLException {
         if (worldName == null || worldName.isBlank()) {
             throw new SQLException("Stored location has no world");
         }
-        World world = Bukkit.getWorld(worldName);
-        if (world == null) {
-            throw new SQLException("Stored location references unavailable world '" + worldName + "'");
-        }
         if (Math.abs((long) x) > 30_000_000L
                 || Math.abs((long) z) > 30_000_000L
-                || y < world.getMinHeight() - 1024
-                || y > world.getMaxHeight() + 1024) {
+                || Math.abs((long) y) > 30_000_000L) {
             throw new SQLException("Stored location is outside safe world bounds");
         }
-        return new Location(world, x, y, z);
+        return new StoredLocation(worldName, x, y, z);
+    }
+
+    private void addStoredLocation(Network network,
+                                   StoredLocation stored,
+                                   java.util.function.Consumer<Location> addResolved,
+                                   java.util.function.Consumer<StoredLocation> addUnresolved) {
+        World world = plugin == null ? null : Bukkit.getWorld(stored.world());
+        if (world == null) {
+            addUnresolved.accept(stored);
+            return;
+        }
+        addResolved.accept(stored.resolve(world));
     }
 
     private void loadTrustsFor(String networkName, Network network) throws SQLException {

@@ -12,6 +12,7 @@ import com.dermoha.networkstorage.util.BlockUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.Container;
@@ -100,6 +101,23 @@ public class NetworkManager {
                 locationIndex.put(loc, network);
             }
         }
+    }
+
+    public void handleWorldLoaded(World world) {
+        requirePrimaryThread();
+        for (Network network : networks.values()) {
+            if (!network.resolveUnloadedLocations(world)) {
+                continue;
+            }
+            indexLocations(network);
+            requestScan(network, true, null);
+        }
+    }
+
+    private void indexLocations(Network network) {
+        for (Location location : network.getChestLocations()) locationIndex.put(location, network);
+        for (Location location : network.getTerminalLocations()) locationIndex.put(location, network);
+        for (Location location : network.getSenderChestLocations()) locationIndex.put(location, network);
     }
 
     private void markDirty(String name) {
@@ -303,7 +321,7 @@ public class NetworkManager {
             return;
         }
         NetworkContentScanner.ScanSession session = contentScanner.begin(
-                network.getName(), network.getChestLocations());
+                network.getName(), network.getChestLocations(), network.getUnloadedChestLocations());
         network.beginScan(session.registeredLocations(), session.uniqueChunks());
         ScanJob job = new ScanJob(network, session, network.getContentVersion());
         if (callback != null) {
@@ -1020,5 +1038,6 @@ public class NetworkManager {
         for (Location location : network.getSenderChestLocations()) {
             removeTrackedLocationExact(network, location);
         }
+        network.clearUnloadedLocations();
     }
 }

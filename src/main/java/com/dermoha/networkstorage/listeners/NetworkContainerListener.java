@@ -18,6 +18,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
@@ -35,6 +36,11 @@ public class NetworkContainerListener implements Listener {
     public NetworkContainerListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
+    }
+
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        plugin.getNetworkManager().handleWorldLoaded(event.getWorld());
     }
 
     @EventHandler(ignoreCancelled = true)

@@ -214,6 +214,34 @@ class SqliteProviderIntegrationTest {
                 SqliteNetworkStorageProvider.inspectLayout(database.toFile()));
     }
 
+    @Test
+    void loadsAndPreservesLocationsWhoseWorldIsUnavailable() throws Exception {
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        provider.initialize();
+        UUID owner = UUID.randomUUID();
+        try {
+            try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+                 var statement = connection.createStatement()) {
+                statement.execute("INSERT INTO networks(name, owner, description) VALUES('Remote', '"
+                        + owner + "', '')");
+                statement.execute("INSERT INTO network_chests(network_name, world, x, y, z) "
+                        + "VALUES('Remote', 'season_two', 12, 64, -8)");
+            }
+
+            Map<String, Network> networks = new HashMap<>();
+            provider.loadNetworks(networks, new HashMap<>(), new HashMap<>());
+
+            Network loaded = networks.get("Remote");
+            assertTrue(loaded.getChestLocations().isEmpty());
+            assertEquals(1, loaded.getUnloadedChestLocations().size());
+            assertEquals("season_two", loaded.getUnloadedChestLocations().iterator().next().world());
+            assertTrue(provider.saveSnapshot(networks.values(), Map.of(), Map.of()));
+            assertEquals(1L, count(provider, "network_chests"));
+        } finally {
+            provider.shutdown();
+        }
+    }
+
     private Network network(String name, UUID owner) {
         NetworkAccessRules rules = new NetworkAccessRules() {
             @Override public boolean isGlobalNetworkMode() { return false; }

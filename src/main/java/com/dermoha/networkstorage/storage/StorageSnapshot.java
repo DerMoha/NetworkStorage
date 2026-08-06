@@ -23,7 +23,11 @@ public record StorageSnapshot(List<NetworkData> networks,
                               Map<UUID, String> selectedNetworks,
                               Map<UUID, String> selectedWirelessNetworks) {
 
-    public record LocationData(String world, int x, int y, int z) {}
+    public record LocationData(String world, int x, int y, int z) {
+        public LocationData(StoredLocation location) {
+            this(location.world(), location.x(), location.y(), location.z());
+        }
+    }
     public record TrustedPlayer(UUID playerId, Long expiresAt) {}
     public record PlayerStatData(UUID playerId, String playerName, long deposited, long withdrawn) {}
     public record NetworkData(String name, UUID owner, String description,
@@ -53,18 +57,24 @@ public record StorageSnapshot(List<NetworkData> networks,
                         stat.getItemsDeposited(), stat.getItemsWithdrawn()));
             }
             copied.add(new NetworkData(network.getName(), network.getOwner(), network.getDescription(),
-                    copyLocations(network.getChestLocations()), copyLocations(network.getTerminalLocations()),
-                    copyLocations(network.getSenderChestLocations()), trusted, stats));
+                    copyLocations(network.getChestLocations(), network.getUnloadedChestLocations()),
+                    copyLocations(network.getTerminalLocations(), network.getUnloadedTerminalLocations()),
+                    copyLocations(network.getSenderChestLocations(), network.getUnloadedSenderChestLocations()),
+                    trusted, stats));
         }
         return new StorageSnapshot(copied, copyState(selectedNetworks), copyState(selectedWirelessNetworks));
     }
 
-    private static List<LocationData> copyLocations(Collection<Location> locations) {
-        List<LocationData> copied = new ArrayList<>(locations.size());
+    private static List<LocationData> copyLocations(Collection<Location> locations,
+                                                    Collection<StoredLocation> unloadedLocations) {
+        List<LocationData> copied = new ArrayList<>(locations.size() + unloadedLocations.size());
         for (Location location : locations) {
             copied.add(location == null || location.getWorld() == null
                     ? new LocationData(null, 0, 0, 0)
                     : new LocationData(location.getWorld().getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ()));
+        }
+        for (StoredLocation location : unloadedLocations) {
+            copied.add(new LocationData(location));
         }
         return List.copyOf(copied);
     }
