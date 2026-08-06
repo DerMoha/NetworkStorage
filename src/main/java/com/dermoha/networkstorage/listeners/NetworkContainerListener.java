@@ -112,9 +112,7 @@ public class NetworkContainerListener implements Listener {
         }
 
         Player breaker = event.getPlayer();
-        boolean isOwner = network.getOwner().equals(breaker.getUniqueId());
-        boolean isAdmin = plugin.getConfigManager().hasPrivilege(breaker, "networkstorage.admin");
-        if (!isOwner && !isAdmin) {
+        if (!network.canManage(breaker)) {
             event.setCancelled(true);
             return;
         }

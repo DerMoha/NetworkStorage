@@ -249,7 +249,7 @@ public class Network {
             return true;
         }
         UUID playerUUID = player.getUniqueId();
-        if (playerUUID.equals(this.owner) || accessRules.hasPrivilege(player, "networkstorage.admin")) {
+        if (canManage(player)) {
             return true;
         }
         if (accessRules.hasPrivilege(player, "networkstorage.access.all")) {
@@ -260,6 +260,12 @@ public class Network {
             return trustedPlayers.contains(playerUUID);
         }
         return true;
+    }
+
+    /** Management changes remain owner/admin-only; trust grants usage access only. */
+    public boolean canManage(Player player) {
+        return player.getUniqueId().equals(owner)
+                || accessRules.hasPrivilege(player, "networkstorage.admin");
     }
 
     public boolean isTrusted(UUID playerUUID) {

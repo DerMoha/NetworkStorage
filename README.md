@@ -42,10 +42,10 @@ In the `config.yml`, you can choose between two modes:
 
 This option is only relevant in `PLAYER` mode:
 
-*   **`true` (Default):** Only the owner and players they have added via `/storage trust` can access a network.
-*   **`false`:** The trust system is completely disabled. **Every player can access every network.** Ideal for small, private servers where everyone works together.
+*   **`true` (Default):** Only the owner and players they have added via `/storage trust` can use a network.
+*   **`false`:** The trust system is completely disabled. **Every player can use every network.** Ideal for small, private servers where everyone works together.
 
-Trust checks apply to terminals and wireless access. Physical storage chests are still normal Minecraft chests, so use your server's land-claim or block-protection plugin if players should not open them directly.
+Trust grants usage access through terminals, wireless terminals, and protected containers. It does not grant management access: only the owner or an admin can add, remove, break, rename, or delete network components. Physical storage chests remain normal Minecraft chests when `protect-network-containers` is disabled, so use your server's land-claim or block-protection plugin if needed.
 
 ### Safety Compatibility
 

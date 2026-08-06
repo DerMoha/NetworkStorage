@@ -25,8 +25,8 @@ auto-save-interval-minutes: 5
 enable-permissions: true
 
 # Enable the trust system (only used in PLAYER mode). If false, anyone can access any network.
-# This controls terminal and wireless access. Protect physical chest blocks with your server's
-# normal land-claim/protection plugin if players should not open storage chests directly.
+# This grants usage through terminals, wireless terminals, and protected containers.
+# It never grants management: only owners/admins can change network components.
 enable-trust-system: true
 
 # Prevent players from directly opening tracked storage/sender chests unless they can access

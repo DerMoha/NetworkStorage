@@ -159,12 +159,14 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
         plugin.getNetworkManager().queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("trust.success"), target.getName()));
+        player.sendMessage(lang.getMessage("trust.scope"));
         if (durationMs > 0) {
             player.sendMessage(String.format(lang.getMessage("trust.success_timed"), formatDuration(durationMs)));
         }
 
         if (target.isOnline()) {
             ((Player) target).sendMessage(String.format(lang.getMessage("trust.notification"), player.getName()));
+            ((Player) target).sendMessage(lang.getMessage("trust.scope"));
         }
     }
 

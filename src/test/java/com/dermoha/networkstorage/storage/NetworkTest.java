@@ -31,6 +31,7 @@ class NetworkTest {
         network.addTrustedPlayer(trustedId);
 
         assertTrue(network.canAccess(trusted));
+        assertFalse(network.canManage(trusted));
     }
 
     @Test
@@ -65,6 +66,7 @@ class NetworkTest {
         Network network = new Network("Admin", UUID.randomUUID(), accessRules);
 
         assertTrue(network.canAccess(admin));
+        assertTrue(network.canManage(admin));
     }
 
     private Player player(UUID playerId) {
