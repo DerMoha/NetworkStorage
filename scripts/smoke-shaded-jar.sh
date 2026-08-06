@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-jar_path="${1:-target/NetworkStorage-1.4.0.jar}"
+jar_path="${1:-target/NetworkStorage-1.5.0.jar}"
 if [[ ! -f "${jar_path}" ]]; then
   echo "Missing shaded jar: ${jar_path}" >&2
   exit 1
