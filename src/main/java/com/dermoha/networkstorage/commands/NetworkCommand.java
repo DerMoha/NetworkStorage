@@ -171,10 +171,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             description.append(args[i]);
         }
         network.setDescription(description.toString());
-        if (!plugin.getNetworkManager().saveNetworks()) {
-            player.sendMessage("§cThe description could not be committed to SQLite. It remains pending and will be retried automatically.");
-            return;
-        }
+        plugin.getNetworkManager().queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("network.description.success"), network.getName(), network.getDescription()));
     }
 

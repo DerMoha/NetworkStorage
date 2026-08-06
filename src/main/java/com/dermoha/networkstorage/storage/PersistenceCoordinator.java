@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 /** Serializes detached SQLite snapshots without ever touching Bukkit from a worker. */
 public final class PersistenceCoordinator implements AutoCloseable {
+    public enum Status { HEALTHY, PENDING, DEGRADED }
     private static final long MAX_RETRY_MS = 30_000L;
     private final NetworkStorageProvider provider;
     private final Logger logger;
@@ -85,6 +86,10 @@ public final class PersistenceCoordinator implements AutoCloseable {
     public long lastSuccessAt() { return lastSuccessAt; }
     public String lastError() { return lastError; }
     public boolean isPending() { return pending != null || writing; }
+    public Status status() {
+        if (!lastError.isBlank()) return Status.DEGRADED;
+        return isPending() ? Status.PENDING : Status.HEALTHY;
+    }
 
     @Override public void close() {
         closed = true;

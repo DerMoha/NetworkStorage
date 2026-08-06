@@ -154,33 +154,33 @@ public class NetworkManager {
         }
     }
 
-    public boolean saveNetworks() {
+    public void queueNetworkSave() {
         requirePrimaryThread();
         if (!hasPendingChanges()) {
-            return true;
+            return;
         }
-        return saveSnapshotNow();
+        queueSnapshotNow();
     }
 
-    public boolean saveAllNetworks() {
+    public void queueFullSave() {
         requirePrimaryThread();
-        return saveSnapshotNow();
+        queueSnapshotNow();
     }
 
-    public boolean savePlayerState() {
+    public void queuePlayerStateSave() {
         requirePrimaryThread();
         playerStateDirty = true;
-        return saveSnapshotNow();
+        queueSnapshotNow();
     }
 
     private void requestPlayerStateSave() {
         if (Bukkit.isPrimaryThread()) {
-            savePlayerState();
+            queuePlayerStateSave();
             return;
         }
         Bukkit.getScheduler().runTask(plugin, () -> {
             playerStateDirty = true;
-            saveSnapshotNow();
+            queueSnapshotNow();
         });
     }
 
@@ -191,10 +191,25 @@ public class NetworkManager {
         return networks.values().stream().anyMatch(Network::isDirty);
     }
 
-    private boolean saveSnapshotNow() {
+    private void queueSnapshotNow() {
         // Capture Bukkit-owned state on the main thread; SQLite receives only detached values.
         persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks));
-        return true;
+    }
+
+    public PersistenceCoordinator.Status getPersistenceStatus() {
+        return persistence.status();
+    }
+
+    public boolean hasPendingPersistence() {
+        return persistence.isPending();
+    }
+
+    public String getLastPersistenceError() {
+        return persistence.lastError();
+    }
+
+    public long getLastPersistenceSuccessAt() {
+        return persistence.lastSuccessAt();
     }
 
     public boolean flushPersistence() {
@@ -607,10 +622,7 @@ public class NetworkManager {
             selectedNetworks.put(player.getUniqueId(), networkName);
             playerStateDirty = true;
         }
-        if (!saveNetworks()) {
-            player.sendMessage("§cThe network was created in memory, but SQLite could not commit it. It will be retried automatically.");
-            return;
-        }
+        queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
 
@@ -671,10 +683,7 @@ public class NetworkManager {
                 playerStateDirty = true;
             }
         }
-        if (!saveNetworks()) {
-            player.sendMessage("§cThe rename could not be committed to SQLite. The change remains pending and will be retried automatically.");
-            return;
-        }
+        queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("network.rename.success"), oldName, newName));
     }
 
@@ -810,7 +819,8 @@ public class NetworkManager {
         }
 
         selectedNetworks.put(player.getUniqueId(), selectedNetwork.getName());
-        return savePlayerState();
+        queuePlayerStateSave();
+        return true;
     }
 
     public boolean selectWirelessNetwork(Player player, String networkName) {
@@ -820,7 +830,8 @@ public class NetworkManager {
         }
 
         selectedWirelessNetworks.put(player.getUniqueId(), selectedNetwork.getName());
-        return savePlayerState();
+        queuePlayerStateSave();
+        return true;
     }
 
     public Network getSelectedWirelessNetwork(Player player) {
@@ -932,7 +943,7 @@ public class NetworkManager {
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
         }
 
-        saveAllNetworks();
+        queueFullSave();
         return networksToPurge.size();
     }
 
@@ -977,10 +988,7 @@ public class NetworkManager {
         }
         selectedWirelessNetworks.values().removeIf(Objects::isNull);
 
-        if (!saveNetworks()) {
-            player.sendMessage("§cThe deletion could not be committed to SQLite. The change remains pending and will be retried automatically.");
-            return false;
-        }
+        queueNetworkSave();
         archiveDeletedNetworkStats(networkName, network);
         clearNetworkChestContents(chestLocationsToClear);
         player.sendMessage(String.format(lang.getMessage("network.delete.success"), networkName));
@@ -1025,7 +1033,8 @@ public class NetworkManager {
     public boolean resetNetwork(Network network) {
         resetNetworkInternal(network);
         markDirty(network.getName());
-        return saveNetworks();
+        queueNetworkSave();
+        return true;
     }
 
     private void resetNetworkInternal(Network network) {

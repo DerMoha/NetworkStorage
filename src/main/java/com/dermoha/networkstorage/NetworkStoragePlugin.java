@@ -360,6 +360,12 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
         Map<String, Object> snap = storageProvider.snapshot();
         sender.sendMessage("§6§lNetworkStorage — Storage");
+        sender.sendMessage("  §7persistence_status: §f" + networkManager.getPersistenceStatus());
+        sender.sendMessage("  §7persistence_pending: §f" + networkManager.hasPendingPersistence());
+        sender.sendMessage("  §7persistence_last_success_at: §f" + networkManager.getLastPersistenceSuccessAt());
+        if (!networkManager.getLastPersistenceError().isBlank()) {
+            sender.sendMessage("  §cpersistence_last_error: §f" + networkManager.getLastPersistenceError());
+        }
         for (Map.Entry<String, Object> entry : snap.entrySet()) {
             sender.sendMessage("  §7" + entry.getKey() + ": §f" + entry.getValue());
         }
@@ -813,11 +819,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (interval > 0) {
             autoSaveTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Auto-saving network data...");
-                if (networkManager.saveAllNetworks()) {
-                    getLogger().info("Auto-save complete.");
-                } else {
-                    getLogger().severe("Auto-save failed; the SQLite snapshot remains pending for retry.");
-                }
+                networkManager.queueFullSave();
+                getLogger().info("Auto-save queued.");
             }, interval, interval).getTaskId();
         }
     }

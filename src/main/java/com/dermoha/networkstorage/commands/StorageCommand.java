@@ -157,10 +157,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         } else {
             network.addTrustedPlayer(target.getUniqueId());
         }
-        if (!plugin.getNetworkManager().saveNetworks()) {
-            player.sendMessage("§cThe trust change could not be committed to SQLite. It remains pending and will be retried automatically.");
-            return;
-        }
+        plugin.getNetworkManager().queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("trust.success"), target.getName()));
         if (durationMs > 0) {
             player.sendMessage(String.format(lang.getMessage("trust.success_timed"), formatDuration(durationMs)));
@@ -257,10 +254,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         }
 
         network.removeTrustedPlayer(target.getUniqueId());
-        if (!plugin.getNetworkManager().saveNetworks()) {
-            player.sendMessage("§cThe trust change could not be committed to SQLite. It remains pending and will be retried automatically.");
-            return;
-        }
+        plugin.getNetworkManager().queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("untrust.success"), target.getName()));
 
         if (target.isOnline()) {

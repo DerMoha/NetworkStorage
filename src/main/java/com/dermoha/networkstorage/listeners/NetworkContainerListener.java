@@ -120,7 +120,7 @@ public class NetworkContainerListener implements Listener {
         }
 
         if (plugin.getNetworkManager().removeTrackedLocation(network, block.getLocation())) {
-            plugin.getNetworkManager().saveNetworks();
+            plugin.getNetworkManager().queueNetworkSave();
         }
     }
 

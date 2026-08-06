@@ -94,10 +94,7 @@ public class WandListener implements Listener {
                 }
 
                 plugin.getNetworkManager().addSenderChestToNetwork(network, normalizedLoc);
-                if (!plugin.getNetworkManager().saveNetworks()) {
-                    player.sendMessage("§cThe sender chest change could not be committed to SQLite. It remains pending and will be retried automatically.");
-                    return;
-                }
+                plugin.getNetworkManager().queueNetworkSave();
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.sender_chest.added"), chestType, network.getSenderChestLocations().size()));
@@ -124,10 +121,7 @@ public class WandListener implements Listener {
                 }
 
                 plugin.getNetworkManager().addChestToNetwork(network, normalizedLoc);
-                if (!plugin.getNetworkManager().saveNetworks()) {
-                    player.sendMessage("§cThe chest change could not be committed to SQLite. It remains pending and will be retried automatically.");
-                    return;
-                }
+                plugin.getNetworkManager().queueNetworkSave();
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.chest.added"), chestType, network.getChestLocations().size()));
@@ -155,10 +149,7 @@ public class WandListener implements Listener {
                 }
 
                 plugin.getNetworkManager().addTerminalToNetwork(network, normalizedLoc);
-                if (!plugin.getNetworkManager().saveNetworks()) {
-                    player.sendMessage("§cThe terminal change could not be committed to SQLite. It remains pending and will be retried automatically.");
-                    return;
-                }
+                plugin.getNetworkManager().queueNetworkSave();
 
                 String chestType = getChestType(chestBlock);
                 player.sendMessage(String.format(lang.getMessage("wand.terminal.added"), chestType, network.getTerminalLocations().size()));
@@ -174,10 +165,7 @@ public class WandListener implements Listener {
                 }
 
                 plugin.getNetworkManager().removeTrackedLocation(network, normalizedLoc);
-                if (!plugin.getNetworkManager().saveNetworks()) {
-                    player.sendMessage("§cThe tracked-location change could not be committed to SQLite. It remains pending and will be retried automatically.");
-                    return;
-                }
+                plugin.getNetworkManager().queueNetworkSave();
 
                 String chestType = getChestType(chestBlock);
 
