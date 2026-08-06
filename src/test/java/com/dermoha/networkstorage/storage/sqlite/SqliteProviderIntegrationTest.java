@@ -96,6 +96,11 @@ class SqliteProviderIntegrationTest {
             invalid.addChest(null);
             assertFalse(provider.saveSnapshot(java.util.List.of(invalid), Map.of(), Map.of()));
             assertEquals(0L, count(provider, "networks"), "failed snapshot must not partially replace the live snapshot");
+
+            Network upper = network("Main", owner);
+            Network lower = network("main", UUID.randomUUID());
+            assertFalse(provider.saveSnapshot(java.util.List.of(upper, lower), Map.of(), Map.of()));
+            assertEquals(0L, count(provider, "networks"), "case-insensitive collisions must roll back");
         } finally {
             provider.shutdown();
         }
@@ -237,6 +242,26 @@ class SqliteProviderIntegrationTest {
             assertEquals("season_two", loaded.getUnloadedChestLocations().iterator().next().world());
             assertTrue(provider.saveSnapshot(networks.values(), Map.of(), Map.of()));
             assertEquals(1L, count(provider, "network_chests"));
+        } finally {
+            provider.shutdown();
+        }
+    }
+
+    @Test
+    void rejectsStoredCaseInsensitiveNetworkNameCollisions() throws Exception {
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        provider.initialize();
+        try {
+            try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+                 var statement = connection.createStatement()) {
+                statement.execute("INSERT INTO networks(name, owner, description) VALUES('Main', '"
+                        + UUID.randomUUID() + "', '')");
+                statement.execute("INSERT INTO networks(name, owner, description) VALUES('main', '"
+                        + UUID.randomUUID() + "', '')");
+            }
+
+            assertThrows(StorageException.class,
+                    () -> provider.loadNetworks(new HashMap<>(), new HashMap<>(), new HashMap<>()));
         } finally {
             provider.shutdown();
         }

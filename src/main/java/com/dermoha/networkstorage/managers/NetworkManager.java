@@ -609,7 +609,7 @@ public class NetworkManager {
             player.sendMessage(lang.getMessage("network.name.invalid"));
             return;
         }
-        if (networks.containsKey(networkName)) {
+        if (findNetworkByNameIgnoreCase(networkName) != null) {
             player.sendMessage(lang.getMessage("network.create.exists"));
             return;
         }
@@ -651,11 +651,16 @@ public class NetworkManager {
             player.sendMessage(String.format(lang.getMessage("network.rename.not_found"), oldName));
             return;
         }
-        if (networks.containsKey(newName)) {
+        if (oldName.equals(newName)) {
             player.sendMessage(String.format(lang.getMessage("network.rename.exists"), newName));
             return;
         }
         Network network = networks.get(oldName);
+        Network conflictingNetwork = findNetworkByNameIgnoreCase(newName);
+        if (conflictingNetwork != null && conflictingNetwork != network) {
+            player.sendMessage(String.format(lang.getMessage("network.rename.exists"), newName));
+            return;
+        }
 
         if (!network.getOwner().equals(player.getUniqueId()) && !plugin.getConfigManager().hasPrivilege(player, "networkstorage.admin")) {
              player.sendMessage(lang.getMessage("network.rename.permission"));
@@ -812,6 +817,16 @@ public class NetworkManager {
                 .orElse(null);
     }
 
+    private Network findNetworkByNameIgnoreCase(String networkName) {
+        if (networkName == null) {
+            return null;
+        }
+        return networks.values().stream()
+                .filter(network -> network.getName().equalsIgnoreCase(networkName))
+                .findFirst()
+                .orElse(null);
+    }
+
     public boolean selectPlayerNetwork(Player player, String networkName) {
         Network selectedNetwork = findOwnedNetwork(player, networkName);
         if (selectedNetwork == null) {
@@ -897,7 +912,12 @@ public class NetworkManager {
         Network network = getPlayerNetwork(player);
         if (network == null) {
             String networkName = player.getName() + "'s Network";
-            if (networks.containsKey(networkName) && !networks.get(networkName).getOwner().equals(player.getUniqueId())) {
+            if (!isValidNetworkName(networkName)) {
+                player.sendMessage(lang.getMessage("network.name.invalid"));
+                return null;
+            }
+            Network conflictingNetwork = findNetworkByNameIgnoreCase(networkName);
+            if (conflictingNetwork != null && !conflictingNetwork.getOwner().equals(player.getUniqueId())) {
                 player.sendMessage(lang.getMessage("network.orcreate.exists"));
                 return null;
             }

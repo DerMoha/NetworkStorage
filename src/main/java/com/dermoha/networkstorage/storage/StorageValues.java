@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.storage;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.regex.Pattern;
+import java.util.Locale;
 
 /** Shared, format-level validation for values crossing the storage seam. */
 public final class StorageValues {
@@ -15,6 +16,10 @@ public final class StorageValues {
 
     public static boolean isValidNetworkName(String value) {
         return value != null && NETWORK_NAME.matcher(value).matches();
+    }
+
+    public static String canonicalNetworkName(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 
     public static boolean isValidPlayerName(String value) {

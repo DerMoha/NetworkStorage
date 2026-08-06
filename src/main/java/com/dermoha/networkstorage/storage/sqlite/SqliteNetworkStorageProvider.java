@@ -494,11 +494,15 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                 purge.executeUpdate();
             }
             try (ResultSet rs = s.executeQuery("SELECT name, owner, description FROM networks ORDER BY name")) {
+                Set<String> canonicalNames = new HashSet<>();
                 while (rs.next()) {
                     String name = rs.getString("name");
                     String ownerValue = rs.getString("owner");
                     if (!StorageValues.isValidNetworkName(name)) {
                         throw new SQLException("Stored network has an invalid name '" + name + "'");
+                    }
+                    if (!canonicalNames.add(StorageValues.canonicalNetworkName(name))) {
+                        throw new SQLException("Stored networks contain a case-insensitive name collision at '" + name + "'");
                     }
                     if (ownerValue == null || ownerValue.isBlank()) {
                         throw new SQLException("Stored network '" + name + "' has no owner UUID");
@@ -717,12 +721,17 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
 
     private void insertSnapshot(Connection c, StorageSnapshot snapshot) throws SQLException {
         Set<String> networkNames = new HashSet<>();
+        Set<String> canonicalNetworkNames = new HashSet<>();
         for (StorageSnapshot.NetworkData network : snapshot.networks()) {
             if (network == null || network.name() == null || network.name().isBlank()) {
                 throw new SQLException("Snapshot contains a network with no valid name");
             }
             if (!networkNames.add(network.name())) {
                 throw new SQLException("Snapshot contains duplicate network '" + network.name() + "'");
+            }
+            if (!canonicalNetworkNames.add(StorageValues.canonicalNetworkName(network.name()))) {
+                throw new SQLException("Snapshot contains a case-insensitive network-name collision at '"
+                        + network.name() + "'");
             }
         }
         try (PreparedStatement networksInsert = c.prepareStatement(
