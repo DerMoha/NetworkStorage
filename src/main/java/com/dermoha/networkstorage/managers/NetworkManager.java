@@ -618,10 +618,8 @@ public class NetworkManager {
         networks.put(networkName, network);
         requestScan(network, true, null);
         markDirty(networkName);
-        if (!selectedNetworks.containsKey(player.getUniqueId())) {
-            selectedNetworks.put(player.getUniqueId(), networkName);
-            playerStateDirty = true;
-        }
+        selectedNetworks.put(player.getUniqueId(), networkName);
+        playerStateDirty = true;
         queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
