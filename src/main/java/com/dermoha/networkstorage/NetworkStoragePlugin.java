@@ -10,6 +10,7 @@ import com.dermoha.networkstorage.listeners.ComparatorOutputListener;
 import com.dermoha.networkstorage.listeners.HopperIntegrationListener;
 import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
 import com.dermoha.networkstorage.listeners.NetworkContainerListener;
+import com.dermoha.networkstorage.listeners.StorageToolInteractionListener;
 import com.dermoha.networkstorage.listeners.UpdateJoinListener;
 import com.dermoha.networkstorage.listeners.WandListener;
 import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
@@ -67,6 +68,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private MovementEvents movementEvents;
     private NetworkContainerListener networkContainerListener;
     private InventoryInteractionListener inventoryInteractionListener;
+    private StorageToolInteractionListener storageToolInteractionListener;
     private WandListener wandListener;
     private WirelessTerminalListener wirelessTerminalListener;
     private StorageCommand storageCommand;
@@ -504,6 +506,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         terminalSessions = new TerminalSessions(this);
         networkContainerListener = new NetworkContainerListener(this);
         inventoryInteractionListener = new InventoryInteractionListener(this);
+        storageToolInteractionListener = new StorageToolInteractionListener(this);
         wandListener = new WandListener(this);
         wirelessTerminalListener = new WirelessTerminalListener(this);
         hopperIntegrationListener = new HopperIntegrationListener(this);
@@ -511,6 +514,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         updateJoinListener = new UpdateJoinListener(this, updateChecker);
 
         getServer().getPluginManager().registerEvents(terminalSessions, this);
+        getServer().getPluginManager().registerEvents(storageToolInteractionListener, this);
         getServer().getPluginManager().registerEvents(networkContainerListener, this);
         getServer().getPluginManager().registerEvents(inventoryInteractionListener, this);
         getServer().getPluginManager().registerEvents(wandListener, this);
@@ -583,6 +587,10 @@ public class NetworkStoragePlugin extends JavaPlugin {
         if (inventoryInteractionListener != null) {
             HandlerList.unregisterAll(inventoryInteractionListener);
             inventoryInteractionListener = null;
+        }
+        if (storageToolInteractionListener != null) {
+            HandlerList.unregisterAll(storageToolInteractionListener);
+            storageToolInteractionListener = null;
         }
         if (wandListener != null) {
             HandlerList.unregisterAll(wandListener);
