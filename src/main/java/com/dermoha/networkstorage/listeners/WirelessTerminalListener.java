@@ -21,14 +21,19 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class WirelessTerminalListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
+    private final Map<UUID, FinalUseConfirmation> finalUseConfirmations = new HashMap<>();
     private static final Pattern USES_PATTERN = Pattern.compile("([0-9]+) / ([0-9]+)");
+    private static final long FINAL_USE_CONFIRMATION_TIMEOUT_MILLIS = 30_000L;
 
     public WirelessTerminalListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -64,6 +69,10 @@ public class WirelessTerminalListener implements Listener {
             List<Network> accessibleNetworks = plugin.getNetworkManager().getAccessibleNetworks(player);
             if (accessibleNetworks.isEmpty()) {
                 player.sendMessage(lang.getMessage("no_network"));
+                return;
+            }
+
+            if (!ensureFinalUseConfirmation(player, event.getHand(), item, lang)) {
                 return;
             }
 
@@ -103,17 +112,109 @@ public class WirelessTerminalListener implements Listener {
 
         WirelessUseState useState = getUseState(item, lang);
         if (useState.currentUses == 0) {
+            if (plugin.getConfigManager().isWirelessTerminalBreakOnZeroEnabled()) {
+                if (breakWirelessTerminal(player, hand, item)) {
+                    player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+                }
+            }
+            clearFinalUseConfirmation(player);
             player.sendMessage(lang.getMessage("wireless_terminal.broken"));
             return;
         }
 
-        setUseState(item, useState.currentUses - 1, useState.maxUses, lang);
+        boolean breaksOnZero = plugin.getConfigManager().isWirelessTerminalBreakOnZeroEnabled();
+        boolean isLastUse = useState.currentUses == 1;
+        if (isLastUse && breaksOnZero && !hasFinalUseConfirmation(player, hand, item)) {
+            player.sendMessage(lang.getMessage("wireless_terminal.last_use"));
+            return;
+        }
+
+        TerminalGUI gui = new TerminalGUI(player, network, plugin);
+        if (!plugin.getTerminalSessions().openTerminal(player, gui)) {
+            return;
+        }
 
         plugin.getNetworkManager().selectWirelessNetwork(player, network.getName());
 
-        TerminalGUI gui = new TerminalGUI(player, network, plugin);
-        if (plugin.getTerminalSessions().openTerminal(player, gui)) {
-            player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
+        setUseState(item, useState.currentUses - 1, useState.maxUses, lang);
+        if (isLastUse && breaksOnZero) {
+            clearFinalUseConfirmation(player);
+            plugin.getTerminalSessions().scheduleWirelessTerminalBreak(player, hand, item);
+        }
+        player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
+    }
+
+    private boolean ensureFinalUseConfirmation(Player player,
+                                               EquipmentSlot hand,
+                                               ItemStack item,
+                                               LanguageManager lang) {
+        if (!plugin.getConfigManager().isWirelessTerminalBreakOnZeroEnabled()) {
+            clearFinalUseConfirmation(player);
+            return true;
+        }
+
+        WirelessUseState useState = getUseState(item, lang);
+        if (useState.currentUses != 1) {
+            clearFinalUseConfirmation(player);
+            return true;
+        }
+
+        if (hasFinalUseConfirmation(player, hand, item)) {
+            return true;
+        }
+
+        finalUseConfirmations.put(player.getUniqueId(), new FinalUseConfirmation(
+                hand,
+                item.clone(),
+                System.currentTimeMillis() + FINAL_USE_CONFIRMATION_TIMEOUT_MILLIS));
+        player.sendMessage(lang.getMessage("wireless_terminal.last_use"));
+        return false;
+    }
+
+    private boolean hasFinalUseConfirmation(Player player, EquipmentSlot hand, ItemStack item) {
+        FinalUseConfirmation confirmation = finalUseConfirmations.get(player.getUniqueId());
+        if (confirmation == null) {
+            return false;
+        }
+
+        if (confirmation.expiresAtMillis < System.currentTimeMillis()
+                || confirmation.hand != hand
+                || !confirmation.item.isSimilar(item)) {
+            clearFinalUseConfirmation(player);
+            return false;
+        }
+        return true;
+    }
+
+    private void clearFinalUseConfirmation(Player player) {
+        finalUseConfirmations.remove(player.getUniqueId());
+    }
+
+    public boolean breakWirelessTerminal(Player player, EquipmentSlot hand, ItemStack expectedItem) {
+        ItemStack heldItem = getWirelessTerminalInHand(player, hand);
+        if (isMatchingWirelessTerminal(heldItem, expectedItem)) {
+            setWirelessTerminalSlot(player, hand, new ItemStack(Material.AIR));
+            return true;
+        }
+
+        for (int slot = 0; slot < player.getInventory().getStorageContents().length; slot++) {
+            if (isMatchingWirelessTerminal(player.getInventory().getItem(slot), expectedItem)) {
+                player.getInventory().setItem(slot, new ItemStack(Material.AIR));
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isMatchingWirelessTerminal(ItemStack item, ItemStack expectedItem) {
+        return isWirelessTerminal(item, plugin) && item.isSimilar(expectedItem);
+    }
+
+    private void setWirelessTerminalSlot(Player player, EquipmentSlot hand, ItemStack item) {
+        if (hand == EquipmentSlot.OFF_HAND) {
+            player.getInventory().setItemInOffHand(item);
+        } else {
+            player.getInventory().setItemInMainHand(item);
         }
     }
 
@@ -221,6 +322,9 @@ public class WirelessTerminalListener implements Listener {
     }
 
     private record WirelessUseState(int currentUses, int maxUses) {
+    }
+
+    private record FinalUseConfirmation(EquipmentSlot hand, ItemStack item, long expiresAtMillis) {
     }
 
     public static ItemStack createWirelessTerminal(NetworkStoragePlugin plugin) {

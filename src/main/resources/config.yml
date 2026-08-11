@@ -39,6 +39,12 @@ enable-comparator-output: true
 wand-material: BLAZE_ROD
 wireless-terminal-material: RECOVERY_COMPASS
 
+# Number of networks a newly issued wireless terminal can open. If break-on-zero
+# is enabled, the first click at the final use warns without opening. A second
+# click opens the final session, and the terminal is removed when that session closes.
+wireless-terminal-durability: 100
+wireless-terminal-break-on-zero: false
+
 # Block type used for access terminals. Must be a valid Bukkit Material name.
 # CHEST and TRAPPED_CHEST are always supported regardless of this setting.
 terminal-block-type: CHEST

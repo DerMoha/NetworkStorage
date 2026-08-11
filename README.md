@@ -47,6 +47,10 @@ This option is only relevant in `PLAYER` mode:
 
 Trust grants usage access through terminals, wireless terminals, and protected containers. It does not grant management access: only the owner or an admin can add, remove, break, rename, or delete network components. Physical storage chests remain normal Minecraft chests when `protect-network-containers` is disabled, so use your server's land-claim or block-protection plugin if needed.
 
+### Wireless Terminal Durability
+
+`wireless-terminal-durability` controls how many networks a newly issued wireless terminal can open. Set `wireless-terminal-break-on-zero: true` to remove the terminal after its final use. The first click at the final use warns without opening; a second click opens the final session, and the terminal is removed when that session closes, including after a search. The default is `false`.
+
 ### Safety Compatibility
 
 *   Storage wands and wireless terminals must be created by this plugin. Items that only match the display name are rejected intentionally, because renamed legacy items cannot be distinguished from forged items.

@@ -3,6 +3,7 @@ package com.dermoha.networkstorage.managers;
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.gui.StatsGUI;
 import com.dermoha.networkstorage.gui.TerminalGUI;
+import com.dermoha.networkstorage.listeners.WirelessTerminalListener;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -12,7 +13,10 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,8 +33,10 @@ public class TerminalSessions implements Listener {
     private final Map<UUID, TerminalGUI> openTerminals = new HashMap<>();
     private final Set<UUID> transitioningToStats = new HashSet<>();
     private final Set<UUID> transitioningToSearch = new HashSet<>();
+    private final Set<UUID> transitioningFromStats = new HashSet<>();
     private final Map<UUID, TerminalGUI> searchingPlayers = new ConcurrentHashMap<>();
     private final ConcurrentMap<UUID, Integer> searchTaskIds = new ConcurrentHashMap<>();
+    private final Map<UUID, PendingWirelessBreak> pendingWirelessBreaks = new HashMap<>();
 
     public TerminalSessions(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -79,7 +85,16 @@ public class TerminalSessions implements Listener {
     }
 
     public void returnToTerminal(Player player, TerminalGUI previousGUI) {
-        openTerminal(player, previousGUI);
+        UUID playerId = player.getUniqueId();
+        transitioningFromStats.add(playerId);
+        if (!openTerminal(player, previousGUI)) {
+            transitioningFromStats.remove(playerId);
+            finishPendingWirelessBreak(player);
+        }
+    }
+
+    public void scheduleWirelessTerminalBreak(Player player, EquipmentSlot hand, ItemStack item) {
+        pendingWirelessBreaks.put(player.getUniqueId(), new PendingWirelessBreak(hand, item.clone()));
     }
 
     public boolean isSearching(Player player) {
@@ -101,6 +116,14 @@ public class TerminalSessions implements Listener {
         openTerminals.clear();
         transitioningToStats.clear();
         transitioningToSearch.clear();
+        transitioningFromStats.clear();
+        for (UUID playerId : new HashSet<>(pendingWirelessBreaks.keySet())) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                finishPendingWirelessBreak(player);
+            }
+        }
+        pendingWirelessBreaks.clear();
     }
 
     private void startSearch(Player player, TerminalGUI gui) {
@@ -111,6 +134,7 @@ public class TerminalSessions implements Listener {
         int taskId = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (searchingPlayers.remove(playerId) != null) {
                 player.sendMessage(lang.getMessage("search.timeout"));
+                finishPendingWirelessBreak(player);
             }
             searchTaskIds.remove(playerId);
         }, NetworkStorageConstants.SEARCH_TIMEOUT_TICKS).getTaskId();
@@ -163,8 +187,21 @@ public class TerminalSessions implements Listener {
                 player.sendMessage(String.format(lang.getMessage("search.searching_for"), message));
             }
 
-            openTerminal(player, gui);
+            if (!openTerminal(player, gui)) {
+                finishPendingWirelessBreak(player);
+            }
         });
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        cancelSearch(player);
+        openTerminals.remove(player.getUniqueId());
+        transitioningToStats.remove(player.getUniqueId());
+        transitioningToSearch.remove(player.getUniqueId());
+        transitioningFromStats.remove(player.getUniqueId());
+        finishPendingWirelessBreak(player);
     }
 
     @EventHandler
@@ -175,6 +212,11 @@ public class TerminalSessions implements Listener {
 
         InventoryHolder holder = event.getInventory().getHolder();
         if (holder instanceof StatsGUI) {
+            UUID playerId = player.getUniqueId();
+            if (transitioningFromStats.remove(playerId)) {
+                return;
+            }
+            finishPendingWirelessBreak(player);
             return;
         }
 
@@ -194,5 +236,21 @@ public class TerminalSessions implements Listener {
         }
         cancelSearch(player);
         openTerminals.remove(playerId);
+        finishPendingWirelessBreak(player);
+    }
+
+    private void finishPendingWirelessBreak(Player player) {
+        PendingWirelessBreak pending = pendingWirelessBreaks.remove(player.getUniqueId());
+        if (pending == null) {
+            return;
+        }
+
+        WirelessTerminalListener listener = plugin.getWirelessTerminalListener();
+        if (listener != null && listener.breakWirelessTerminal(player, pending.hand(), pending.item())) {
+            player.playSound(player.getLocation(), org.bukkit.Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+        }
+    }
+
+    private record PendingWirelessBreak(EquipmentSlot hand, ItemStack item) {
     }
 }

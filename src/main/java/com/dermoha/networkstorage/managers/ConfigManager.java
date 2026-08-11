@@ -45,6 +45,7 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("enable-comparator-output", true);
         config.addDefault("language", "en");
         config.addDefault("wireless-terminal-durability", 100);
+        config.addDefault("wireless-terminal-break-on-zero", false);
         config.addDefault("wand-material", "BLAZE_ROD");
         config.addDefault("wireless-terminal-material", "RECOVERY_COMPASS");
         config.addDefault("terminal-block-type", "CHEST");
@@ -101,6 +102,10 @@ public class ConfigManager implements NetworkAccessRules {
 
     public int getWirelessTerminalDurability() {
         return getClampedInt("wireless-terminal-durability", 100, 1, 1_000_000);
+    }
+
+    public boolean isWirelessTerminalBreakOnZeroEnabled() {
+        return config.getBoolean("wireless-terminal-break-on-zero", false);
     }
 
     public Material getWandMaterial() {

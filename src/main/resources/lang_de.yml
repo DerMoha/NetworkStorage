@@ -161,6 +161,7 @@ wireless_terminal.lore1: "§7Rechtsklick, um ein verfuegbares Netzwerk zu oeffne
 wireless_terminal.lore2: "§7Merkt sich dein letztes Wireless-Ziel."
 wireless_terminal.lore.durability: "§7Benutzungen: %s / %s"
 wireless_terminal.broken: "§cDieses drahtlose Terminal ist kaputt und kann nicht mehr verwendet werden."
+wireless_terminal.last_use: "§eLetzte Benutzung. Rechtsklick erneut zum Oeffnen; das Terminal geht beim Schliessen kaputt."
 wireless.select.title: "§1Wireless-Netzwerk waehlen"
 wireless.select.item: "§b%s"
 wireless.select.owner: "§7Besitzer: §f%s"
