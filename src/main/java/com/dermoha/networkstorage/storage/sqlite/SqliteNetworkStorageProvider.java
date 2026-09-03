@@ -442,7 +442,7 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                 "network_senders", List.of("network_name", "world", "x", "y", "z"),
                 "network_trusted", List.of("network_name", "player_uuid", "expires_at"),
                 "network_stats", List.of("network_name", "player_uuid", "player_name", "deposited", "withdrawn"),
-                "player_state", List.of("player_uuid", "selected_network", "selected_wireless"),
+                "player_state", List.of("player_uuid", "selected_network", "selected_wireless", "sort_type"),
                 "storage_metadata", List.of("key", "value"));
         for (Map.Entry<String, List<String>> table : requiredColumns.entrySet()) {
             if (!hasTable(connection, table.getKey())) {
@@ -482,7 +482,8 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
     @Override
     public void loadNetworks(Map<String, Network> networks,
                              Map<UUID, String> selectedNetworks,
-                             Map<UUID, String> selectedWirelessNetworks) {
+                             Map<UUID, String> selectedWirelessNetworks,
+                             Map<UUID, String> sortTypes) {
         requireAvailable();
         boolean transactionStarted = false;
         try (Statement s = connection.createStatement()) {
@@ -537,16 +538,20 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                     networks.put(name, network);
                 }
             }
-            try (ResultSet rs = s.executeQuery("SELECT player_uuid, selected_network, selected_wireless FROM player_state")) {
+            try (ResultSet rs = s.executeQuery("SELECT player_uuid, selected_network, selected_wireless, sort_type FROM player_state")) {
                 while (rs.next()) {
                     UUID playerId = UUID.fromString(rs.getString("player_uuid"));
                     String selected = rs.getString("selected_network");
                     String wireless = rs.getString("selected_wireless");
+                    String sort = rs.getString("sort_type");
                     if (selected != null && !selected.isBlank()) {
                         selectedNetworks.put(playerId, selected);
                     }
                     if (wireless != null && !wireless.isBlank()) {
                         selectedWirelessNetworks.put(playerId, wireless);
+                    }
+                    if (sort != null && !sort.isBlank()) {
+                        sortTypes.put(playerId, sort);
                     }
                 }
             }
@@ -655,14 +660,15 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
     @Override
     public boolean saveSnapshot(Collection<Network> networks,
                                 Map<UUID, String> selectedNetworks,
-                                Map<UUID, String> selectedWirelessNetworks) {
+                                Map<UUID, String> selectedWirelessNetworks,
+                                Map<UUID, String> sortTypes) {
         if (!isAvailable()) {
             lastError = "SQLite provider is not available";
             return false;
         }
         StorageSnapshot snapshot;
         try {
-            snapshot = StorageSnapshot.capture(networks, selectedNetworks, selectedWirelessNetworks);
+            snapshot = StorageSnapshot.capture(networks, selectedNetworks, selectedWirelessNetworks, sortTypes);
         } catch (RuntimeException e) {
             lastError = messageOf(e);
             logger().log(Level.SEVERE, "Could not capture SQLite snapshot; changes remain dirty", e);
@@ -747,7 +753,7 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
              PreparedStatement statsInsert = c.prepareStatement(
                      "INSERT INTO network_stats(network_name, player_uuid, player_name, deposited, withdrawn) VALUES(?, ?, ?, ?, ?)");
              PreparedStatement stateInsert = c.prepareStatement(
-                     "INSERT INTO player_state(player_uuid, selected_network, selected_wireless) VALUES(?, ?, ?)")) {
+                     "INSERT INTO player_state(player_uuid, selected_network, selected_wireless, sort_type) VALUES(?, ?, ?, ?)")) {
 
             for (StorageSnapshot.NetworkData network : snapshot.networks()) {
                 if (!StorageValues.isValidNetworkName(network.name())
@@ -797,6 +803,7 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
 
             Set<UUID> playerIds = new HashSet<>(snapshot.selectedNetworks().keySet());
             playerIds.addAll(snapshot.selectedWirelessNetworks().keySet());
+            playerIds.addAll(snapshot.sortTypes().keySet());
             for (UUID playerId : playerIds) {
                 if (playerId == null) {
                     throw new SQLException("Player state contains a null UUID");
@@ -809,9 +816,15 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                 if (selectedWireless != null && !networkNames.contains(selectedWireless)) {
                     throw new SQLException("Player state references missing wireless network '" + selectedWireless + "'");
                 }
+                String sort = snapshot.sortTypes().get(playerId);
                 stateInsert.setString(1, playerId.toString());
                 stateInsert.setString(2, selectedNetwork);
                 stateInsert.setString(3, selectedWireless);
+                if (sort == null) {
+                    stateInsert.setNull(4, java.sql.Types.VARCHAR);
+                } else {
+                    stateInsert.setString(4, sort);
+                }
                 stateInsert.addBatch();
             }
             // Keep the transaction durable but avoid one JNI/SQLite round trip per child row.
@@ -1015,11 +1028,12 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
                 }
             }
             try (ResultSet rs = s.executeQuery(
-                    "SELECT player_uuid, selected_network, selected_wireless FROM player_state")) {
+                    "SELECT player_uuid, selected_network, selected_wireless, sort_type FROM player_state")) {
                 while (rs.next()) {
                     rows.add("player|" + rs.getString("player_uuid") + "|"
                             + nullToEmpty(rs.getString("selected_network")) + "|"
-                            + nullToEmpty(rs.getString("selected_wireless")));
+                            + nullToEmpty(rs.getString("selected_wireless")) + "|"
+                            + nullToEmpty(rs.getString("sort_type")));
                 }
             }
         } catch (SQLException e) {

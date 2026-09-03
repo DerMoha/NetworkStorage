@@ -129,7 +129,8 @@ public class WirelessTerminalListener implements Listener {
             return;
         }
 
-        TerminalGUI gui = new TerminalGUI(player, network, plugin);
+        TerminalGUI gui = new TerminalGUI(player, network, plugin,
+                plugin.getNetworkManager().getPlayerSortType(player, plugin.getConfigManager().getDefaultSort()));
         if (!plugin.getTerminalSessions().openTerminal(player, gui)) {
             return;
         }

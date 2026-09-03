@@ -152,7 +152,7 @@ public class YamlToSqliteMigrator {
             FileConfiguration playerConfig = loadYamlStrict(yamlPlayerStateFile, "player-state.yml");
             readPlayerState(playerConfig, selectedNetworks, selectedWirelessNetworks);
         }
-        return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks);
+        return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, Map.of());
     }
 
     private FileConfiguration loadYamlStrict(File file, String description) {
@@ -227,7 +227,7 @@ public class YamlToSqliteMigrator {
         } catch (IllegalArgumentException e) {
             throw new StorageException("Legacy SQLite database contains invalid UUID data", e);
         }
-        return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks);
+        return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, Map.of());
     }
 
     private Network readNetwork(String networkName, UUID owner, ConfigurationSection section) {

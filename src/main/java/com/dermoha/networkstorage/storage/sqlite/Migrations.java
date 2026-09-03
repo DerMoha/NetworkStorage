@@ -6,14 +6,15 @@ import java.util.List;
 
 public final class Migrations {
 
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
     public static final int APPLICATION_ID = 0x4E53544F;
 
     private Migrations() {
     }
 
     public static List<SchemaMigration> all() {
-        return List.of(new V1__InitialSchema(), new V2__Metadata(), new V3__RemoveRedundantIndexes());
+        return List.of(new V1__InitialSchema(), new V2__Metadata(), new V3__RemoveRedundantIndexes(),
+                new V4__PlayerSortType());
     }
 
     private static final class V1__InitialSchema implements SchemaMigration {
@@ -104,6 +105,18 @@ public final class Migrations {
                 s.execute("DROP INDEX IF EXISTS idx_trusted_network");
                 s.execute("DROP INDEX IF EXISTS idx_stats_network");
                 s.execute("DROP INDEX IF EXISTS idx_player_state");
+            }
+        }
+    }
+
+    /** Adds the per-player terminal sort preference. NULL means "use the server default". */
+    private static final class V4__PlayerSortType implements SchemaMigration {
+        @Override public int targetVersion() { return 4; }
+
+        @Override
+        public void migrate(Connection connection) throws SQLException {
+            try (var s = connection.createStatement()) {
+                s.execute("ALTER TABLE player_state ADD COLUMN sort_type TEXT");
             }
         }
     }

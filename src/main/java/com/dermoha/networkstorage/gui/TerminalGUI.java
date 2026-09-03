@@ -28,7 +28,8 @@ public class TerminalGUI implements InventoryHolder {
 
     private Inventory inventory;
     private int currentPage = 0;
-    private SortType sortType = SortType.ALPHABETICAL;
+    private final SortType defaultSort;
+    private SortType sortType;
     private List<Map.Entry<ItemStack, Integer>> sortedItems;
     private String searchFilter = "";
     private boolean refreshPending;
@@ -50,17 +51,13 @@ public class TerminalGUI implements InventoryHolder {
     private static final int SLOT_REFRESH = 52;
     private static final int SLOT_NEXT_PAGE = 53;
 
-    public enum SortType {
-        ALPHABETICAL,
-        COUNT_DESC,
-        COUNT_ASC
-    }
-
-    public TerminalGUI(Player player, Network network, NetworkStoragePlugin plugin) {
+    public TerminalGUI(Player player, Network network, NetworkStoragePlugin plugin, SortType initialSort) {
         this.player = player;
         this.network = network;
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
+        this.defaultSort = initialSort;
+        this.sortType = initialSort;
         this.inventory = Bukkit.createInventory(this, GUI_SIZE, lang.getMessage("terminal.title"));
         updateInventory();
     }
@@ -205,7 +202,8 @@ public class TerminalGUI implements InventoryHolder {
                 String.format(lang.getMessage("terminal.sort.title"), getSortDisplayName()),
                 Arrays.asList(
                 lang.getMessage("terminal.sort.lore1"),
-                String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName())
+                String.format(lang.getMessage("terminal.sort.lore2"), getSortDisplayName()),
+                lang.getMessage("terminal.sort.lore3")
                 ),
                 "custom-model-data.gui.terminal.sort"
         );
@@ -383,7 +381,11 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_SORT) {
-            cycleSortType();
+            if (isShiftClick) {
+                resetSortToDefault();
+            } else {
+                cycleSortType();
+            }
             currentPage = 0;
             updateInventory();
             return;
@@ -460,7 +462,14 @@ public class TerminalGUI implements InventoryHolder {
 
     private void cycleSortType() {
         sortType = SortType.values()[(sortType.ordinal() + 1) % SortType.values().length];
+        plugin.getNetworkManager().setPlayerSortType(player, sortType);
         player.sendMessage(String.format(lang.getMessage("terminal.sort_changed"), getSortDisplayName()));
+    }
+
+    private void resetSortToDefault() {
+        sortType = defaultSort;
+        plugin.getNetworkManager().clearPlayerSortType(player);
+        player.sendMessage(String.format(lang.getMessage("terminal.sort.reset"), getSortDisplayName()));
     }
 
     public void setSearchFilter(String filter) {

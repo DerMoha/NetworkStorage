@@ -44,7 +44,8 @@ public class TerminalSessions implements Listener {
     }
 
     public boolean openTerminal(Player player, Network network) {
-        return openTerminal(player, new TerminalGUI(player, network, plugin));
+        return openTerminal(player, new TerminalGUI(player, network, plugin,
+                plugin.getNetworkManager().getPlayerSortType(player, plugin.getConfigManager().getDefaultSort())));
     }
 
     public boolean openTerminal(Player player, TerminalGUI gui) {

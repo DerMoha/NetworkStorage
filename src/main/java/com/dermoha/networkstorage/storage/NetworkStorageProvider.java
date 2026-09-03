@@ -20,11 +20,13 @@ public interface NetworkStorageProvider {
 
     void loadNetworks(Map<String, Network> networks,
                       Map<UUID, String> selectedNetworks,
-                      Map<UUID, String> selectedWirelessNetworks);
+                      Map<UUID, String> selectedWirelessNetworks,
+                      Map<UUID, String> sortTypes);
 
     boolean saveSnapshot(Collection<Network> networks,
                          Map<UUID, String> selectedNetworks,
-                         Map<UUID, String> selectedWirelessNetworks);
+                         Map<UUID, String> selectedWirelessNetworks,
+                         Map<UUID, String> sortTypes);
 
     default boolean saveSnapshot(StorageSnapshot snapshot) {
         throw new UnsupportedOperationException("Detached snapshots are not supported by this provider");

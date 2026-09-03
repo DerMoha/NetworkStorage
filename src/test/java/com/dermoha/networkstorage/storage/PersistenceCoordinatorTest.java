@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PersistenceCoordinatorTest {
 
-    private static final StorageSnapshot EMPTY = new StorageSnapshot(java.util.List.of(), Map.of(), Map.of());
+    private static final StorageSnapshot EMPTY = new StorageSnapshot(java.util.List.of(), Map.of(), Map.of(), Map.of());
 
     @Test
     void reportsPendingThenHealthyAfterAsyncCommit() throws Exception {
@@ -75,10 +75,12 @@ class PersistenceCoordinatorTest {
         @Override public boolean isAvailable() { return true; }
         @Override public void loadNetworks(Map<String, Network> networks,
                                            Map<UUID, String> selectedNetworks,
-                                           Map<UUID, String> selectedWirelessNetworks) {}
+                                           Map<UUID, String> selectedWirelessNetworks,
+                                           Map<UUID, String> sortTypes) {}
         @Override public boolean saveSnapshot(Collection<Network> networks,
                                               Map<UUID, String> selectedNetworks,
-                                              Map<UUID, String> selectedWirelessNetworks) {
+                                              Map<UUID, String> selectedWirelessNetworks,
+                                              Map<UUID, String> sortTypes) {
             return result;
         }
     }

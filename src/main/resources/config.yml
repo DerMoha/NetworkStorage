@@ -52,6 +52,14 @@ terminal-block-type: CHEST
 # Langauge for Plugin-messages (de or en)
 language: en
 
+# Default sort order for terminal GUIs. Can be one of:
+# ALPHABETICAL: Sort by item name.
+# COUNT_DESC: Sort by stored amount, largest first.
+# COUNT_ASC: Sort by stored amount, smallest first.
+# Players can cycle the sort with the sort button; their choice is remembered.
+# Shift-clicking the sort button resets to this server-wide default.
+default-sort: ALPHABETICAL
+
 # Periodic update checks against Modrinth. OPs (and players with
 # notify-permission if set) are notified in chat on join, with the cached
 # result. interval-hours=0 disables the periodic scheduler (only checks on

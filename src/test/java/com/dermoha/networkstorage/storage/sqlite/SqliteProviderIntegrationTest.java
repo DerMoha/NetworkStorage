@@ -4,6 +4,7 @@ import com.dermoha.networkstorage.stats.PlayerStat;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.storage.NetworkAccessRules;
 import com.dermoha.networkstorage.storage.StorageException;
+import com.dermoha.networkstorage.storage.StorageSnapshot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,12 +82,12 @@ class SqliteProviderIntegrationTest {
         Map<UUID, String> selected = new HashMap<>(Map.of(owner, "Main"));
         Map<UUID, String> wireless = new HashMap<>(Map.of(trusted, "Main"));
         try {
-            assertTrue(provider.saveSnapshot(java.util.List.of(network), selected, wireless));
+            assertTrue(provider.saveSnapshot(java.util.List.of(network), selected, wireless, Map.of()));
             assertEquals(1L, count(provider, "networks"));
             assertEquals(1L, count(provider, "network_trusted"));
             assertEquals(2L, count(provider, "player_state"));
 
-            assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of()));
+            assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of(), Map.of()));
             assertEquals(0L, count(provider, "networks"));
             assertEquals(0L, count(provider, "network_trusted"));
             assertEquals(0L, count(provider, "network_stats"));
@@ -94,12 +95,12 @@ class SqliteProviderIntegrationTest {
 
             Network invalid = network("Invalid", owner);
             invalid.addChest(null);
-            assertFalse(provider.saveSnapshot(java.util.List.of(invalid), Map.of(), Map.of()));
+            assertFalse(provider.saveSnapshot(java.util.List.of(invalid), Map.of(), Map.of(), Map.of()));
             assertEquals(0L, count(provider, "networks"), "failed snapshot must not partially replace the live snapshot");
 
             Network upper = network("Main", owner);
             Network lower = network("main", UUID.randomUUID());
-            assertFalse(provider.saveSnapshot(java.util.List.of(upper, lower), Map.of(), Map.of()));
+            assertFalse(provider.saveSnapshot(java.util.List.of(upper, lower), Map.of(), Map.of(), Map.of()));
             assertEquals(0L, count(provider, "networks"), "case-insensitive collisions must roll back");
         } finally {
             provider.shutdown();
@@ -112,7 +113,7 @@ class SqliteProviderIntegrationTest {
         provider.initialize();
         Path backup = tempDirectory.resolve("networks.db.backup.db");
         try {
-            assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of()));
+            assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of(), Map.of()));
             assertTrue(provider.backupTo(backup.toFile()));
             assertTrue(provider.verifyBackup(backup.toFile()));
             assertTrue(Files.size(backup) > 0);
@@ -128,7 +129,7 @@ class SqliteProviderIntegrationTest {
         SqliteBackupManager backups = new SqliteBackupManager(provider, tempDirectory.toFile(), null);
         try {
             for (int i = 0; i < 4; i++) {
-                assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of()));
+                assertTrue(provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of(), Map.of()));
                 assertTrue(backups.createBackup());
                 Thread.sleep(2L);
             }
@@ -150,7 +151,7 @@ class SqliteProviderIntegrationTest {
         try {
             var saves = pool.submit(() -> {
                 for (int i = 0; i < 20; i++) {
-                    if (!provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of())) {
+                    if (!provider.saveSnapshot(java.util.List.of(), Map.of(), Map.of(), Map.of())) {
                         throw new AssertionError("snapshot save failed");
                     }
                 }
@@ -234,13 +235,13 @@ class SqliteProviderIntegrationTest {
             }
 
             Map<String, Network> networks = new HashMap<>();
-            provider.loadNetworks(networks, new HashMap<>(), new HashMap<>());
+            provider.loadNetworks(networks, new HashMap<>(), new HashMap<>(), new HashMap<>());
 
             Network loaded = networks.get("Remote");
             assertTrue(loaded.getChestLocations().isEmpty());
             assertEquals(1, loaded.getUnloadedChestLocations().size());
             assertEquals("season_two", loaded.getUnloadedChestLocations().iterator().next().world());
-            assertTrue(provider.saveSnapshot(networks.values(), Map.of(), Map.of()));
+            assertTrue(provider.saveSnapshot(networks.values(), Map.of(), Map.of(), Map.of()));
             assertEquals(1L, count(provider, "network_chests"));
         } finally {
             provider.shutdown();
@@ -261,7 +262,44 @@ class SqliteProviderIntegrationTest {
             }
 
             assertThrows(StorageException.class,
-                    () -> provider.loadNetworks(new HashMap<>(), new HashMap<>(), new HashMap<>()));
+                    () -> provider.loadNetworks(new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>()));
+        } finally {
+            provider.shutdown();
+        }
+    }
+
+    @Test
+    void persistsPlayerSortTypesAndClearsThemBackToNull() throws Exception {
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        provider.initialize();
+        UUID owner = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        Network network = network("Main", owner);
+        Map<UUID, String> selected = new HashMap<>(Map.of(owner, "Main"));
+        Map<UUID, String> sortTypes = new HashMap<>(Map.of(owner, "COUNT_DESC", other, "COUNT_ASC"));
+        try {
+            assertTrue(provider.saveSnapshot(java.util.List.of(network), selected, Map.of(), sortTypes));
+
+            Map<String, Network> networks = new HashMap<>();
+            Map<UUID, String> loadedSelected = new HashMap<>();
+            Map<UUID, String> loadedWireless = new HashMap<>();
+            Map<UUID, String> loadedSortTypes = new HashMap<>();
+            provider.loadNetworks(networks, loadedSelected, loadedWireless, loadedSortTypes);
+            assertEquals("COUNT_DESC", loadedSortTypes.get(owner));
+            assertEquals("COUNT_ASC", loadedSortTypes.get(other));
+            assertTrue(loadedSelected.containsKey(owner));
+            assertTrue(loadedWireless.isEmpty());
+
+            StorageSnapshot captured = StorageSnapshot.capture(networks.values(), loadedSelected, loadedWireless, loadedSortTypes);
+            provider.verifySnapshot(captured);
+
+            assertTrue(provider.saveSnapshot(java.util.List.of(network), selected, Map.of(), Map.of()));
+            try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+                 var statement = connection.createStatement();
+                 var rs = statement.executeQuery("SELECT sort_type FROM player_state WHERE player_uuid = '" + owner + "'")) {
+                assertTrue(rs.next(), "expected player_state row to survive the save");
+                assertTrue(rs.getString("sort_type") == null, "expected sort_type to be NULL after clearing");
+            }
         } finally {
             provider.shutdown();
         }

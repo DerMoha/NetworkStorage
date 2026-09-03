@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.SortType;
 import com.dermoha.networkstorage.storage.Network;
 import com.dermoha.networkstorage.storage.NetworkStorageProvider;
 import com.dermoha.networkstorage.storage.PersistenceCoordinator;
@@ -45,6 +46,7 @@ public class NetworkManager {
     private final Map<Location, Network> locationIndex = new HashMap<>();
     private final Map<UUID, String> selectedNetworks = new ConcurrentHashMap<>();
     private final Map<UUID, String> selectedWirelessNetworks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> sortTypes = new ConcurrentHashMap<>();
     private final Set<String> dirtyNetworks = ConcurrentHashMap.newKeySet();
     private final NetworkContentScanner contentScanner = new NetworkContentScanner();
     private final Map<Network, ScanJob> scanJobs = new java.util.IdentityHashMap<>();
@@ -75,7 +77,7 @@ public class NetworkManager {
     }
 
     private void loadAll() {
-        provider.loadNetworks(networks, selectedNetworks, selectedWirelessNetworks);
+        provider.loadNetworks(networks, selectedNetworks, selectedWirelessNetworks, sortTypes);
 
         boolean isGlobalMode = plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL;
         if (isGlobalMode && !networks.containsKey(GLOBAL_NETWORK_NAME)) {
@@ -149,6 +151,9 @@ public class NetworkManager {
             }
         }
 
+        // Sort preferences are not network-scoped, so they stay valid for any player
+        // who can open a terminal (owners and trusted players alike).
+
         if (changed) {
             requestPlayerStateSave();
         }
@@ -193,7 +198,7 @@ public class NetworkManager {
 
     private void queueSnapshotNow() {
         // Capture Bukkit-owned state on the main thread; SQLite receives only detached values.
-        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks));
+        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, sortTypes));
     }
 
     public PersistenceCoordinator.Status getPersistenceStatus() {
@@ -215,7 +220,7 @@ public class NetworkManager {
     public boolean flushPersistence() {
         requirePrimaryThread();
         // Always capture the newest server-thread view before shutdown/reload waits for durability.
-        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks));
+        persistence.request(StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, sortTypes));
         boolean saved = persistence.flush(Duration.ofSeconds(30));
         if (saved) {
             for (Network network : networks.values()) network.setDirty(false);
@@ -872,6 +877,32 @@ public class NetworkManager {
         return selectedNetwork == null ? null : selectedNetwork.getName();
     }
 
+    public SortType getPlayerSortType(Player player, SortType fallback) {
+        String stored = sortTypes.get(player.getUniqueId());
+        if (stored == null) {
+            return fallback;
+        }
+        try {
+            return SortType.valueOf(stored);
+        } catch (IllegalArgumentException e) {
+            sortTypes.remove(player.getUniqueId());
+            return fallback;
+        }
+    }
+
+    public void setPlayerSortType(Player player, SortType type) {
+        requirePrimaryThread();
+        sortTypes.put(player.getUniqueId(), type.name());
+        queuePlayerStateSave();
+    }
+
+    public void clearPlayerSortType(Player player) {
+        requirePrimaryThread();
+        if (sortTypes.remove(player.getUniqueId()) != null) {
+            queuePlayerStateSave();
+        }
+    }
+
     public String getNetworkOwnerName(Network network) {
         if (network == null) {
             return "";
@@ -949,6 +980,7 @@ public class NetworkManager {
         locationIndex.clear();
         selectedNetworks.clear();
         selectedWirelessNetworks.clear();
+        sortTypes.clear();
         dirtyNetworks.clear();
         storageDirty = true;
         playerStateDirty = true;

@@ -81,7 +81,8 @@ public class NetworkContainerListener implements Listener {
                 return;
             }
 
-            TerminalGUI gui = new TerminalGUI(player, network, plugin);
+            TerminalGUI gui = new TerminalGUI(player, network, plugin,
+                    plugin.getNetworkManager().getPlayerSortType(player, plugin.getConfigManager().getDefaultSort()));
             if (plugin.getTerminalSessions().openTerminal(player, gui)) {
                 player.playSound(player.getLocation(), Sound.BLOCK_ENDER_CHEST_OPEN, 1.0f, 1.0f);
                 player.sendMessage(lang.getMessage("network.access"));

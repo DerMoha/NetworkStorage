@@ -21,7 +21,8 @@ import java.security.NoSuchAlgorithmException;
  */
 public record StorageSnapshot(List<NetworkData> networks,
                               Map<UUID, String> selectedNetworks,
-                              Map<UUID, String> selectedWirelessNetworks) {
+                              Map<UUID, String> selectedWirelessNetworks,
+                              Map<UUID, String> sortTypes) {
 
     public record LocationData(String world, int x, int y, int z) {
         public LocationData(StoredLocation location) {
@@ -39,11 +40,13 @@ public record StorageSnapshot(List<NetworkData> networks,
         networks = List.copyOf(networks);
         selectedNetworks = Map.copyOf(selectedNetworks);
         selectedWirelessNetworks = Map.copyOf(selectedWirelessNetworks);
+        sortTypes = Map.copyOf(sortTypes);
     }
 
     public static StorageSnapshot capture(Collection<Network> networks,
                                           Map<UUID, String> selectedNetworks,
-                                          Map<UUID, String> selectedWirelessNetworks) {
+                                          Map<UUID, String> selectedWirelessNetworks,
+                                          Map<UUID, String> sortTypes) {
         List<NetworkData> copied = new ArrayList<>(networks.size());
         for (Network network : networks) {
             List<TrustedPlayer> trusted = new ArrayList<>();
@@ -62,7 +65,8 @@ public record StorageSnapshot(List<NetworkData> networks,
                     copyLocations(network.getSenderChestLocations(), network.getUnloadedSenderChestLocations()),
                     trusted, stats));
         }
-        return new StorageSnapshot(copied, copyState(selectedNetworks), copyState(selectedWirelessNetworks));
+        return new StorageSnapshot(copied, copyState(selectedNetworks), copyState(selectedWirelessNetworks),
+                copyState(sortTypes));
     }
 
     private static List<LocationData> copyLocations(Collection<Location> locations,
@@ -99,6 +103,7 @@ public record StorageSnapshot(List<NetworkData> networks,
     public long playerStateCount() {
         Set<UUID> ids = new HashSet<>(selectedNetworks.keySet());
         ids.addAll(selectedWirelessNetworks.keySet());
+        ids.addAll(sortTypes.keySet());
         return ids.size();
     }
 
@@ -121,9 +126,11 @@ public record StorageSnapshot(List<NetworkData> networks,
             }
             Set<UUID> ids = new HashSet<>(selectedNetworks.keySet());
             ids.addAll(selectedWirelessNetworks.keySet());
+            ids.addAll(sortTypes.keySet());
             for (UUID id : ids) {
                 rows.add("player|" + id + "|" + selectedNetworks.getOrDefault(id, "") + "|"
-                        + selectedWirelessNetworks.getOrDefault(id, ""));
+                        + selectedWirelessNetworks.getOrDefault(id, "") + "|"
+                        + sortTypes.getOrDefault(id, ""));
             }
             rows.sort(String::compareTo);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

@@ -89,7 +89,7 @@ class YamlToSqliteMigratorIntegrationTest {
             assertEquals(1L, count(statement, "network_stats"));
             assertEquals(1L, count(statement, "player_state"));
             assertEquals("COMPLETE", metadata(statement, "migration_state"));
-            assertEquals("3", metadata(statement, "migration_schema_version"));
+            assertEquals("4", metadata(statement, "migration_schema_version"));
             assertTrue(metadata(statement, "migration_source_hash").matches("[0-9a-f]{64}"));
         }
     }

@@ -1,6 +1,7 @@
 package com.dermoha.networkstorage.managers;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
+import com.dermoha.networkstorage.gui.SortType;
 import com.dermoha.networkstorage.storage.NetworkAccessRules;
 import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Material;
@@ -44,6 +45,7 @@ public class ConfigManager implements NetworkAccessRules {
         config.addDefault("enable-hopper-integration", true);
         config.addDefault("enable-comparator-output", true);
         config.addDefault("language", "en");
+        config.addDefault("default-sort", "ALPHABETICAL");
         config.addDefault("wireless-terminal-durability", 100);
         config.addDefault("wireless-terminal-break-on-zero", false);
         config.addDefault("wand-material", "BLAZE_ROD");
@@ -179,6 +181,16 @@ public class ConfigManager implements NetworkAccessRules {
 
     public String getLanguage() {
         return config.getString("language");
+    }
+
+    public SortType getDefaultSort() {
+        String name = config.getString("default-sort", SortType.ALPHABETICAL.name());
+        try {
+            return SortType.valueOf(name.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            plugin.getLogger().warning("Invalid sort '" + name + "' for default-sort, using ALPHABETICAL.");
+            return SortType.ALPHABETICAL;
+        }
     }
 
     public boolean isUpdateCheckEnabled() {
