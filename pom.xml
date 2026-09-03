@@ -16,7 +16,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.2.build.97-stable</paper.version>
         <bstats.version>3.2.1</bstats.version>
-        <junit.jupiter.version>6.1.2</junit.jupiter.version>
+        <junit.jupiter.version>6.1.3</junit.jupiter.version>
         <sqlite-jdbc.version>3.53.4.0</sqlite-jdbc.version>
         <placeholderapi.version>2.12.3</placeholderapi.version>
     </properties>
