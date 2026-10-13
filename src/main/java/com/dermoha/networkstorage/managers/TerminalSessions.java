@@ -18,25 +18,20 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class TerminalSessions implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private final Map<UUID, TerminalGUI> openTerminals = new HashMap<>();
-    private final Set<UUID> transitioningToStats = new HashSet<>();
-    private final Set<UUID> transitioningToSearch = new HashSet<>();
-    private final Set<UUID> transitioningFromStats = new HashSet<>();
-    private final Map<UUID, TerminalGUI> searchingPlayers = new ConcurrentHashMap<>();
-    private final ConcurrentMap<UUID, Integer> searchTaskIds = new ConcurrentHashMap<>();
-    private final Map<UUID, PendingWirelessBreak> pendingWirelessBreaks = new HashMap<>();
+    private final Map<UUID, TerminalSession> sessions = new ConcurrentHashMap<>();
+
+    private TerminalSession session(Player player) {
+        return sessions.computeIfAbsent(player.getUniqueId(), ignored -> new TerminalSession());
+    }
 
     public TerminalSessions(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -49,104 +44,93 @@ public class TerminalSessions implements Listener {
     }
 
     public boolean openTerminal(Player player, TerminalGUI gui) {
-        UUID playerId = player.getUniqueId();
+        TerminalSession session = session(player);
         if (!gui.open()) {
-            openTerminals.remove(playerId);
+            session.close();
             return false;
         }
 
-        openTerminals.put(playerId, gui);
+        session.opened(gui);
         return true;
     }
 
     public boolean isCurrentTerminal(Player player, TerminalGUI terminal) {
-        return terminal.equals(openTerminals.get(player.getUniqueId()));
+        TerminalSession session = sessions.get(player.getUniqueId());
+        return session != null && terminal.equals(session.visibleTerminal());
     }
 
     public void refreshNetwork(Network network) {
-        for (TerminalGUI terminal : openTerminals.values()) {
-            if (terminal.getNetwork() == network) {
+        for (TerminalSession session : sessions.values()) {
+            TerminalGUI terminal = session.visibleTerminal();
+            if (terminal != null && terminal.getNetwork() == network) {
                 terminal.requestRefresh();
             }
         }
     }
 
     public void promptSearch(Player player, TerminalGUI gui) {
-        UUID playerId = player.getUniqueId();
         startSearch(player, gui);
-        transitioningToSearch.add(playerId);
         player.closeInventory();
         player.sendMessage(lang.getMessage("terminal.search.prompt"));
         player.sendMessage(lang.getMessage("terminal.search.cancel_hint"));
     }
 
     public void openStats(Player player, Network network, TerminalGUI previousGUI) {
-        transitioningToStats.add(player.getUniqueId());
+        session(player).beginStats();
         new StatsGUI(player, network, plugin, previousGUI).open();
     }
 
     public void returnToTerminal(Player player, TerminalGUI previousGUI) {
-        UUID playerId = player.getUniqueId();
-        transitioningFromStats.add(playerId);
+        session(player).returnFromStats();
         if (!openTerminal(player, previousGUI)) {
-            transitioningFromStats.remove(playerId);
             finishPendingWirelessBreak(player);
         }
     }
 
     public void scheduleWirelessTerminalBreak(Player player, EquipmentSlot hand, ItemStack item) {
-        pendingWirelessBreaks.put(player.getUniqueId(), new PendingWirelessBreak(hand, item.clone()));
+        session(player).pendingBreak(hand, item);
     }
 
     public boolean isSearching(Player player) {
-        return searchingPlayers.containsKey(player.getUniqueId());
+        TerminalSession session = sessions.get(player.getUniqueId());
+        return session != null && session.isSearching();
     }
 
     public void cancelSearch(Player player) {
-        UUID playerId = player.getUniqueId();
-        searchingPlayers.remove(playerId);
-        cancelSearchTask(playerId);
+        TerminalSession session = sessions.get(player.getUniqueId());
+        if (session != null) {
+            session.cancelSearch();
+            cancelSearchTask(session);
+        }
     }
 
     public void cleanup() {
-        for (Integer taskId : searchTaskIds.values()) {
-            plugin.getServer().getScheduler().cancelTask(taskId);
-        }
-        searchTaskIds.clear();
-        searchingPlayers.clear();
-        openTerminals.clear();
-        transitioningToStats.clear();
-        transitioningToSearch.clear();
-        transitioningFromStats.clear();
-        for (UUID playerId : new HashSet<>(pendingWirelessBreaks.keySet())) {
+        for (UUID playerId : Set.copyOf(sessions.keySet())) {
+            TerminalSession session = sessions.get(playerId);
+            session.close();
+            cancelSearchTask(session);
             Player player = plugin.getServer().getPlayer(playerId);
-            if (player != null) {
-                finishPendingWirelessBreak(player);
-            }
+            if (player != null) finishPendingWirelessBreak(player);
         }
-        pendingWirelessBreaks.clear();
+        sessions.clear();
     }
 
     private void startSearch(Player player, TerminalGUI gui) {
-        UUID playerId = player.getUniqueId();
-        cancelSearchTask(playerId);
-        searchingPlayers.put(playerId, gui);
-
-        int taskId = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (searchingPlayers.remove(playerId) != null) {
+        TerminalSession session = session(player);
+        cancelSearchTask(session);
+        session.beginSearch(gui);
+        session.searchTask(plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (session.expireSearch()) {
                 player.sendMessage(lang.getMessage("search.timeout"));
                 finishPendingWirelessBreak(player);
             }
-            searchTaskIds.remove(playerId);
-        }, NetworkStorageConstants.SEARCH_TIMEOUT_TICKS).getTaskId();
-        searchTaskIds.put(playerId, taskId);
+            session.takeSearchTask();
+        }, NetworkStorageConstants.SEARCH_TIMEOUT_TICKS).getTaskId());
     }
 
-    private void cancelSearchTask(UUID playerId) {
-        Integer taskId = searchTaskIds.remove(playerId);
-        if (taskId != null) {
-            plugin.getServer().getScheduler().cancelTask(taskId);
-        }
+    private void cancelSearchTask(TerminalSession session) {
+        int taskId = session.takeSearchTask();
+        if (taskId != -1) plugin.getServer().getScheduler().cancelTask(taskId);
     }
 
     @EventHandler
@@ -172,15 +156,18 @@ public class TerminalSessions implements Listener {
 
     private void handleSearchInput(Player player, String rawMessage) {
         UUID playerId = player.getUniqueId();
-        TerminalGUI gui = searchingPlayers.remove(playerId);
-        if (gui == null) {
+        TerminalSession session = sessions.get(playerId);
+        TerminalSession.SearchInput input = session == null ? null : session.claimSearch();
+        if (input == null) {
             return;
         }
 
-        cancelSearchTask(playerId);
         String message = rawMessage.trim();
 
         plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (sessions.get(playerId) != session || !session.acceptsSearchInput(input)) return;
+            cancelSearchTask(session);
+            TerminalGUI gui = input.terminal();
             if (message.equalsIgnoreCase("cancel")) {
                 player.sendMessage(lang.getMessage("search.cancelled"));
             } else {
@@ -198,50 +185,36 @@ public class TerminalSessions implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         cancelSearch(player);
-        openTerminals.remove(player.getUniqueId());
-        transitioningToStats.remove(player.getUniqueId());
-        transitioningToSearch.remove(player.getUniqueId());
-        transitioningFromStats.remove(player.getUniqueId());
+        TerminalSession session = sessions.get(player.getUniqueId());
+        if (session != null) session.close();
         finishPendingWirelessBreak(player);
+        sessions.remove(player.getUniqueId());
     }
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) {
-            return;
-        }
+        if (!(event.getPlayer() instanceof Player player)) return;
+        TerminalSession session = sessions.get(player.getUniqueId());
+        if (session == null) return;
 
         InventoryHolder holder = event.getInventory().getHolder();
+        boolean finished;
         if (holder instanceof StatsGUI) {
-            UUID playerId = player.getUniqueId();
-            if (transitioningFromStats.remove(playerId)) {
-                return;
-            }
+            finished = session.closeStats();
+        } else if (holder instanceof TerminalGUI) {
+            finished = session.closeTerminal();
+        } else {
+            return;
+        }
+        if (finished) {
+            cancelSearchTask(session);
             finishPendingWirelessBreak(player);
-            return;
         }
-
-        if (!(holder instanceof TerminalGUI)) {
-            return;
-        }
-
-        UUID playerId = player.getUniqueId();
-        if (transitioningToSearch.remove(playerId)) {
-            openTerminals.remove(playerId);
-            return;
-        }
-        if (transitioningToStats.remove(playerId)) {
-            cancelSearch(player);
-            openTerminals.remove(playerId);
-            return;
-        }
-        cancelSearch(player);
-        openTerminals.remove(playerId);
-        finishPendingWirelessBreak(player);
     }
 
     private void finishPendingWirelessBreak(Player player) {
-        PendingWirelessBreak pending = pendingWirelessBreaks.remove(player.getUniqueId());
+        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession.PendingWirelessBreak pending = session == null ? null : session.takePendingBreak();
         if (pending == null) {
             return;
         }
@@ -252,6 +225,4 @@ public class TerminalSessions implements Listener {
         }
     }
 
-    private record PendingWirelessBreak(EquipmentSlot hand, ItemStack item) {
-    }
 }

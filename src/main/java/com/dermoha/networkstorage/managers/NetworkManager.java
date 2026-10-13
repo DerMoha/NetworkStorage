@@ -48,10 +48,7 @@ public class NetworkManager {
     private final Map<UUID, String> selectedWirelessNetworks = new ConcurrentHashMap<>();
     private final Map<UUID, String> sortTypes = new ConcurrentHashMap<>();
     private final Set<String> dirtyNetworks = ConcurrentHashMap.newKeySet();
-    private final NetworkContentScanner contentScanner = new NetworkContentScanner();
-    private final Map<Network, ScanJob> scanJobs = new java.util.IdentityHashMap<>();
-    private final Set<Network> attachedNetworks = Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-    private boolean scansCancelled;
+    private final NetworkScanCoordinator scans;
     private volatile boolean storageDirty;
     private volatile boolean playerStateDirty;
     private final Object renameLock = new Object();
@@ -64,11 +61,12 @@ public class NetworkManager {
         this.provider = provider;
         this.persistence = new PersistenceCoordinator(provider, plugin.getLogger(),
                 plugin.getConfigManager().getStorageWriteDebounceMs());
+        this.scans = new NetworkScanCoordinator(plugin);
         loadAll();
         pruneInvalidPlayerState();
         for (Network network : networks.values()) {
-            attachNetwork(network);
-            requestScan(network, true, null);
+            scans.attachNetwork(network);
+            scans.getNetworkScan(network, true, null);
         }
     }
 
@@ -112,7 +110,7 @@ public class NetworkManager {
                 continue;
             }
             indexLocations(network);
-            requestScan(network, true, null);
+            scans.getNetworkScan(network, true, null);
         }
     }
 
@@ -236,83 +234,15 @@ public class NetworkManager {
         persistence.close();
     }
 
-    /**
-     * Connects a network's content mutations to the coalesced main-thread
-     * scanner.  The callback deliberately does not read Bukkit state; it only
-     * schedules the scan if a caller ever mutates a network off-thread.
-     */
-    private void attachNetwork(Network network) {
-        if (network == null || !attachedNetworks.add(network)) {
-            return;
-        }
-        network.setContentChangeListener(() -> {
-            if (Bukkit.isPrimaryThread()) {
-                requestScan(network, false, null);
-            } else {
-                Bukkit.getScheduler().runTask(plugin, () -> requestScan(network, false, null));
-            }
-        });
-    }
-
     private void requirePrimaryThread() {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("Network storage scans and Bukkit world access must run on the main thread");
         }
     }
 
-    private void requestScan(Network network,
-                             boolean refresh,
-                             Consumer<NetworkScanResult> completionCallback) {
-        getNetworkScan(network, refresh, completionCallback);
-    }
-
-    /**
-     * Returns the latest authoritative snapshot, starting a scan when the
-     * snapshot is missing or stale.  A refresh always starts a fresh scan;
-     * otherwise an existing scan is coalesced and allowed to finish.
-     */
-    public NetworkScanResult getNetworkScan(Network network,
-                                             boolean refresh,
-                                             Consumer<NetworkScanResult> completionCallback) {
-        requirePrimaryThread();
-        if (network == null) {
-            return null;
-        }
-        attachNetworkIfNeeded(network);
-
-        ScanJob existing = scanJobs.get(network);
-        if (refresh) {
-            if (existing != null) {
-                restartScan(existing, completionCallback);
-            } else {
-                startScan(network, completionCallback);
-            }
-            return network.getScanResult();
-        }
-
-        NetworkScanResult current = network.getScanResult();
-        if (current.status() == NetworkScanStatus.COMPLETE) {
-            if (completionCallback != null) {
-                completionCallback.accept(current);
-            }
-            return current;
-        }
-
-        // An incomplete result is an actionable diagnostic, not a request to
-        // retry forever on every terminal render.  Content invalidation and
-        // the explicit admin/terminal refresh path both create a fresh scan.
-        if (current.status() == NetworkScanStatus.INCOMPLETE && existing == null) {
-            return current;
-        }
-
-        if (existing == null) {
-            startScan(network, completionCallback);
-        } else if (completionCallback != null) {
-            if (!existing.callbacks().contains(completionCallback)) {
-                existing.callbacks().add(completionCallback);
-            }
-        }
-        return network.getScanResult();
+    public NetworkScanResult getNetworkScan(Network network, boolean refresh,
+                                            Consumer<NetworkScanResult> completionCallback) {
+        return scans.getNetworkScan(network, refresh, completionCallback);
     }
 
     public NetworkScanResult getNetworkScan(Network network) {
@@ -335,122 +265,8 @@ public class NetworkManager {
         }
     }
 
-    private void startScan(Network network, Consumer<NetworkScanResult> callback) {
-        requirePrimaryThread();
-        if (scansCancelled) {
-            return;
-        }
-        NetworkContentScanner.ScanSession session = contentScanner.begin(
-                network.getName(), network.getChestLocations(), network.getUnloadedChestLocations());
-        network.beginScan(session.registeredLocations(), session.uniqueChunks());
-        ScanJob job = new ScanJob(network, session, network.getContentVersion());
-        if (callback != null) {
-            job.callbacks().add(callback);
-        }
-        scanJobs.put(network, job);
-        scheduleScanStep(job);
-    }
-
-    private void restartScan(ScanJob job, Consumer<NetworkScanResult> callback) {
-        requirePrimaryThread();
-        List<Consumer<NetworkScanResult>> callbacks = new ArrayList<>(job.callbacks());
-        if (callback != null) {
-            callbacks.add(callback);
-        }
-        cancelScan(job.network());
-        startScan(job.network(), null);
-        ScanJob replacement = scanJobs.get(job.network());
-        if (replacement != null) {
-            replacement.callbacks().addAll(callbacks);
-        }
-    }
-
-    private void scheduleScanStep(ScanJob job) {
-        job.taskId = plugin.getServer().getScheduler().runTask(plugin, () -> advanceScan(job)).getTaskId();
-    }
-
-    private void advanceScan(ScanJob job) {
-        requirePrimaryThread();
-        if (scanJobs.get(job.network()) != job || scansCancelled) {
-            return;
-        }
-        if (job.network().getContentVersion() != job.contentVersion()) {
-            restartScan(job, null);
-            return;
-        }
-
-        NetworkContentScanner.ScanStep step = contentScanner.advance(
-                job.session(), NetworkContentScanner.DEFAULT_CHUNKS_PER_TICK);
-        if (!step.complete()) {
-            scheduleScanStep(job);
-            return;
-        }
-
-        if (job.network().getContentVersion() != job.contentVersion()) {
-            restartScan(job, null);
-            return;
-        }
-
-        NetworkScanResult result = step.result();
-        job.network().applyScanResult(result);
-        scanJobs.remove(job.network());
-        job.taskId = -1;
-        logScan(job.network(), job.session(), job.network().getScanResult());
-        for (Consumer<NetworkScanResult> callback : List.copyOf(job.callbacks())) {
-            try {
-                callback.accept(job.network().getScanResult());
-            } catch (RuntimeException exception) {
-                plugin.getLogger().log(Level.WARNING,
-                        "NetworkStorage scan completion callback failed for " + job.network().getName(),
-                        exception);
-            }
-        }
-    }
-
-    private void logScan(Network network,
-                         NetworkContentScanner.ScanSession session,
-                         NetworkScanResult result) {
-        if (result.status() == NetworkScanStatus.COMPLETE) {
-            plugin.getLogger().info(String.format(java.util.Locale.ROOT,
-                    "%s scan: %,d registered locations, %,d containers found, %,d items",
-                    network.getName(),
-                    session.registeredLocations(),
-                    session.containersFound(),
-                    result.totalItems()));
-            return;
-        }
-
-        plugin.getLogger().warning(network.getName() + " scan " + result.status()
-                + ": " + session.containersFound() + "/" + session.registeredLocations()
-                + " containers found; item total is not authoritative.");
-        for (String warning : result.warnings()) {
-            plugin.getLogger().warning(warning);
-        }
-    }
-
-    private void cancelScan(Network network) {
-        ScanJob job = scanJobs.remove(network);
-        if (job != null && job.taskId != -1) {
-            plugin.getServer().getScheduler().cancelTask(job.taskId);
-            job.taskId = -1;
-        }
-    }
-
-    private void detachNetwork(Network network) {
-        cancelScan(network);
-        attachedNetworks.remove(network);
-        network.setContentChangeListener(null);
-    }
-
     public void cancelScheduledScans() {
-        requirePrimaryThread();
-        scansCancelled = true;
-        for (ScanJob job : new ArrayList<>(scanJobs.values())) {
-            if (job.taskId != -1) {
-                plugin.getServer().getScheduler().cancelTask(job.taskId);
-            }
-        }
-        scanJobs.clear();
+        scans.cancelScheduledScans();
     }
 
     public boolean ensureLocationChunkLoaded(Location location) {
@@ -503,40 +319,10 @@ public class NetworkManager {
         return NetworkScanStatus.COMPLETE.name().toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static final class ScanJob {
-        private final Network network;
-        private final NetworkContentScanner.ScanSession session;
-        private final long contentVersion;
-        private final List<Consumer<NetworkScanResult>> callbacks = new ArrayList<>();
-        private int taskId = -1;
-
-        private ScanJob(Network network, NetworkContentScanner.ScanSession session, long contentVersion) {
-            this.network = network;
-            this.session = session;
-            this.contentVersion = contentVersion;
-        }
-
-        private Network network() {
-            return network;
-        }
-
-        private NetworkContentScanner.ScanSession session() {
-            return session;
-        }
-
-        private long contentVersion() {
-            return contentVersion;
-        }
-
-        private List<Consumer<NetworkScanResult>> callbacks() {
-            return callbacks;
-        }
-    }
-
     public void addChestToNetwork(Network network, Location location) {
         requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
-        attachNetworkIfNeeded(network);
+        scans.attachNetwork(network);
         network.addChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
         markDirty(network.getName());
@@ -545,7 +331,7 @@ public class NetworkManager {
     public void addTerminalToNetwork(Network network, Location location) {
         requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
-        attachNetworkIfNeeded(network);
+        scans.attachNetwork(network);
         network.addTerminal(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
         markDirty(network.getName());
@@ -554,19 +340,10 @@ public class NetworkManager {
     public void addSenderChestToNetwork(Network network, Location location) {
         requirePrimaryThread();
         Location normalizedLocation = getNormalizedLocation(location);
-        attachNetworkIfNeeded(network);
+        scans.attachNetwork(network);
         network.addSenderChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
         markDirty(network.getName());
-    }
-
-    private void attachNetworkIfNeeded(Network network) {
-        // A network loaded at startup is already attached.  This assignment is
-        // harmless for newly-created networks and makes manager entry points
-        // robust for tests and integrations that hand us a fresh Network.
-        if (network != null && !attachedNetworks.contains(network)) {
-            attachNetwork(network);
-        }
     }
 
     public boolean removeTrackedLocation(Network network, Location location) {
@@ -619,9 +396,9 @@ public class NetworkManager {
             return;
         }
         Network network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
-        attachNetwork(network);
+        scans.attachNetwork(network);
         networks.put(networkName, network);
-        requestScan(network, true, null);
+        scans.getNetworkScan(network, true, null);
         markDirty(networkName);
         selectedNetworks.put(player.getUniqueId(), networkName);
         playerStateDirty = true;
@@ -951,9 +728,9 @@ public class NetworkManager {
                 return null;
             }
             network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
-            attachNetwork(network);
+            scans.attachNetwork(network);
             networks.put(networkName, network);
-            requestScan(network, true, null);
+            scans.getNetworkScan(network, true, null);
             markDirty(networkName);
         }
         return network;
@@ -972,7 +749,7 @@ public class NetworkManager {
         for (Network network : networksToPurge) {
             archiveDeletedNetworkStats(network.getName(), network);
             clearNetworkChestContents(network);
-            detachNetwork(network);
+            scans.detachNetwork(network);
             resetNetworkInternal(network);
         }
 
@@ -987,8 +764,8 @@ public class NetworkManager {
 
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
-            attachNetwork(globalNetwork);
-            requestScan(globalNetwork, true, null);
+            scans.attachNetwork(globalNetwork);
+            scans.getNetworkScan(globalNetwork, true, null);
             markDirty(GLOBAL_NETWORK_NAME);
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
         }
@@ -1018,7 +795,7 @@ public class NetworkManager {
         }
 
         Set<Location> chestLocationsToClear = network.getChestLocations();
-        detachNetwork(network);
+        scans.detachNetwork(network);
         resetNetworkInternal(network);
         networks.remove(networkName);
         dirtyNetworks.remove(networkName);

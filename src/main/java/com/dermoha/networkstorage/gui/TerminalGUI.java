@@ -7,17 +7,14 @@ import com.dermoha.networkstorage.storage.NetworkScanResult;
 import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 public class TerminalGUI implements InventoryHolder {
 
@@ -30,7 +27,7 @@ public class TerminalGUI implements InventoryHolder {
     private int currentPage = 0;
     private final SortType defaultSort;
     private SortType sortType;
-    private List<Map.Entry<ItemStack, Integer>> sortedItems;
+    private TerminalItemSelection.Page selection;
     private String searchFilter = "";
     private boolean refreshPending;
     private boolean forceScanNextUpdate;
@@ -39,7 +36,7 @@ public class TerminalGUI implements InventoryHolder {
         requestRefresh();
     };
 
-    private static final int ITEMS_PER_PAGE = 45;
+    private static final int ITEMS_PER_PAGE = TerminalItemSelection.PAGE_SIZE;
     private static final int GUI_SIZE = 54;
 
     private static final int SLOT_PREV_PAGE = 45;
@@ -78,84 +75,12 @@ public class TerminalGUI implements InventoryHolder {
         int uniqueTypes = scan.uniqueTypes();
         double capacity = scan.capacityPercent();
         boolean showNumericSummary = scan.hasAuthoritativeData() || network.hasLastCompleteScan();
-        sortedItems = new ArrayList<>(networkItems.entrySet());
-
-        if (!searchFilter.isEmpty()) {
-            String lowerCaseFilter = searchFilter.toLowerCase(Locale.ROOT);
-            sortedItems = sortedItems.stream()
-                    .filter(entry -> {
-                        ItemStack item = entry.getKey();
-
-                        // Check custom display name
-                        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-                            if (item.getItemMeta().getDisplayName().toLowerCase().contains(lowerCaseFilter)) {
-                                return true;
-                            }
-                        }
-
-                        // Check internal material name (e.g., "diamond_sword")
-                        if (item.getType().getKey().getKey().toLowerCase().contains(lowerCaseFilter)) {
-                            return true;
-                        }
-
-                        // Check enchantments of enchanted books
-                        if (item.hasItemMeta()) {
-                            ItemMeta meta = item.getItemMeta();
-
-                            // Normal Item Enchants
-                            if (meta.hasEnchants()) {
-                                for (Map.Entry<Enchantment, Integer> enchEntry : meta.getEnchants().entrySet()) {
-                                    if (ItemUtils.matchesEnchantment(enchEntry.getKey(), enchEntry.getValue(), lowerCaseFilter)) {
-                                        return true;
-                                    }
-                                }
-                            }
-
-                            // Enchanted Books
-                            if (meta instanceof EnchantmentStorageMeta storageMeta) {
-                                if (storageMeta.hasStoredEnchants()) {
-                                    for (Map.Entry<Enchantment, Integer> enchEntry : storageMeta.getStoredEnchants().entrySet()) {
-                                        if (ItemUtils.matchesEnchantment(enchEntry.getKey(), enchEntry.getValue(), lowerCaseFilter)) {
-                                            return true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Fallback check for formatted English name
-                        return getItemDisplayName(item).toLowerCase().contains(lowerCaseFilter);
-                    })
-                    .collect(Collectors.toList());
-        }
-
-        switch (sortType) {
-            case ALPHABETICAL:
-                sortedItems.sort(Comparator.comparing(a -> ItemUtils.getSortableName(a.getKey()), String.CASE_INSENSITIVE_ORDER));
-                break;
-            case COUNT_DESC:
-                sortedItems.sort(Map.Entry.comparingByValue(Comparator.reverseOrder()));
-                break;
-            case COUNT_ASC:
-                sortedItems.sort(Map.Entry.comparingByValue());
-                break;
-        }
-
-        int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
-        if (currentPage >= totalPages) {
-            currentPage = totalPages - 1;
-        }
-        if (currentPage < 0) {
-            currentPage = 0;
-        }
-        int startIndex = currentPage * ITEMS_PER_PAGE;
-        int endIndex = Math.min(startIndex + ITEMS_PER_PAGE, sortedItems.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            int slot = i - startIndex;
-            Map.Entry<ItemStack, Integer> entry = sortedItems.get(i);
-            ItemStack displayItem = createDisplayItem(entry.getKey(), entry.getValue(), totalNetworkItems);
-            inventory.setItem(slot, displayItem);
+        selection = TerminalItemSelection.select(networkItems, searchFilter, sortType, currentPage);
+        currentPage = selection.index();
+        int totalPages = selection.totalPages();
+        for (int slot = 0; slot < selection.items().size(); slot++) {
+            Map.Entry<ItemStack, Integer> entry = selection.items().get(slot);
+            inventory.setItem(slot, createDisplayItem(entry.getKey(), entry.getValue(), totalNetworkItems));
         }
 
         addControlButtons(currentPage, totalPages, totalNetworkItems, uniqueTypes, capacity, scan, showNumericSummary);
@@ -360,7 +285,7 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot == SLOT_NEXT_PAGE) {
-            int totalPages = Math.max(1, (int) Math.ceil((double) sortedItems.size() / ITEMS_PER_PAGE));
+            int totalPages = selection.totalPages();
             if (currentPage < totalPages - 1) {
                 currentPage++;
                 updateInventory();
@@ -409,9 +334,8 @@ public class TerminalGUI implements InventoryHolder {
         }
 
         if (slot >= 0 && slot < ITEMS_PER_PAGE) {
-            int itemIndex = (currentPage * ITEMS_PER_PAGE) + slot;
-            if (itemIndex < sortedItems.size()) {
-                Map.Entry<ItemStack, Integer> entry = sortedItems.get(itemIndex);
+            if (slot < selection.items().size()) {
+                Map.Entry<ItemStack, Integer> entry = selection.items().get(slot);
                 ItemStack originalItem = entry.getKey();
                 int availableAmount = entry.getValue();
                 int amountToTake = 0;
