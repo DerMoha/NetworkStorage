@@ -418,7 +418,15 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
         if (digest == null || !digest.matches("[0-9a-fA-F]{64}")) {
             throw new SQLException("SQLite migration metadata has an invalid digest");
         }
-        if (migrationSchema == null || Integer.parseInt(migrationSchema) != schemaVersion) {
+        // This records the schema at import time, not the database's current schema.
+        // Later schema migrations must not invalidate a completed import's history.
+        int importedSchemaVersion;
+        try {
+            importedSchemaVersion = Integer.parseInt(migrationSchema);
+        } catch (NumberFormatException e) {
+            throw new SQLException("SQLite migration metadata has an invalid schema version", e);
+        }
+        if (importedSchemaVersion < 1 || importedSchemaVersion > schemaVersion) {
             throw new SQLException("SQLite migration metadata has an invalid schema version");
         }
         if (completedAt == null || Long.parseLong(completedAt) <= 0) {

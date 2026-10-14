@@ -69,6 +69,86 @@ class SqliteProviderIntegrationTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {3, 4})
+    void historicalMigrationMetadataSurvivesUpgradeAndRestart(int databaseVersion) throws Exception {
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        provider.initialize();
+        UUID owner = UUID.randomUUID();
+        Network network = network("Main", owner);
+        network.setDescription("preserved after upgrade");
+        network.addTrustedPlayerWithExpiry(UUID.randomUUID(), System.currentTimeMillis() + 86_400_000L);
+        StorageSnapshot expected = StorageSnapshot.capture(java.util.List.of(network),
+                Map.of(owner, "Main"), Map.of(owner, "Main"), Map.of());
+        try {
+            assertTrue(provider.saveSnapshot(expected));
+            assertTrue(provider.setMigrationMetadata("original-import", "a".repeat(64), expected));
+        } finally {
+            provider.shutdown();
+        }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+             var statement = connection.createStatement()) {
+            statement.execute("UPDATE storage_metadata SET value = '3' WHERE key = 'migration_schema_version'");
+            if (databaseVersion == 3) {
+                statement.execute("ALTER TABLE player_state DROP COLUMN sort_type");
+                statement.execute("PRAGMA user_version = 3");
+            }
+        }
+
+        for (int restart = 0; restart < 2; restart++) {
+            try {
+                provider.initialize();
+                assertTrue(provider.isAvailable());
+                assertEquals(Migrations.CURRENT_VERSION, provider.getSchemaVersion());
+                provider.verifySnapshot(expected);
+                Map<String, Network> loaded = new HashMap<>();
+                Map<UUID, String> selected = new HashMap<>();
+                Map<UUID, String> wireless = new HashMap<>();
+                Map<UUID, String> sorts = new HashMap<>();
+                provider.loadNetworks(loaded, selected, wireless, sorts);
+                assertEquals(expected, StorageSnapshot.capture(loaded.values(), selected, wireless, sorts));
+                try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+                     var statement = connection.createStatement();
+                     var result = statement.executeQuery(
+                             "SELECT value FROM storage_metadata WHERE key = 'migration_schema_version'")) {
+                    assertTrue(result.next());
+                    assertEquals("3", result.getString(1), "original import history must remain unchanged");
+                }
+            } finally {
+                provider.shutdown();
+            }
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", "garbage", "0", "-1", "5", "999999999999999999999"})
+    void rejectsInvalidMigrationSchemaMetadata(String version) throws Exception {
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        provider.initialize();
+        try {
+            StorageSnapshot empty = StorageSnapshot.capture(java.util.List.of(), Map.of(), Map.of(), Map.of());
+            assertTrue(provider.setMigrationMetadata("original-import", "a".repeat(64), empty));
+        } finally {
+            provider.shutdown();
+        }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database)) {
+            if (version == null) {
+                try (var statement = connection.createStatement()) {
+                    statement.execute("DELETE FROM storage_metadata WHERE key = 'migration_schema_version'");
+                }
+            } else {
+                try (var statement = connection.prepareStatement(
+                        "UPDATE storage_metadata SET value = ? WHERE key = 'migration_schema_version'")) {
+                    statement.setString(1, version);
+                    statement.executeUpdate();
+                }
+            }
+        }
+        assertThrows(StorageException.class, provider::initialize);
+        assertFalse(provider.isAvailable());
+    }
+
     @Test
     void snapshotCommitReconcilesDeletesAndRollsBackInvalidWrites() throws Exception {
         SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
