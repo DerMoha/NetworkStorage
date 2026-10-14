@@ -307,6 +307,42 @@ class YamlToSqliteMigratorIntegrationTest {
         assertFalse(Files.exists(dataDirectory.resolve("migration.lock")));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void combinedLegacyDataPreservesCaseVariantsAcrossSavesAndRestarts(boolean packed) throws Exception {
+        writeLegacySource(packed, java.util.Map.of(
+                "Main", "description: upper\ntrusted:\n  - " + trusted
+                        + "\nchests:\n  - {world: missing, x: 1, y: 64, z: 2}\n",
+                "main", "description: lower\n"),
+                java.util.Map.of(owner, "Main", trusted, "Deleted"),
+                java.util.Map.of(owner, "main"));
+        migrateSource(packed);
+        for (int restart = 0; restart < 2; restart++) {
+            SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+            try {
+                provider.initialize();
+                java.util.Map<String, Network> loaded = new java.util.HashMap<>();
+                java.util.Map<UUID, String> selected = new java.util.HashMap<>();
+                java.util.Map<UUID, String> wireless = new java.util.HashMap<>();
+                provider.loadNetworks(loaded, selected, wireless, new java.util.HashMap<>());
+                assertEquals(java.util.Set.of("Main", "main"), loaded.keySet());
+                assertEquals("upper", loaded.get("Main").getDescription());
+                assertEquals("lower", loaded.get("main").getDescription());
+                assertEquals(java.util.Set.of(trusted), loaded.get("Main").getTrustedPlayers());
+                assertEquals(java.util.Set.of(new StoredLocation("missing", 1, 64, 2)),
+                        loaded.get("Main").getUnloadedChestLocations());
+                assertEquals(java.util.Map.of(owner, "Main"), selected);
+                assertEquals(java.util.Map.of(owner, "main"), wireless);
+                StorageSnapshot snapshot = StorageSnapshot.capture(loaded.values(), selected, wireless, java.util.Map.of());
+                provider.verifySnapshot(snapshot);
+                assertTrue(provider.saveSnapshot(snapshot));
+            } finally {
+                provider.shutdown();
+            }
+        }
+        assertFalse(Files.exists(dataDirectory.resolve("migration.lock")));
+    }
+
     private void migrateSource(boolean packed) {
         if (packed) migrator().migrateLegacyDatabase(database.toFile());
         else migrator().migrateYaml();

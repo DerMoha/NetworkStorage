@@ -436,8 +436,7 @@ public class NetworkManager {
             return;
         }
         Network network = networks.get(oldName);
-        Network conflictingNetwork = findNetworkByNameIgnoreCase(newName);
-        if (conflictingNetwork != null && conflictingNetwork != network) {
+        if (com.dermoha.networkstorage.storage.NetworkNames.conflicts(networks.values(), newName, network)) {
             player.sendMessage(String.format(lang.getMessage("network.rename.exists"), newName));
             return;
         }
@@ -584,17 +583,11 @@ public class NetworkManager {
     }
 
     public Network findOwnedNetwork(Player player, String networkName) {
-        return getOwnedNetworks(player).stream()
-                .filter(network -> network.getName().equalsIgnoreCase(networkName))
-                .findFirst()
-                .orElse(null);
+        return com.dermoha.networkstorage.storage.NetworkNames.find(getOwnedNetworks(player), networkName);
     }
 
     public Network findAccessibleNetwork(Player player, String networkName) {
-        return getAccessibleNetworks(player).stream()
-                .filter(network -> network.getName().equalsIgnoreCase(networkName))
-                .findFirst()
-                .orElse(null);
+        return com.dermoha.networkstorage.storage.NetworkNames.find(getAccessibleNetworks(player), networkName);
     }
 
     private Network findNetworkByNameIgnoreCase(String networkName) {
@@ -723,7 +716,8 @@ public class NetworkManager {
                 return null;
             }
             Network conflictingNetwork = findNetworkByNameIgnoreCase(networkName);
-            if (conflictingNetwork != null && !conflictingNetwork.getOwner().equals(player.getUniqueId())) {
+            if (conflictingNetwork != null) {
+                if (conflictingNetwork.getOwner().equals(player.getUniqueId())) return conflictingNetwork;
                 player.sendMessage(lang.getMessage("network.orcreate.exists"));
                 return null;
             }

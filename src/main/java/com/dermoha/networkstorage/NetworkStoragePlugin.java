@@ -460,10 +460,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
             return;
         }
 
-        Network network = networkManager.getAllNetworks().stream()
-                .filter(candidate -> candidate.getName().equalsIgnoreCase(args[1]))
-                .findFirst()
-                .orElse(null);
+        Network network = com.dermoha.networkstorage.storage.NetworkNames.find(
+                networkManager.getAllNetworks(), args[1]);
         if (network == null) {
             sender.sendMessage("§cNetwork not found: " + args[1]);
             return;

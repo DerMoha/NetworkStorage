@@ -179,9 +179,9 @@ class SqliteProviderIntegrationTest {
             assertEquals(0L, count(provider, "networks"), "failed snapshot must not partially replace the live snapshot");
 
             Network upper = network("Main", owner);
-            Network lower = network("main", UUID.randomUUID());
+            Network lower = network("Main", UUID.randomUUID());
             assertFalse(provider.saveSnapshot(java.util.List.of(upper, lower), Map.of(), Map.of(), Map.of()));
-            assertEquals(0L, count(provider, "networks"), "case-insensitive collisions must roll back");
+            assertEquals(0L, count(provider, "networks"), "exact-name collisions must roll back");
         } finally {
             provider.shutdown();
         }
@@ -329,7 +329,7 @@ class SqliteProviderIntegrationTest {
     }
 
     @Test
-    void rejectsStoredCaseInsensitiveNetworkNameCollisions() throws Exception {
+    void preservesStoredCaseVariants() throws Exception {
         SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
         provider.initialize();
         try {
@@ -341,8 +341,10 @@ class SqliteProviderIntegrationTest {
                         + UUID.randomUUID() + "', '')");
             }
 
-            assertThrows(StorageException.class,
-                    () -> provider.loadNetworks(new HashMap<>(), new HashMap<>(), new HashMap<>(), new HashMap<>()));
+            Map<String, Network> loaded = new HashMap<>();
+            provider.loadNetworks(loaded, new HashMap<>(), new HashMap<>(), new HashMap<>());
+            assertEquals(java.util.Set.of("Main", "main"), loaded.keySet());
+            assertTrue(provider.saveSnapshot(loaded.values(), Map.of(), Map.of(), Map.of()));
         } finally {
             provider.shutdown();
         }
