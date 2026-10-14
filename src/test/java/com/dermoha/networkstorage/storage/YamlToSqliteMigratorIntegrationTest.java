@@ -166,10 +166,10 @@ class YamlToSqliteMigratorIntegrationTest {
         Files.writeString(playerStateYaml, """
                 players:
                   %s:
-                    selected-owned-network: Missing
+                    selected-owned-network: Main
                 """.formatted(owner));
 
-        assertThrows(StorageException.class, () -> migrator().migrateYaml());
+        assertThrows(StorageException.class, () -> migrator(dataDirectory.resolve("missing/networks.db")).migrateYaml());
         assertTrue(Files.exists(dataDirectory.resolve("migration.lock")));
         assertTrue(Files.exists(networksYaml));
         assertFalse(Files.exists(database));
@@ -282,6 +282,31 @@ class YamlToSqliteMigratorIntegrationTest {
         assertFalse(Files.exists(database));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void staleSelectionsAreClearedWithoutDiscardingValidSelections(boolean packed) throws Exception {
+        writeLegacySource(packed, java.util.Map.of("Main", "trusted: []\n"),
+                java.util.Map.of(owner, "Main", trusted, "Deleted"),
+                java.util.Map.of(owner, "Deleted", trusted, "Main"));
+        migrateSource(packed);
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        try {
+            provider.initialize();
+            java.util.Map<String, Network> loaded = new java.util.HashMap<>();
+            java.util.Map<UUID, String> selected = new java.util.HashMap<>();
+            java.util.Map<UUID, String> wireless = new java.util.HashMap<>();
+            provider.loadNetworks(loaded, selected, wireless, new java.util.HashMap<>());
+            assertEquals(java.util.Set.of("Main"), loaded.keySet());
+            assertEquals(owner, loaded.get("Main").getOwner());
+            assertEquals(java.util.Map.of(owner, "Main"), selected);
+            assertEquals(java.util.Map.of(trusted, "Main"), wireless);
+            provider.verifySnapshot(StorageSnapshot.capture(loaded.values(), selected, wireless, java.util.Map.of()));
+        } finally {
+            provider.shutdown();
+        }
+        assertFalse(Files.exists(dataDirectory.resolve("migration.lock")));
+    }
+
     private void migrateSource(boolean packed) {
         if (packed) migrator().migrateLegacyDatabase(database.toFile());
         else migrator().migrateYaml();
@@ -329,13 +354,17 @@ class YamlToSqliteMigratorIntegrationTest {
     }
 
     private YamlToSqliteMigrator migrator() {
+        return migrator(database);
+    }
+
+    private YamlToSqliteMigrator migrator(Path target) {
         NetworkAccessRules rules = new NetworkAccessRules() {
             @Override public boolean isGlobalNetworkMode() { return false; }
             @Override public boolean hasPrivilege(org.bukkit.command.CommandSender sender, String permission) { return false; }
             @Override public boolean isTrustSystemEnabled() { return true; }
         };
         return new YamlToSqliteMigrator(rules, MovementEvents.NOOP, dataDirectory.toFile(),
-                networksYaml.toFile(), playerStateYaml.toFile(), database.toFile(),
+                networksYaml.toFile(), playerStateYaml.toFile(), target.toFile(),
                 Logger.getLogger("migration-test"));
     }
 

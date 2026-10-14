@@ -152,6 +152,7 @@ public class YamlToSqliteMigrator {
             FileConfiguration playerConfig = loadYamlStrict(yamlPlayerStateFile, "player-state.yml");
             readPlayerState(playerConfig, selectedNetworks, selectedWirelessNetworks);
         }
+        pruneMissingSelections(networks, selectedNetworks, selectedWirelessNetworks);
         return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, Map.of());
     }
 
@@ -227,6 +228,7 @@ public class YamlToSqliteMigrator {
         } catch (IllegalArgumentException e) {
             throw new StorageException("Legacy SQLite database contains invalid UUID data", e);
         }
+        pruneMissingSelections(networks, selectedNetworks, selectedWirelessNetworks);
         return StorageSnapshot.capture(networks.values(), selectedNetworks, selectedWirelessNetworks, Map.of());
     }
 
@@ -435,6 +437,25 @@ public class YamlToSqliteMigrator {
                 throw new StorageException("Invalid player-state UUID '" + uuidString + "'", e);
             }
         }
+    }
+
+    private void pruneMissingSelections(Map<String, Network> networks,
+                                        Map<UUID, String> selected,
+                                        Map<UUID, String> wireless) {
+        pruneMissingSelections(networks, selected, "owned");
+        pruneMissingSelections(networks, wireless, "wireless");
+    }
+
+    private void pruneMissingSelections(Map<String, Network> networks,
+                                        Map<UUID, String> selections, String kind) {
+        selections.entrySet().removeIf(entry -> {
+            if (networks.containsKey(entry.getValue())) {
+                return false;
+            }
+            logger.warning("Cleared stale " + kind + " selection for " + entry.getKey()
+                    + ": network '" + entry.getValue() + "' no longer exists");
+            return true;
+        });
     }
 
     private void putState(Map<UUID, String> selectedNetworks,
