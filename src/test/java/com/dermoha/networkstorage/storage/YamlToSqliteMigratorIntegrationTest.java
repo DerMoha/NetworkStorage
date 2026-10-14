@@ -228,6 +228,60 @@ class YamlToSqliteMigratorIntegrationTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void unavailableWorldLocationsSurviveMigrationAndResolveLater(boolean packed) throws Exception {
+        String location = "  - {world: season_two, x: 12.0, y: 64.0, z: -8.0}\n";
+        writeLegacySource(packed, java.util.Map.of("Main", "chests:\n" + location
+                + "terminals:\n" + location + "sender-chests:\n" + location),
+                java.util.Map.of(), java.util.Map.of());
+        migrateSource(packed);
+        SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+        try {
+            provider.initialize();
+            java.util.Map<String, Network> loaded = new java.util.HashMap<>();
+            provider.loadNetworks(loaded, new java.util.HashMap<>(), new java.util.HashMap<>(), new java.util.HashMap<>());
+            Network network = loaded.get("Main");
+            StoredLocation expected = new StoredLocation("season_two", 12, 64, -8);
+            assertEquals(java.util.Set.of(expected), network.getUnloadedChestLocations());
+            assertEquals(java.util.Set.of(expected), network.getUnloadedTerminalLocations());
+            assertEquals(java.util.Set.of(expected), network.getUnloadedSenderChestLocations());
+            StorageSnapshot snapshot = StorageSnapshot.capture(loaded.values(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of());
+            provider.verifySnapshot(snapshot);
+            assertTrue(provider.saveSnapshot(snapshot));
+            org.bukkit.World world = (org.bukkit.World) java.lang.reflect.Proxy.newProxyInstance(
+                    org.bukkit.World.class.getClassLoader(), new Class<?>[] {org.bukkit.World.class},
+                    (proxy, method, args) -> switch (method.getName()) {
+                        case "getName" -> "season_two";
+                        case "hashCode" -> 123;
+                        case "equals" -> proxy == args[0];
+                        default -> throw new UnsupportedOperationException(method.getName());
+                    });
+            assertTrue(network.resolveUnloadedLocations(world));
+            assertTrue(network.getUnloadedChestLocations().isEmpty());
+            assertTrue(network.getUnloadedTerminalLocations().isEmpty());
+            assertTrue(network.getUnloadedSenderChestLocations().isEmpty());
+            assertEquals(snapshot, StorageSnapshot.capture(loaded.values(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of()));
+        } finally {
+            provider.shutdown();
+        }
+        assertFalse(Files.exists(dataDirectory.resolve("migration.lock")));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "{world: '', x: 0, y: 64, z: 0}", "{world: absent, x: 1.5, y: 64, z: 0}",
+            "{world: absent, x: 30000001, y: 64, z: 0}", "{world: absent, x: 0, y: 2147483648, z: 0}",
+            "{world: absent, x: 0, z: 0}", "{world: absent, world_key: other, x: 0, y: 64, z: 0}"})
+    void invalidDetachedLocationsStillPreserveSource(String location) throws Exception {
+        writeLegacySource(false, java.util.Map.of("Main", "chests:\n  - " + location + "\n"),
+                java.util.Map.of(), java.util.Map.of());
+        String original = Files.readString(networksYaml);
+        assertThrows(StorageException.class, () -> migrateSource(false));
+        assertEquals(original, Files.readString(networksYaml));
+        assertFalse(Files.exists(database));
+    }
+
     private void migrateSource(boolean packed) {
         if (packed) migrator().migrateLegacyDatabase(database.toFile());
         else migrator().migrateYaml();

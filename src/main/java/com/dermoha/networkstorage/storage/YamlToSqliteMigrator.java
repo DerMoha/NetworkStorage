@@ -241,9 +241,9 @@ public class YamlToSqliteMigrator {
             }
         }
         Network network = new Network(networkName, owner, accessRules, movementEvents);
-        readLocations(section, "chests", networkName).forEach(network::addChest);
-        readLocations(section, "terminals", networkName).forEach(network::addTerminal);
-        readLocations(section, "sender-chests", networkName).forEach(network::addSenderChest);
+        readLocations(section, "chests", networkName).forEach(network::addUnloadedChest);
+        readLocations(section, "terminals", networkName).forEach(network::addUnloadedTerminal);
+        readLocations(section, "sender-chests", networkName).forEach(network::addUnloadedSenderChest);
 
         Object trustedValue = section.get("trusted");
         if (trustedValue != null && !(trustedValue instanceof List<?>)) {
@@ -339,9 +339,9 @@ public class YamlToSqliteMigrator {
         return network;
     }
 
-    private List<Location> readLocations(ConfigurationSection section, String key, String networkName) {
-        List<Location> locations = new ArrayList<>();
-        Set<Location> seenLocations = new HashSet<>();
+    private List<StoredLocation> readLocations(ConfigurationSection section, String key, String networkName) {
+        List<StoredLocation> locations = new ArrayList<>();
+        Set<StoredLocation> seenLocations = new HashSet<>();
         int index = 0;
         Object rawLocations = section.get(key);
         if (rawLocations == null) {
@@ -355,7 +355,7 @@ public class YamlToSqliteMigrator {
                 throw new StorageException("Network '" + networkName + "' has malformed " + key
                         + " entry at index " + index);
             }
-            Location location = deserializeLocation(locationMap, networkName, key + "[" + index + "]");
+            StoredLocation location = deserializeLocation(locationMap, networkName, key + "[" + index + "]");
             if (!seenLocations.add(location)) {
                 throw new StorageException("Network '" + networkName + "' contains a duplicate " + key + " location");
             }
@@ -365,57 +365,33 @@ public class YamlToSqliteMigrator {
         return locations;
     }
 
-    private Location deserializeLocation(Map<?, ?> locationMap, String networkName, String locationType) {
+    private StoredLocation deserializeLocation(Map<?, ?> locationMap, String networkName, String locationType) {
         try {
-            Map<String, Object> serialized = new HashMap<>();
-            for (Map.Entry<?, ?> entry : locationMap.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    throw new IllegalArgumentException("non-string location key");
+            for (var entry : locationMap.entrySet()) {
+                if (!(entry.getKey() instanceof String key) || !LOCATION_KEYS.contains(key)) {
+                    throw new IllegalArgumentException("unsupported location key");
                 }
-                if (!LOCATION_KEYS.contains(key)) {
-                    throw new IllegalArgumentException("unsupported location key '" + key + "'");
+                if (("yaw".equals(key) || "pitch".equals(key))
+                        && (!(entry.getValue() instanceof Number number) || !Double.isFinite(number.doubleValue()))) {
+                    throw new IllegalArgumentException("invalid location orientation");
                 }
-                if (("x".equals(key) || "y".equals(key) || "z".equals(key)
-                        || "yaw".equals(key) || "pitch".equals(key))
-                        && !(entry.getValue() instanceof Number)) {
-                    throw new IllegalArgumentException("location coordinate is not numeric");
-                }
-                if (("world".equals(key) || "world_key".equals(key))
-                        && !(entry.getValue() instanceof String)) {
-                    throw new IllegalArgumentException("location world is not a string");
-                }
-                serialized.put(key, entry.getValue());
             }
-            if ((!serialized.containsKey("world") && !serialized.containsKey("world_key"))
-                    || !serialized.keySet().containsAll(Set.of("x", "y", "z"))) {
-                throw new IllegalArgumentException("location is missing world or coordinates");
+            Object rawWorld = locationMap.containsKey("world") ? locationMap.get("world") : locationMap.get("world_key");
+            if (!(rawWorld instanceof String world) || world.isBlank()) {
+                throw new IllegalArgumentException("location is missing a world identifier");
             }
-            if (serialized.containsKey("world") && serialized.containsKey("world_key")
-                    && !serialized.get("world").equals(serialized.get("world_key"))) {
+            if (locationMap.containsKey("world") && locationMap.containsKey("world_key")
+                    && !world.equals(locationMap.get("world_key"))) {
                 throw new IllegalArgumentException("location contains conflicting world identifiers");
             }
-            Location location = Location.deserialize(serialized);
-            if (location == null || location.getWorld() == null
-                    || !Double.isFinite(location.getX())
-                    || !Double.isFinite(location.getY())
-                    || !Double.isFinite(location.getZ())
-                    || location.getX() != Math.rint(location.getX())
-                    || location.getY() != Math.rint(location.getY())
-                    || location.getZ() != Math.rint(location.getZ())) {
-                throw new IllegalArgumentException("invalid coordinates or world");
-            }
-            World world = Bukkit.getWorld(location.getWorld().getName());
-            if (world == null) {
-                throw new IllegalArgumentException("world is not loaded");
-            }
-            if (Math.abs(location.getX()) > 3.0E7
-                    || Math.abs(location.getZ()) > 3.0E7
-                    || location.getY() < world.getMinHeight() - 1024
-                    || location.getY() > world.getMaxHeight() + 1024) {
+            int x = Math.toIntExact(StorageValues.exactLong(locationMap.get("x"), "location x"));
+            int y = Math.toIntExact(StorageValues.exactLong(locationMap.get("y"), "location y"));
+            int z = Math.toIntExact(StorageValues.exactLong(locationMap.get("z"), "location z"));
+            if (Math.abs((long) x) > 30_000_000L || Math.abs((long) z) > 30_000_000L) {
                 throw new IllegalArgumentException("coordinates are outside safe world bounds");
             }
-            return new Location(world, location.getX(), location.getY(), location.getZ(),
-                    location.getYaw(), location.getPitch());
+            // Import detached positions. The runtime resolves worlds when they are available.
+            return new StoredLocation(world, x, y, z);
         } catch (Exception e) {
             throw new StorageException("Invalid " + locationType + " location in network '" + networkName + "'", e);
         }
