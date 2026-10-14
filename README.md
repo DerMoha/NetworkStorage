@@ -53,6 +53,12 @@ Trust grants usage access through terminals, wireless terminals, and protected c
 
 `wireless-terminal-durability` controls how many networks a newly issued wireless terminal can open. Set `wireless-terminal-break-on-zero: true` to remove the terminal after its final use. The first click at the final use warns without opening; a second click opens the final session, and the terminal is removed when that session closes, including after a search. The default is `false`.
 
+### Safe inventory deposits
+
+The terminal's **Deposit inventory** button previews a deposit and requires a separate confirmation within 15 seconds. It deposits only the 27 main inventory slots. Hotbar, armor, offhand, wireless terminals, and storage wands are excluded. Changing eligible inventory contents, closing the terminal, or using another control cancels confirmation. Items that do not fit remain in your inventory, and the terminal stays open.
+
+Wireless terminals and storage wands are also protected from individual player deposits. If a terminal was deposited using an older build, obtain a replacement with `/ns wireless` (requires permission), or use a physical terminal to retrieve the stored items.
+
 ### Safety Compatibility
 
 *   Storage wands and wireless terminals must be created by this plugin. Items that only match the display name are rejected intentionally, because renamed legacy items cannot be distinguished from forged items.

@@ -59,8 +59,12 @@ public final class NetworkMovement {
 
     public DepositResult depositFromPlayer(Player player, ItemSource source) {
         ItemStack original = source.read();
-        if (original == null || original.getType().isAir()) {
+        if (com.dermoha.networkstorage.util.StorageItems.isEmpty(original)) {
             return new DepositResult(0, 0);
+        }
+
+        if (com.dermoha.networkstorage.util.StorageItems.isTool(original)) {
+            return new DepositResult(0, original.getAmount());
         }
 
         int originalAmount = original.getAmount();

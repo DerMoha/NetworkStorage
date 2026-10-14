@@ -244,7 +244,7 @@ update.command.latest: "§e[NetworkStorage] Eine neue Version (§a%s§e) ist ver
 update.command.checking: "§7[NetworkStorage] Suche nach Updates..."
 update.command.never_checked: "§7[NetworkStorage] Es wurde noch keine Update-Pruefung abgeschlossen. Versuche es gleich nochmal."
 
-# Shared command help
+# Shared commands and safe bulk deposits
 commands.help.title: "§6=== NetworkStorage-Hilfe ==="
 commands.help.aliases: "§7Aliase: /ns, /storage, /network, /networkstorage"
 commands.help.wand: "§e/ns wand §7- Lagerstab erhalten"
@@ -260,3 +260,13 @@ commands.help.description: "§e/ns description <name> <text> §7- Beschreibung s
 commands.help.reset: "§e/ns reset §7- Netzwerk zurücksetzen (Bestätigung erforderlich)"
 commands.help.delete: "§e/ns delete <name> §7- Netzwerk löschen (Bestätigung erforderlich)"
 commands.help.admin: "§e/ns admin <command> §7- Admin-Werkzeuge: reload, list, info, inspect, rescan, config, storage, update"
+terminal.bulk.title: "§7Inventar einlagern"
+terminal.bulk.scope: "§7Nur die 27 Plätze im Hauptinventar werden eingelagert."
+terminal.bulk.protected: "§7Schnellleiste, Rüstung, Nebenhand, Terminals und Stäbe bleiben bei dir."
+terminal.bulk.confirm: "§7Einlagern bestätigen"
+terminal.bulk.cancel: "§7Einlagern abbrechen"
+terminal.bulk.preview: "§7Bis zu %d Gegenstände aus %d Plätzen einlagern?"
+terminal.bulk.nothing: "§7Keine geeigneten Gegenstände im Hauptinventar."
+terminal.bulk.changed: "§7Inventar geändert oder Bestätigung abgelaufen. Vorschau erneut öffnen."
+terminal.bulk.no_space: "§7Nichts eingelagert; prüfe den freien Lagerplatz."
+terminal.bulk.tool_protected: "§7Kabellose Terminals und Lagerstäbe können nicht eingelagert werden."

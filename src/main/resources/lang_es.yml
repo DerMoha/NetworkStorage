@@ -246,7 +246,7 @@ update.command.latest: "§e[NetworkStorage] ¡Hay una nueva versión (§a%s§e)!
 update.command.checking: "§7[NetworkStorage] Buscando actualizaciones..."
 update.command.never_checked: "§7[NetworkStorage] Aún no se ha completado la verificación. Inténtalo de nuevo en un momento."
 
-# Shared command help
+# Shared commands and safe bulk deposits
 commands.help.title: "§6=== Ayuda de NetworkStorage ==="
 commands.help.aliases: "§7Alias: /ns, /storage, /network, /networkstorage"
 commands.help.wand: "§e/ns wand §7- Obtener una varita de almacenamiento"
@@ -262,3 +262,13 @@ commands.help.description: "§e/ns description <name> <text> §7- Establecer una
 commands.help.reset: "§e/ns reset §7- Reiniciar tu red (requiere confirmación)"
 commands.help.delete: "§e/ns delete <name> §7- Eliminar una red (requiere confirmación)"
 commands.help.admin: "§e/ns admin <command> §7- Herramientas de admin: reload, list, info, inspect, rescan, config, storage, update"
+terminal.bulk.title: "§7Depositar inventario"
+terminal.bulk.scope: "§7Solo se depositan los 27 espacios del inventario principal."
+terminal.bulk.protected: "§7Barra rápida, armadura, mano secundaria, terminales y varitas se conservan."
+terminal.bulk.confirm: "§7Confirmar depósito"
+terminal.bulk.cancel: "§7Cancelar depósito"
+terminal.bulk.preview: "§7¿Depositar hasta %d objetos de %d espacios?"
+terminal.bulk.nothing: "§7No hay objetos aptos en el inventario principal."
+terminal.bulk.changed: "§7El inventario cambió o la confirmación caducó. Revisa el depósito otra vez."
+terminal.bulk.no_space: "§7No se depositó nada; comprueba el espacio de almacenamiento."
+terminal.bulk.tool_protected: "§7Las terminales inalámbricas y varitas no se pueden depositar."

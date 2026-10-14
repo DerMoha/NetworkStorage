@@ -123,6 +123,13 @@ public class InventoryInteractionListener implements Listener {
             return;
         }
 
+        terminal.cancelBulkDeposit();
+        if (com.dermoha.networkstorage.util.StorageItems.isTool(event.getCurrentItem())) {
+            player.sendMessage(lang.getMessage("terminal.bulk.tool_protected"));
+            terminal.requestRefresh();
+            return;
+        }
+
         terminal.getNetwork().getMovement().depositFromPlayerToTerminal(
                 player,
                 new NetworkMovement.ItemSource.InvSlotSource(player, event.getSlot()),

@@ -247,7 +247,7 @@ update.command.latest: "§e[NetworkStorage] A new version (§a%s§e) is availabl
 update.command.checking: "§7[NetworkStorage] Checking for updates..."
 update.command.never_checked: "§7[NetworkStorage] No update check has completed yet. Try again in a moment."
 
-# Shared command help
+# Shared commands and safe bulk deposits
 commands.help.title: "§6=== NetworkStorage help ==="
 commands.help.aliases: "§7Aliases: /ns, /storage, /network, /networkstorage"
 commands.help.wand: "§e/ns wand §7- Get a storage wand"
@@ -263,3 +263,13 @@ commands.help.description: "§e/ns description <name> <text> §7- Set a descript
 commands.help.reset: "§e/ns reset §7- Reset your network (confirmation required)"
 commands.help.delete: "§e/ns delete <name> §7- Delete a network (confirmation required)"
 commands.help.admin: "§e/ns admin <command> §7- Admin tools: reload, list, info, inspect, rescan, config, storage, update"
+terminal.bulk.title: "§7Deposit inventory"
+terminal.bulk.scope: "§7Only the 27 main inventory slots are deposited."
+terminal.bulk.protected: "§7Hotbar, armor, offhand, terminals and wands stay with you."
+terminal.bulk.confirm: "§7Confirm deposit"
+terminal.bulk.cancel: "§7Cancel deposit"
+terminal.bulk.preview: "§7Deposit up to %d items from %d slots?"
+terminal.bulk.nothing: "§7No eligible items in your main inventory."
+terminal.bulk.changed: "§7Inventory changed or confirmation expired. Preview the deposit again."
+terminal.bulk.no_space: "§7Nothing deposited; check network storage space."
+terminal.bulk.tool_protected: "§7Wireless terminals and storage wands cannot be deposited."

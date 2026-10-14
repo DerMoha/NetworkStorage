@@ -29,6 +29,7 @@ public class TerminalGUI implements InventoryHolder {
     private SortType sortType;
     private TerminalItemSelection.Page selection;
     private String searchFilter = "";
+    private BulkDepositPlan pendingDeposit;
     private boolean refreshPending;
     private boolean forceScanNextUpdate;
     private final Consumer<NetworkScanResult> scanCompletionCallback = result -> {
@@ -45,6 +46,7 @@ public class TerminalGUI implements InventoryHolder {
     private static final int SLOT_INFO = 48;
     private static final int SLOT_STATS = 49;
     private static final int SLOT_DEPOSIT_ALL = 50;
+    private static final int SLOT_CONFIRM_DEPOSIT = 51;
     private static final int SLOT_REFRESH = 52;
     private static final int SLOT_NEXT_PAGE = 53;
 
@@ -180,16 +182,21 @@ public class TerminalGUI implements InventoryHolder {
         );
         inventory.setItem(SLOT_REFRESH, refreshButton);
 
-        ItemStack depositAllButton = createGuiControlItem(
-                Material.HOPPER,
-                lang.getMessage("terminal.deposit_all.title"),
-                Arrays.asList(
-                        lang.getMessage("terminal.deposit_all.lore1"),
-                        lang.getMessage("terminal.deposit_all.lore2")
-                ),
-                "custom-model-data.gui.terminal.deposit-all"
-        );
-        inventory.setItem(SLOT_DEPOSIT_ALL, depositAllButton);
+        if (pendingDeposit == null) {
+            inventory.setItem(SLOT_DEPOSIT_ALL, createGuiControlItem(Material.HOPPER,
+                    lang.getMessage("terminal.bulk.title"), Arrays.asList(
+                            lang.getMessage("terminal.bulk.scope"), lang.getMessage("terminal.bulk.protected")),
+                    "custom-model-data.gui.terminal.deposit-all"));
+        } else {
+            inventory.setItem(SLOT_DEPOSIT_ALL, createGuiControlItem(Material.BARRIER,
+                    lang.getMessage("terminal.bulk.cancel"), List.of(lang.getMessage("terminal.bulk.protected")),
+                    "custom-model-data.gui.terminal.deposit-all"));
+            inventory.setItem(SLOT_CONFIRM_DEPOSIT, createGuiControlItem(Material.LIME_CONCRETE,
+                    lang.getMessage("terminal.bulk.confirm"), Arrays.asList(
+                            String.format(lang.getMessage("terminal.bulk.preview"), pendingDeposit.itemCount(), pendingDeposit.slots().size()),
+                            lang.getMessage("terminal.bulk.scope"), lang.getMessage("terminal.bulk.protected")),
+                    "custom-model-data.gui.terminal.deposit-all"));
+        }
 
         if (page < totalPages - 1) {
             ItemStack nextButton = createGuiControlItem(
@@ -278,6 +285,21 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
+        if (slot == SLOT_DEPOSIT_ALL && isLeftClick && !isShiftClick) {
+            if (pendingDeposit != null) {
+                cancelBulkDeposit();
+                requestRefresh();
+            } else prepareBulkDeposit();
+            return;
+        }
+        if (slot == SLOT_CONFIRM_DEPOSIT && isLeftClick && !isShiftClick) {
+            confirmBulkDeposit();
+            return;
+        }
+        boolean hadPendingDeposit = pendingDeposit != null;
+        cancelBulkDeposit();
+        if (hadPendingDeposit) requestRefresh();
+
         if (slot == SLOT_PREV_PAGE && currentPage > 0) {
             currentPage--;
             updateInventory();
@@ -328,11 +350,6 @@ public class TerminalGUI implements InventoryHolder {
             return;
         }
 
-        if (slot == SLOT_DEPOSIT_ALL) {
-            handleDepositAll();
-            return;
-        }
-
         if (slot >= 0 && slot < ITEMS_PER_PAGE) {
             if (slot < selection.items().size()) {
                 Map.Entry<ItemStack, Integer> entry = selection.items().get(slot);
@@ -359,27 +376,40 @@ public class TerminalGUI implements InventoryHolder {
         network.getMovement().withdrawToPlayer(player, itemType, amountToTake, this);
     }
 
-    private void handleDepositAll() {
-        if (!ensureAccess()) {
+    private void prepareBulkDeposit() {
+        pendingDeposit = BulkDepositPlan.capture(player.getInventory()::getItem, System.currentTimeMillis());
+        if (pendingDeposit.isEmpty()) {
+            pendingDeposit = null;
+            player.sendMessage(lang.getMessage("terminal.bulk.nothing"));
+        }
+        requestRefresh();
+    }
+
+    public void cancelBulkDeposit() {
+        if (pendingDeposit == null) return;
+        pendingDeposit = null;
+    }
+
+    private void confirmBulkDeposit() {
+        BulkDepositPlan plan = pendingDeposit;
+        pendingDeposit = null;
+        if (plan == null) return;
+        if (!ensureAccess()) return;
+        if (!plan.matches(player.getInventory()::getItem, System.currentTimeMillis())) {
+            player.sendMessage(lang.getMessage("terminal.bulk.changed"));
+            requestRefresh();
             return;
         }
         int deposited = 0;
-        int slotsScanned = 0;
-        org.bukkit.inventory.PlayerInventory inv = player.getInventory();
-        for (int slot = 0; slot < inv.getSize(); slot++) {
-            ItemStack stack = inv.getItem(slot);
-            if (stack == null || stack.getType() == Material.AIR) {
-                continue;
-            }
-            slotsScanned++;
-            com.dermoha.networkstorage.storage.NetworkMovement.DepositResult result =
-                    network.getMovement().depositFromPlayer(player, new com.dermoha.networkstorage.storage.NetworkMovement.ItemSource.InvSlotSource(player, slot));
+        for (int slot : plan.slots()) {
+            var result = network.getMovement().depositFromPlayer(player,
+                    new com.dermoha.networkstorage.storage.NetworkMovement.ItemSource.InvSlotSource(player, slot));
             deposited += result.deposited();
         }
         if (deposited > 0) {
-            player.sendMessage(String.format(lang.getMessage("terminal.deposit_all.summary"), deposited, slotsScanned));
+            player.sendMessage(String.format(lang.getMessage("terminal.deposit_all.summary"), deposited, plan.slots().size()));
         } else {
-            player.sendMessage(lang.getMessage("terminal.deposit_all.nothing"));
+            player.sendMessage(lang.getMessage("terminal.bulk.no_space"));
         }
         requestRefresh();
     }
@@ -411,6 +441,8 @@ public class TerminalGUI implements InventoryHolder {
             return false;
         }
 
+        pendingDeposit = null;
+        updateInventory();
         player.openInventory(inventory);
         return true;
     }

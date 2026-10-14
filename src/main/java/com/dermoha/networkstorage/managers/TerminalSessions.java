@@ -201,7 +201,8 @@ public class TerminalSessions implements Listener {
         boolean finished;
         if (holder instanceof StatsGUI) {
             finished = session.closeStats();
-        } else if (holder instanceof TerminalGUI) {
+        } else if (holder instanceof TerminalGUI closing) {
+            closing.cancelBulkDeposit();
             finished = session.closeTerminal();
         } else {
             return;
