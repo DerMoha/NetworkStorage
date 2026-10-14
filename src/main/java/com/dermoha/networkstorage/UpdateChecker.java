@@ -15,9 +15,12 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
+import java.util.function.Consumer;
 import java.util.concurrent.CompletableFuture;
 
-public class UpdateChecker {
+public class UpdateChecker implements AutoCloseable {
 
     private static final String MODRINTH_API_URL = "https://api.modrinth.com/v2/project/MFLw2RTS/version";
 
@@ -32,10 +35,25 @@ public class UpdateChecker {
     private volatile long lastCheckedAtMs;
     private volatile long lastCheckedRateLimitRemaining = -1L;
 
-    private volatile CompletableFuture<Result> inFlight;
+    private CompletableFuture<Result> inFlight;
+    private volatile boolean closed;
+    private volatile Result lastResult;
+    private volatile long lastSuccessAtMs;
+    private final Fetcher fetcher;
+    private final Consumer<Runnable> dispatch;
+
+    @FunctionalInterface
+    interface Fetcher { String fetch() throws Exception; }
+
 
     public UpdateChecker(NetworkStoragePlugin plugin) {
+        this(plugin, null, null);
+    }
+
+    UpdateChecker(NetworkStoragePlugin plugin, Fetcher fetcher, Consumer<Runnable> dispatch) {
         this.plugin = plugin;
+        this.fetcher = fetcher == null ? this::fetchLatestVersion : fetcher;
+        this.dispatch = dispatch == null ? task -> Bukkit.getScheduler().runTaskAsynchronously(plugin, task) : dispatch;
         this.configManager = plugin.getConfigManager();
         this.lang = plugin.getLanguageManager();
         this.currentVersion = plugin.getDescription().getVersion();
@@ -44,57 +62,75 @@ public class UpdateChecker {
                 + " (https://github.com/DerMoha/NetworkStorage)";
     }
 
-    public CompletableFuture<Result> checkNow() {
-        if (!configManager.isUpdateCheckEnabled()) {
-            CompletableFuture<Result> disabled = CompletableFuture.completedFuture(Result.disabled());
-            inFlight = disabled;
-            return disabled;
-        }
+    UpdateChecker(String currentVersion, Fetcher fetcher, Consumer<Runnable> dispatch) {
+        this.plugin = null;
+        this.configManager = null;
+        this.lang = null;
+        this.currentVersion = currentVersion;
+        this.userAgent = "NetworkStorage-test";
+        this.fetcher = fetcher;
+        this.dispatch = dispatch;
+    }
 
-        if (inFlight != null && !inFlight.isDone()) {
-            return inFlight;
-        }
+    private boolean enabled() { return configManager == null || configManager.isUpdateCheckEnabled(); }
 
+    public synchronized CompletableFuture<Result> checkNow() {
+        if (closed) return CompletableFuture.completedFuture(Result.failed("Update checker retired"));
+        if (!enabled()) {
+            lastResult = Result.disabled();
+            return CompletableFuture.completedFuture(lastResult);
+        }
+        if (inFlight != null) return inFlight;
         CompletableFuture<Result> future = new CompletableFuture<>();
         inFlight = future;
-
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                String fetched = fetchLatestVersion();
-                if (fetched == null) {
+        try {
+            dispatch.accept(() -> {
+                Result result;
+                try {
+                    String fetched = fetcher.fetch();
+                    result = fetched == null ? Result.failed("No compatible release returned by Modrinth")
+                            : Result.success(currentVersion, fetched, isNewerVersion(fetched, currentVersion));
+                } catch (Exception error) {
+                    result = Result.failed(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+                }
+                synchronized (this) {
+                    if (closed || inFlight != future) return;
                     lastCheckedAtMs = System.currentTimeMillis();
-                    notifyCheckFailed("empty response from Modrinth");
-                    future.complete(Result.failed("empty response from Modrinth"));
-                    return;
+                    lastResult = result;
+                    if (result.getStatus() == Status.SUCCESS) {
+                        latestVersion = result.getLatestVersion();
+                        updateAvailable = result.isUpdateAvailable();
+                        lastSuccessAtMs = lastCheckedAtMs;
+                    }
+                    inFlight = null;
+                    if (result.getStatus() == Status.FAILURE) notifyCheckFailed(result.getError());
+                    else if (result.isUpdateAvailable()) notifyAdmins(currentVersion, latestVersion);
+                    future.complete(result);
                 }
-
-                String localVersion = plugin.getDescription().getVersion();
-                currentVersion = localVersion;
-                latestVersion = fetched;
-                updateAvailable = isNewerVersion(fetched, localVersion);
-                lastCheckedAtMs = System.currentTimeMillis();
-
-                if (updateAvailable) {
-                    notifyAdmins(localVersion, fetched);
-                } else {
-                    plugin.getLogger().info("[NetworkStorage] You are running the latest version (" + localVersion + ").");
-                }
-
-                future.complete(Result.success(localVersion, fetched, updateAvailable));
-            } catch (Exception e) {
-                lastCheckedAtMs = System.currentTimeMillis();
-                plugin.getLogger().warning("Failed to check for updates: " + e.getMessage());
-                notifyCheckFailed(e.getMessage());
-                future.complete(Result.failed(e.getMessage()));
-            }
-        });
-
-        future.whenComplete((r, ex) -> inFlight = null);
+            });
+        } catch (RuntimeException failure) {
+            if (inFlight == future) inFlight = null;
+            lastResult = Result.failed(failure.getMessage());
+            lastCheckedAtMs = System.currentTimeMillis();
+            future.complete(lastResult);
+        }
         return future;
     }
 
+    @Override
+    public synchronized void close() {
+        closed = true;
+        CompletableFuture<Result> pending = inFlight;
+        inFlight = null;
+        if (pending != null) pending.complete(Result.failed("Update checker retired"));
+    }
+
+    public boolean isClosed() { return closed; }
+    public Result getLastResult() { return lastResult; }
+    public long getLastSuccessfulCheckAtMs() { return lastSuccessAtMs; }
+
     public boolean isUpdateAvailable() {
-        return updateAvailable;
+        return lastResult != null && lastResult.getStatus() == Status.SUCCESS && updateAvailable;
     }
 
     public String getLatestVersion() {
@@ -114,12 +150,13 @@ public class UpdateChecker {
     }
 
     public String getStatus() {
-        if (!plugin.getConfigManager().isUpdateCheckEnabled()) {
+        if (!enabled()) {
             return "disabled";
         }
         if (!hasCompletedCheck()) {
             return "unknown";
         }
+        if (lastResult != null && lastResult.getStatus() == Status.FAILURE) return lastSuccessAtMs > 0 ? "stale" : "failed";
         return updateAvailable ? "outdated" : "latest";
     }
 
@@ -152,7 +189,7 @@ public class UpdateChecker {
                 return null;
             }
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                 JsonElement parsed = JsonParser.parseReader(reader);
                 if (!parsed.isJsonArray()) {
                     return null;
@@ -161,12 +198,18 @@ public class UpdateChecker {
                 if (versions.isEmpty()) {
                     return null;
                 }
-                JsonObject first = versions.get(0).getAsJsonObject();
-                JsonElement versionNumber = first.get("version_number");
-                if (versionNumber == null || versionNumber.isJsonNull()) {
-                    return null;
+                String best = null;
+                for (JsonElement element : versions) {
+                    JsonObject version = element.getAsJsonObject();
+                    if (!version.has("version_type") || !"release".equals(version.get("version_type").getAsString())) continue;
+                    if (version.has("game_versions") && !version.getAsJsonArray("game_versions").contains(
+                            new com.google.gson.JsonPrimitive(Bukkit.getMinecraftVersion()))) continue;
+                    JsonElement number = version.get("version_number");
+                    if (number == null || number.isJsonNull()) continue;
+                    String candidate = number.getAsString();
+                    if (best == null || isNewerVersion(candidate, best)) best = candidate;
                 }
-                return versionNumber.getAsString();
+                return best;
             }
         } finally {
             connection.disconnect();
@@ -186,53 +229,49 @@ public class UpdateChecker {
         }
     }
 
-    private boolean isNewerVersion(String latest, String current) {
-        String[] latestParts = latest.split("\\.");
-        String[] currentParts = current.split("\\.");
-
-        int length = Math.max(latestParts.length, currentParts.length);
-        for (int i = 0; i < length; i++) {
-            int latestPart = i < latestParts.length ? parseVersionPart(latestParts[i]) : 0;
-            int currentPart = i < currentParts.length ? parseVersionPart(currentParts[i]) : 0;
-
-            if (latestPart > currentPart) {
-                return true;
-            }
-            if (latestPart < currentPart) {
-                return false;
-            }
-        }
-        return false;
+    /** Numeric dotted versions, optional v prefix and SemVer prerelease/build suffixes. */
+    static boolean isNewerVersion(String latest, String current) {
+        return compareVersions(latest, current) > 0;
     }
 
-    private int parseVersionPart(String part) {
-        StringBuilder sb = new StringBuilder();
-        for (char c : part.toCharArray()) {
-            if (Character.isDigit(c)) {
-                sb.append(c);
-            } else {
-                break;
-            }
+    private static int compareVersions(String first, String second) {
+        String[] a = first.replaceFirst("^[vV]", "").split("\\+", 2)[0].split("-", 2);
+        String[] b = second.replaceFirst("^[vV]", "").split("\\+", 2)[0].split("-", 2);
+        String[] x = a[0].split("\\.");
+        String[] y = b[0].split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int comparison = new BigInteger(i < x.length ? x[i] : "0")
+                    .compareTo(new BigInteger(i < y.length ? y[i] : "0"));
+            if (comparison != 0) return comparison;
         }
-        return sb.length() > 0 ? Integer.parseInt(sb.toString()) : 0;
+        if (a.length != b.length) return a.length == 1 ? 1 : -1;
+        if (a.length == 1) return 0;
+        x = a[1].split("\\."); y = b[1].split("\\.");
+        for (int i = 0; i < Math.min(x.length, y.length); i++) {
+            boolean numericX = x[i].matches("[0-9]+"), numericY = y[i].matches("[0-9]+");
+            int comparison = numericX && numericY ? new BigInteger(x[i]).compareTo(new BigInteger(y[i]))
+                    : numericX != numericY ? (numericX ? -1 : 1) : x[i].compareTo(y[i]);
+            if (comparison != 0) return comparison;
+        }
+        return Integer.compare(x.length, y.length);
     }
 
     public void notifyPlayer(Player player, String currentVer, String latestVer) {
-        if (!configManager.shouldNotifyAdminsOnUpdate()) {
+        if (closed || configManager == null || !configManager.shouldNotifyAdminsOnUpdate()) {
             return;
         }
         player.sendMessage(lang.getMessage("update.available").formatted(latestVer, currentVer));
     }
 
     private void notifyAdmins(String currentVersion, String latestVersion) {
-        if (!configManager.shouldNotifyAdminsOnUpdate()) {
+        if (closed || configManager == null || !configManager.shouldNotifyAdminsOnUpdate()) {
             return;
         }
 
         final String finalMessage = lang.getMessage("update.available").formatted(latestVersion, currentVersion);
         final String consoleMsg = lang.getMessage("update.notify.console").formatted(latestVersion, currentVersion);
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        scheduleNotification(() -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (isNotifyTarget(player)) {
                     player.sendMessage(finalMessage);
@@ -251,11 +290,11 @@ public class UpdateChecker {
     }
 
     private void notifyCheckFailed(String error) {
-        if (!configManager.shouldNotifyAdminsOnUpdate()) {
+        if (closed || configManager == null || !configManager.shouldNotifyAdminsOnUpdate()) {
             return;
         }
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        scheduleNotification(() -> {
             String message = lang.getMessage("update.check.failed").formatted(error);
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (isNotifyTarget(player)) {
@@ -265,19 +304,39 @@ public class UpdateChecker {
         });
     }
 
+    private synchronized void scheduleNotification(Runnable task) {
+        if (closed) return;
+        try {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!closed) task.run();
+            });
+        } catch (RuntimeException rejection) {
+            if (!closed) plugin.getLogger().warning("Unable to schedule update notification: " + rejection.getMessage());
+        }
+    }
+
     public void reportManualResult(CommandSender sender) {
-        if (!configManager.isUpdateCheckEnabled()) {
+        reportManualResult(sender, lastResult);
+    }
+
+    public void reportManualResult(CommandSender sender, Result result) {
+        if (closed) return;
+        if (result != null && result.getStatus() == Status.FAILURE) {
+            sender.sendMessage(lang.getMessage("update.check.failed").formatted(result.getError()));
+            return;
+        }
+        if (result != null && result.getStatus() == Status.DISABLED) {
             sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
             return;
         }
-        if (!hasCompletedCheck()) {
+        if (result == null) {
             sender.sendMessage(lang.getMessage("update.command.never_checked"));
             return;
         }
-        if (updateAvailable) {
-            sender.sendMessage(lang.getMessage("update.command.latest").formatted(latestVersion, currentVersion));
+        if (result.isUpdateAvailable()) {
+            sender.sendMessage(lang.getMessage("update.command.latest").formatted(result.getLatestVersion(), result.getCurrentVersion()));
         } else {
-            sender.sendMessage(lang.getMessage("update.up_to_date").formatted(currentVersion));
+            sender.sendMessage(lang.getMessage("update.up_to_date").formatted(result.getCurrentVersion()));
         }
     }
 
