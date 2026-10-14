@@ -99,19 +99,19 @@ public class Network {
 
     public Set<Location> getChestLocations() {
         synchronized (chestLocations) {
-            return new HashSet<>(chestLocations);
+            return copyLocations(chestLocations);
         }
     }
 
     public Set<Location> getTerminalLocations() {
         synchronized (terminalLocations) {
-            return new HashSet<>(terminalLocations);
+            return copyLocations(terminalLocations);
         }
     }
 
     public Set<Location> getSenderChestLocations() {
         synchronized (senderChestLocations) {
-            return new HashSet<>(senderChestLocations);
+            return copyLocations(senderChestLocations);
         }
     }
 
@@ -165,11 +165,29 @@ public class Network {
     }
 
     public Map<UUID, PlayerStat> getPlayerStats() {
-        return playerStats;
+        Map<UUID, PlayerStat> copy = new HashMap<>();
+        playerStats.forEach((id, stat) -> copy.put(id, copyStat(stat)));
+        return Collections.unmodifiableMap(copy);
     }
 
     public Set<UUID> getTrustedPlayers() {
-        return trustedPlayers;
+        return Set.copyOf(trustedPlayers);
+    }
+
+    private static Set<Location> copyLocations(Set<Location> source) {
+        Set<Location> copy = new HashSet<>();
+        for (Location location : source) copy.add(location == null ? null : location.clone());
+        return Collections.unmodifiableSet(copy);
+    }
+
+    private static PlayerStat copyStat(PlayerStat stat) {
+        return new PlayerStat(stat.getPlayerUUID(), stat.getPlayerName(),
+                stat.getItemsDeposited(), stat.getItemsWithdrawn());
+    }
+
+    /** Restores a detached persisted statistic; gameplay writes use recordItems* methods. */
+    public void restorePlayerStat(PlayerStat stat) {
+        playerStats.put(stat.getPlayerUUID(), copyStat(stat));
     }
 
     public boolean isDirty() {
@@ -181,7 +199,7 @@ public class Network {
     }
 
     public void addChest(Location location) {
-        if (chestLocations.add(location)) {
+        if (chestLocations.add(location == null ? null : location.clone())) {
             this.dirty = true;
             markContentsChanged();
         }
@@ -195,7 +213,7 @@ public class Network {
     }
 
     public void addTerminal(Location location) {
-        terminalLocations.add(location);
+        terminalLocations.add(location == null ? null : location.clone());
         this.dirty = true;
     }
 
@@ -205,7 +223,7 @@ public class Network {
     }
 
     public void addSenderChest(Location location) {
-        if (senderChestLocations.add(location)) {
+        if (senderChestLocations.add(location == null ? null : location.clone())) {
             this.dirty = true;
             markContentsChanged();
         }
@@ -231,16 +249,20 @@ public class Network {
     }
 
     public PlayerStat getPlayerStat(Player player) {
-        return playerStats.computeIfAbsent(player.getUniqueId(), k -> new PlayerStat(player.getUniqueId(), player.getName()));
+        return copyStat(mutablePlayerStat(player));
+    }
+
+    private PlayerStat mutablePlayerStat(Player player) {
+        return playerStats.computeIfAbsent(player.getUniqueId(), k -> new PlayerStat(k, player.getName()));
     }
 
     public void recordItemsDeposited(Player player, int amount) {
-        getPlayerStat(player).addItemsDeposited(amount);
+        mutablePlayerStat(player).addItemsDeposited(amount);
         this.dirty = true;
     }
 
     public void recordItemsWithdrawn(Player player, int amount) {
-        getPlayerStat(player).addItemsWithdrawn(amount);
+        mutablePlayerStat(player).addItemsWithdrawn(amount);
         this.dirty = true;
     }
 

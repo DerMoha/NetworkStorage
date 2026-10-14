@@ -5,25 +5,25 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
 /** One player's terminal lifecycle. Search input may be claimed by an async chat event. */
-final class TerminalSession {
+final class TerminalSession<T> {
     enum Phase { CLOSED, TERMINAL, TO_SEARCH, SEARCH, SEARCH_INPUT, TO_STATS, STATS, FROM_STATS }
 
     private Phase phase = Phase.CLOSED;
-    private TerminalGUI terminal;
+    private T terminal;
     private long searchGeneration;
     private int searchTaskId = -1;
     private PendingWirelessBreak pendingBreak;
 
-    synchronized void opened(TerminalGUI terminal) {
+    synchronized void opened(T terminal) {
         this.terminal = terminal;
         phase = Phase.TERMINAL;
     }
 
-    synchronized TerminalGUI visibleTerminal() {
+    synchronized T visibleTerminal() {
         return phase == Phase.TERMINAL ? terminal : null;
     }
 
-    synchronized void beginSearch(TerminalGUI terminal) {
+    synchronized void beginSearch(T terminal) {
         this.terminal = terminal;
         searchGeneration++;
         phase = Phase.TO_SEARCH;
@@ -33,13 +33,13 @@ final class TerminalSession {
         return phase == Phase.TO_SEARCH || phase == Phase.SEARCH;
     }
 
-    synchronized SearchInput claimSearch() {
+    synchronized SearchInput<T> claimSearch() {
         if (!isSearching()) return null;
         phase = Phase.SEARCH_INPUT;
-        return new SearchInput(terminal, searchGeneration);
+        return new SearchInput<>(terminal, searchGeneration);
     }
 
-    synchronized boolean acceptsSearchInput(SearchInput input) {
+    synchronized boolean acceptsSearchInput(SearchInput<T> input) {
         return phase == Phase.SEARCH_INPUT && input.generation() == searchGeneration;
     }
 
@@ -62,6 +62,11 @@ final class TerminalSession {
     }
 
     /** Returns true only when this close ends the session. */
+    synchronized boolean closeTerminal(T closing) {
+        if (terminal != closing) return false;
+        return closeTerminal();
+    }
+
     synchronized boolean closeTerminal() {
         if (phase == Phase.TO_SEARCH) {
             phase = Phase.SEARCH;
@@ -110,7 +115,7 @@ final class TerminalSession {
         return pending;
     }
 
-    record SearchInput(TerminalGUI terminal, long generation) { }
+    record SearchInput<T>(T terminal, long generation) { }
 
     record PendingWirelessBreak(EquipmentSlot hand, ItemStack item) { }
 }

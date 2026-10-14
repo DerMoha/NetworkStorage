@@ -10,13 +10,22 @@ public class PlaceholderAPIHook {
 
     private final NetworkStoragePlugin plugin;
     private final boolean enabled;
+    private UpdatePlaceholderExpansion expansion;
 
     public PlaceholderAPIHook(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.enabled = Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null;
         if (enabled) {
             plugin.getLogger().info("PlaceholderAPI detected; placeholders enabled.");
-            new UpdatePlaceholderExpansion(plugin).register();
+            expansion = new UpdatePlaceholderExpansion(plugin, this);
+            expansion.register();
+        }
+    }
+
+    public void close() {
+        if (expansion != null) {
+            expansion.unregister();
+            expansion = null;
         }
     }
 
@@ -28,20 +37,17 @@ public class PlaceholderAPIHook {
         if (!enabled) {
             return null;
         }
-        if (offlinePlayer == null) {
-            return "";
-        }
-        String lower = identifier.toLowerCase();
-        if (lower.startsWith("networkstorage_active_")) {
-            return handleActivePlaceholder(offlinePlayer, lower.substring("networkstorage_active_".length()));
-        }
-        if (lower.startsWith("networkstorage_top_")) {
-            return handleTopPlaceholder(lower.substring("networkstorage_top_".length()));
+        String lower = identifier.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("networkstorage_")) lower = lower.substring("networkstorage_".length());
+        if (lower.startsWith("active_")) {
+            return handleActivePlaceholder(offlinePlayer, lower.substring("active_".length()));
         }
         return null;
     }
 
     private String handleActivePlaceholder(OfflinePlayer offlinePlayer, String sub) {
+        if (!java.util.Set.of("chests", "terminals", "sender_chests", "items", "capacity", "name", "description").contains(sub)) return null;
+        if (offlinePlayer == null) return "";
         Player online = offlinePlayer.getPlayer();
         if (online == null) {
             return "0";
@@ -62,7 +68,4 @@ public class PlaceholderAPIHook {
         };
     }
 
-    private String handleTopPlaceholder(String sub) {
-        return "0";
-    }
 }

@@ -9,10 +9,39 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class NetworkTest {
+
+    @Test
+    void locationsAndStatisticsAreDetachedAtEveryBoundary() {
+        Network network = new Network("Safe", UUID.randomUUID(), new FakeAccessRules(false, true));
+        org.bukkit.Location location = new org.bukkit.Location(null, 1, 2, 3);
+        network.addChest(location);
+        network.addTerminal(location);
+        network.addSenderChest(location);
+        location.setX(99);
+        for (Set<org.bukkit.Location> locations : java.util.List.of(network.getChestLocations(),
+                network.getTerminalLocations(), network.getSenderChestLocations())) {
+            assertEquals(1, locations.iterator().next().getBlockX());
+            locations.iterator().next().setX(77);
+        }
+        assertEquals(1, network.getChestLocations().iterator().next().getBlockX());
+        assertEquals(1, network.getTerminalLocations().iterator().next().getBlockX());
+        assertEquals(1, network.getSenderChestLocations().iterator().next().getBlockX());
+        UUID id = UUID.randomUUID();
+        var stat = new com.dermoha.networkstorage.stats.PlayerStat(id, "Alex", 5, 2);
+        network.restorePlayerStat(stat);
+        stat.addItemsDeposited(100);
+        network.getPlayerStats().get(id).addItemsDeposited(100);
+        assertEquals(5, network.getPlayerStats().get(id).getItemsDeposited());
+        assertThrows(UnsupportedOperationException.class, () -> network.getPlayerStats().clear());
+        network.addTrustedPlayer(id);
+        assertThrows(UnsupportedOperationException.class, () -> network.getTrustedPlayers().clear());
+        network.removeTrustedPlayer(id);
+        assertFalse(network.isTrusted(id));
+    }
 
     @Test
     void ownerCanAccessPlayerNetwork() {

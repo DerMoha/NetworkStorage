@@ -72,6 +72,7 @@ public class WirelessTerminalListener implements Listener {
                 return;
             }
 
+            item = prepareDevice(player, event.getHand(), item);
             if (!ensureFinalUseConfirmation(player, event.getHand(), item, lang)) {
                 return;
             }
@@ -110,6 +111,7 @@ public class WirelessTerminalListener implements Listener {
             return;
         }
 
+        item = prepareDevice(player, hand, item);
         WirelessUseState useState = getUseState(item, lang);
         if (useState.currentUses == 0) {
             if (plugin.getConfigManager().isWirelessTerminalBreakOnZeroEnabled()) {
@@ -164,6 +166,7 @@ public class WirelessTerminalListener implements Listener {
             return true;
         }
 
+        finalUseConfirmations.values().removeIf(value -> value.expiresAtMillis < System.currentTimeMillis());
         finalUseConfirmations.put(player.getUniqueId(), new FinalUseConfirmation(
                 hand,
                 item.clone(),
@@ -194,13 +197,16 @@ public class WirelessTerminalListener implements Listener {
     public boolean breakWirelessTerminal(Player player, EquipmentSlot hand, ItemStack expectedItem) {
         ItemStack heldItem = getWirelessTerminalInHand(player, hand);
         if (isMatchingWirelessTerminal(heldItem, expectedItem)) {
-            setWirelessTerminalSlot(player, hand, new ItemStack(Material.AIR));
+            heldItem.setAmount(heldItem.getAmount() - 1);
+            setWirelessTerminalSlot(player, hand, heldItem);
             return true;
         }
 
-        for (int slot = 0; slot < player.getInventory().getStorageContents().length; slot++) {
+        for (int slot = 0; slot < player.getInventory().getContents().length; slot++) {
             if (isMatchingWirelessTerminal(player.getInventory().getItem(slot), expectedItem)) {
-                player.getInventory().setItem(slot, new ItemStack(Material.AIR));
+                ItemStack matched = player.getInventory().getItem(slot);
+                matched.setAmount(matched.getAmount() - 1);
+                player.getInventory().setItem(slot, matched);
                 return true;
             }
         }
@@ -208,7 +214,36 @@ public class WirelessTerminalListener implements Listener {
     }
 
     private boolean isMatchingWirelessTerminal(ItemStack item, ItemStack expectedItem) {
-        return isWirelessTerminal(item, plugin) && item.isSimilar(expectedItem);
+        if (!isWirelessTerminal(item, plugin) || expectedItem == null) return false;
+        String expectedId = expectedItem.getItemMeta().getPersistentDataContainer().get(getDeviceIdKey(plugin), PersistentDataType.STRING);
+        return expectedId != null && expectedId.equals(item.getItemMeta().getPersistentDataContainer().get(getDeviceIdKey(plugin), PersistentDataType.STRING));
+    }
+
+    @EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        clearFinalUseConfirmation(event.getPlayer());
+    }
+
+    /** Split old stacks before consuming a use, preserving every unused device. */
+    private ItemStack prepareDevice(Player player, EquipmentSlot hand, ItemStack item) {
+        ItemStack remainder = item.clone();
+        remainder.setAmount(item.getAmount() - 1);
+        item = item.clone();
+        item.setAmount(1);
+        ItemMeta meta = item.getItemMeta();
+        if (!meta.getPersistentDataContainer().has(getDeviceIdKey(plugin), PersistentDataType.STRING)
+                || remainder.getAmount() > 0) {
+            meta.getPersistentDataContainer().set(getDeviceIdKey(plugin), PersistentDataType.STRING, UUID.randomUUID().toString());
+        }
+        meta.setMaxStackSize(1);
+        item.setItemMeta(meta);
+        setWirelessTerminalSlot(player, hand, item);
+        if (remainder.getAmount() > 0) {
+            for (ItemStack overflow : player.getInventory().addItem(remainder).values()) {
+                player.getWorld().dropItemNaturally(player.getLocation(), overflow);
+            }
+        }
+        return getWirelessTerminalInHand(player, hand);
     }
 
     private void setWirelessTerminalSlot(Player player, EquipmentSlot hand, ItemStack item) {
@@ -335,6 +370,8 @@ public class WirelessTerminalListener implements Listener {
         ItemStack terminal = new ItemStack(plugin.getConfigManager().getWirelessTerminalMaterial());
         ItemMeta meta = terminal.getItemMeta();
         if (meta != null) {
+            meta.setMaxStackSize(1);
+            meta.getPersistentDataContainer().set(getDeviceIdKey(plugin), PersistentDataType.STRING, UUID.randomUUID().toString());
             meta.setDisplayName(lang.getMessage("wireless_terminal.name"));
             List<String> lore = new ArrayList<>();
             lore.add(lang.getMessage("wireless_terminal.lore1"));
@@ -356,6 +393,10 @@ public class WirelessTerminalListener implements Listener {
         }
         ItemMeta meta = item.getItemMeta();
         return meta != null && meta.getPersistentDataContainer().has(getWirelessTerminalKey(plugin), PersistentDataType.BYTE);
+    }
+
+    private static NamespacedKey getDeviceIdKey(NetworkStoragePlugin plugin) {
+        return new NamespacedKey(plugin, "wireless_terminal_device");
     }
 
     private static NamespacedKey getWirelessTerminalKey(NetworkStoragePlugin plugin) {

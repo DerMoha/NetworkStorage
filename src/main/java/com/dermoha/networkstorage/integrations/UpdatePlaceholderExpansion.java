@@ -9,9 +9,15 @@ import org.jetbrains.annotations.NotNull;
 public class UpdatePlaceholderExpansion extends PlaceholderExpansion {
 
     private final NetworkStoragePlugin plugin;
+    private final PlaceholderAPIHook hook;
 
     public UpdatePlaceholderExpansion(NetworkStoragePlugin plugin) {
+        this(plugin, null);
+    }
+
+    public UpdatePlaceholderExpansion(NetworkStoragePlugin plugin, PlaceholderAPIHook hook) {
         this.plugin = plugin;
+        this.hook = hook;
     }
 
     @Override
@@ -41,11 +47,13 @@ public class UpdatePlaceholderExpansion extends PlaceholderExpansion {
 
     @Override
     public String onRequest(OfflinePlayer player, @NotNull String params) {
+        String key = params.toLowerCase(java.util.Locale.ROOT);
+        if (key.startsWith("active_") && hook != null) return hook.onPlaceholderRequest(player, key);
+        if (!java.util.Set.of("update_available", "update_current", "update_latest").contains(key)) return null;
         UpdateChecker checker = plugin.getUpdateChecker();
         if (checker == null) {
             return "";
         }
-        String key = params.toLowerCase();
         return switch (key) {
             case "update_available" -> String.valueOf(checker.isUpdateAvailable());
             case "update_current" -> {

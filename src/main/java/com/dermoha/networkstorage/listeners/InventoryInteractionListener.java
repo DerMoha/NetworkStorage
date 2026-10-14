@@ -96,10 +96,7 @@ public class InventoryInteractionListener implements Listener {
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         InventoryHolder holder = event.getView().getTopInventory().getHolder();
-        if (!(holder instanceof NetworkSelectGUI
-                || holder instanceof WirelessNetworkSelectGUI
-                || holder instanceof StatsGUI
-                || holder instanceof TerminalGUI)) {
+        if (!(holder instanceof com.dermoha.networkstorage.gui.PluginInventory)) {
             return;
         }
 
@@ -130,9 +127,9 @@ public class InventoryInteractionListener implements Listener {
             return;
         }
 
-        terminal.getNetwork().getMovement().depositFromPlayerToTerminal(
+        terminal.getNetwork().getMovement().depositFromPlayer(
                 player,
-                new NetworkMovement.ItemSource.InvSlotSource(player, event.getSlot()),
-                terminal);
+                new NetworkMovement.ItemSource.InvSlotSource(player, event.getSlot()));
+        terminal.requestRefresh();
     }
 }

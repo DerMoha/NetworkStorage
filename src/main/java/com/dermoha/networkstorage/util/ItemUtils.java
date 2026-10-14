@@ -19,7 +19,7 @@ public final class ItemUtils {
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
             return item.getItemMeta().getDisplayName();
         }
-        String materialName = item.getType().toString().replace('_', ' ').toLowerCase();
+        String materialName = item.getType().toString().replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
         String[] words = materialName.split(" ");
         StringBuilder displayName = new StringBuilder();
         for (String word : words) {
@@ -52,10 +52,10 @@ public final class ItemUtils {
     }
 
     static boolean matchesEnchantment(String rawName, int level, String lowerCaseFilter) {
-        String formattedName = formatEnchantmentName(rawName).toLowerCase();
-        String normalizedRaw = rawName.toLowerCase();
+        String formattedName = formatEnchantmentName(rawName).toLowerCase(java.util.Locale.ROOT);
+        String normalizedRaw = rawName.toLowerCase(java.util.Locale.ROOT);
         String levelStr = String.valueOf(level);
-        String romanLevel = toRoman(level).toLowerCase();
+        String romanLevel = toRoman(level).toLowerCase(java.util.Locale.ROOT);
 
         String[] filterParts = lowerCaseFilter.trim().split("\\s+");
         boolean hasNamePart = false;
@@ -80,7 +80,7 @@ public final class ItemUtils {
     }
 
     static String formatEnchantmentName(String rawName) {
-        String[] words = rawName.replace('_', ' ').toLowerCase().split(" ");
+        String[] words = rawName.replace('_', ' ').toLowerCase(java.util.Locale.ROOT).split(" ");
         StringBuilder displayName = new StringBuilder();
 
         for (String word : words) {

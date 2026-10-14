@@ -34,7 +34,15 @@ public record StorageSnapshot(List<NetworkData> networks,
     public record NetworkData(String name, UUID owner, String description,
                               List<LocationData> chests, List<LocationData> terminals,
                               List<LocationData> senders, List<TrustedPlayer> trusted,
-                              List<PlayerStatData> stats) {}
+                              List<PlayerStatData> stats) {
+        public NetworkData {
+            chests = List.copyOf(chests);
+            terminals = List.copyOf(terminals);
+            senders = List.copyOf(senders);
+            trusted = List.copyOf(trusted);
+            stats = List.copyOf(stats);
+        }
+    }
 
     public StorageSnapshot {
         networks = List.copyOf(networks);

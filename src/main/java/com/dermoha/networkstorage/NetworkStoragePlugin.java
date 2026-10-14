@@ -2,10 +2,6 @@ package com.dermoha.networkstorage;
 
 import com.dermoha.networkstorage.commands.NetworkCommand;
 import com.dermoha.networkstorage.commands.StorageCommand;
-import com.dermoha.networkstorage.gui.NetworkSelectGUI;
-import com.dermoha.networkstorage.gui.StatsGUI;
-import com.dermoha.networkstorage.gui.TerminalGUI;
-import com.dermoha.networkstorage.gui.WirelessNetworkSelectGUI;
 import com.dermoha.networkstorage.listeners.ComparatorOutputListener;
 import com.dermoha.networkstorage.listeners.HopperIntegrationListener;
 import com.dermoha.networkstorage.listeners.InventoryInteractionListener;
@@ -32,15 +28,7 @@ import com.dermoha.networkstorage.util.NetworkStorageConstants;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.block.Chest;
-import org.bukkit.command.PluginCommand;
-import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.AdvancedPie;
@@ -48,9 +36,6 @@ import org.bstats.charts.SimplePie;
 import org.bstats.charts.SingleLineChart;
 
 import java.util.Map;
-import java.util.List;
-import java.util.Set;
-import java.util.Iterator;
 import java.io.File;
 import java.util.function.ToIntFunction;
 
@@ -58,7 +43,8 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private static final int BSTATS_PLUGIN_ID = 28228;
 
-    private java.util.concurrent.CompletableFuture<UpdateChecker.Result> pendingUpdateFuture;
+    private final com.dermoha.networkstorage.runtime.WirelessRecipeRegistration recipes =
+            new com.dermoha.networkstorage.runtime.WirelessRecipeRegistration(this);
 
     private NetworkManager networkManager;
     private ConfigManager configManager;
@@ -86,70 +72,88 @@ public class NetworkStoragePlugin extends JavaPlugin {
     private int trustExpiryTaskId = -1;
     private int updateCheckTaskId = -1;
     private int storageBackupTaskId = -1;
-    private static final String WIRELESS_RECIPE_KEY = "wireless_terminal";
 
     @Override
     public void onEnable() {
         try {
-            createManagers();
+            startRuntime();
+            initializeMetrics();
+            getLogger().info("NetworkStorage Plugin has been enabled!");
         } catch (RuntimeException e) {
-            getLogger().log(java.util.logging.Level.SEVERE,
-                    "NetworkStorage refused to enable because storage could not be verified", e);
+            getLogger().log(java.util.logging.Level.SEVERE, "NetworkStorage could not initialize", e);
             getServer().getPluginManager().disablePlugin(this);
-            return;
         }
-        initializeMetrics();
-        registerCommands();
-        registerListeners();
-        registerRecipes();
-        startTasks();
-
-        getLogger().info("NetworkStorage Plugin has been enabled!");
     }
 
     @Override
     public void onDisable() {
-        cancelStorageBackupTask();
-        if (networkManager != null && !networkManager.flushPersistence()) {
-            getLogger().severe("Final SQLite save failed; pending changes were not cleared and must be retried on the next start.");
+        stopRuntime(true);
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
         }
-        if (networkManager != null) networkManager.shutdownPersistence();
-        if (storageProvider != null) {
-            storageProvider.shutdown();
-        }
-        closePluginInventories();
-        unregisterRuntimeComponents();
-        cancelScheduledTasks();
         getLogger().info("NetworkStorage Plugin has been disabled!");
     }
 
     public boolean reload() {
-        cancelStorageBackupTask();
+        // Keep the current runtime, including backup scheduling, operational on failure.
         if (networkManager != null && !networkManager.flushPersistence()) {
             getLogger().severe("Reload aborted because the current SQLite snapshot could not be committed.");
             return false;
         }
-        if (networkManager != null) networkManager.cancelScheduledScans();
-        if (networkManager != null) networkManager.shutdownPersistence();
-        if (storageProvider != null) {
-            storageProvider.shutdown();
-        }
-        closePluginInventories();
-        cancelScheduledTasks();
-        unregisterRuntimeComponents();
+        stopRuntime(false);
         try {
-            createManagers();
+            startRuntime();
+            return true;
         } catch (RuntimeException e) {
-            getLogger().log(java.util.logging.Level.SEVERE,
-                    "Reload failed storage verification; disabling the plugin", e);
+            getLogger().log(java.util.logging.Level.SEVERE, "Reload failed; disabling NetworkStorage", e);
             getServer().getPluginManager().disablePlugin(this);
             return false;
         }
+    }
+
+    private void startRuntime() {
+        createManagers();
         registerCommands();
         registerListeners();
-        registerRecipes();
+        recipes.register();
         startTasks();
-        return true;
+    }
+
+    /** One teardown order for reload, partial startup failure and disable. */
+    private void stopRuntime(boolean flush) {
+        cancelScheduledTasks();
+        if (updateChecker != null) updateChecker.close();
+        closePluginInventories();
+        unregisterRuntimeComponents();
+        if (placeholderAPIHook != null) {
+            placeholderAPIHook.close();
+            placeholderAPIHook = null;
+        }
+        recipes.close();
+        if (networkManager != null) {
+            if (flush && !networkManager.flushPersistence()) {
+                getLogger().severe("Final SQLite save failed. Uncommitted in-memory changes could not be persisted.");
+            }
+            networkManager.shutdownPersistence();
+            networkManager = null;
+        }
+        if (storageProvider != null) {
+            storageProvider.shutdown();
+            storageProvider = null;
+        }
+        backupManager = null;
+    }
+
+    /** Applies editable settings without replacing active terminal/session objects. */
+    public void applyRuntimeConfig() {
+        configManager.reloadConfig();
+        if (senderChestTaskId != -1) getServer().getScheduler().cancelTask(senderChestTaskId);
+        if (autoSaveTaskId != -1) getServer().getScheduler().cancelTask(autoSaveTaskId);
+        senderChestTaskId = -1;
+        autoSaveTaskId = -1;
+        startSenderChestTask();
+        startAutoSaveTask();
     }
 
     private void createManagers() {
@@ -206,11 +210,11 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private void initializeMetrics() {
         metrics = new Metrics(this, BSTATS_PLUGIN_ID);
-        metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name().toLowerCase()));
+        metrics.addCustomChart(new SimplePie("network_mode", () -> configManager.getNetworkMode().name().toLowerCase(java.util.Locale.ROOT)));
         metrics.addCustomChart(new SingleLineChart("tracked_chests", this::getTrackedChestCount));
         metrics.addCustomChart(new AdvancedPie("tracked_chests_per_server", () -> Map.of(getTrackedChestCountBucket(getTrackedChestCount()), 1)));
         metrics.addCustomChart(new SingleLineChart("stored_items", this::getStoredItemCount));
-        metrics.addCustomChart(new SimplePie("stored_items_scan_status", networkManager::getScanStatusForMetrics));
+        metrics.addCustomChart(new SimplePie("stored_items_scan_status", () -> networkManager == null ? "unavailable" : networkManager.getScanStatusForMetrics()));
         metrics.addCustomChart(new AdvancedPie("networks_per_server", () -> Map.of(networksBucket(networkManager.getNetworks().size()), 1)));
         metrics.addCustomChart(new SingleLineChart("wireless_terminal_users", () -> networkManager.getSelectedWirelessNetworks().size()));
         metrics.addCustomChart(new SingleLineChart("terminal_count", () -> sumN(n -> n.getTerminalLocations().size())));
@@ -289,221 +293,12 @@ public class NetworkStoragePlugin extends JavaPlugin {
         getCommand("storage").setTabCompleter(storageCommand);
         getCommand("network").setExecutor(networkCommand);
         getCommand("network").setTabCompleter(networkCommand);
-        PluginCommand networkStorageCommand = getCommand("networkstorage");
-        networkStorageCommand.setExecutor((sender, command, label, args) -> {
-            if (args.length == 0) {
-                sender.sendMessage("§cUsage: /ns admin <reload|list|info|inspect|rescan|config|storage|update>");
-                return true;
-            }
-
-            if (!configManager.hasPermission(sender, "networkstorage.admin")) {
-                sender.sendMessage(languageManager.getMessage("no_permission_reload"));
-                return true;
-            }
-
-            String sub = args[0].toLowerCase();
-            switch (sub) {
-                case "reload":
-                    sender.sendMessage(languageManager.getMessage("reload.start"));
-                    if (reload()) {
-                        sender.sendMessage(languageManager.getMessage("reload.success"));
-                    } else {
-                        sender.sendMessage("§cNetworkStorage reload failed; SQLite remains fail-closed.");
-                    }
-                    break;
-                case "list":
-                    handleAdminList(sender);
-                    break;
-                case "info":
-                    handleAdminInfo(sender, args);
-                    break;
-                case "rescan":
-                    handleAdminRescan(sender, args);
-                    break;
-                case "inspect":
-                    handleAdminInspect(sender, args);
-                    break;
-                case "config":
-                    if (!(sender instanceof Player)) {
-                        sender.sendMessage("§cConfig editor requires a player.");
-                        return true;
-                    }
-                    new com.dermoha.networkstorage.gui.ConfigEditorGUI(this).open((Player) sender);
-                    break;
-                case "storage":
-                    handleAdminStorage(sender);
-                    break;
-                case "update":
-                    handleAdminUpdate(sender);
-                    break;
-                default:
-                    sender.sendMessage("§cUsage: /ns admin <reload|list|info|inspect|rescan|config|storage|update>");
-            }
-            return true;
-        });
         var unified = new com.dermoha.networkstorage.commands.UnifiedCommand(
-                this, storageCommand, networkCommand, networkStorageCommand.getExecutor());
+                this, storageCommand, networkCommand, new com.dermoha.networkstorage.commands.AdminCommand(this));
         for (String name : new String[] {"storage", "network", "networkstorage"}) {
             getCommand(name).setExecutor(unified);
             getCommand(name).setTabCompleter(unified);
         }
-    }
-
-    private void handleAdminList(org.bukkit.command.CommandSender sender) {
-        sender.sendMessage("§6=== All Networks ===");
-        for (Network network : networkManager.getAllNetworks()) {
-            sender.sendMessage(String.format("§e%s §7(owner: §f%s§7, chests: §f%d§7, terminals: §f%d§7, senders: §f%d§7)",
-                    network.getName(),
-                    networkManager.getNetworkOwnerName(network),
-                    network.getChestLocations().size(),
-                    network.getTerminalLocations().size(),
-                    network.getSenderChestLocations().size()));
-        }
-    }
-
-    private void handleAdminStorage(org.bukkit.command.CommandSender sender) {
-        if (storageProvider == null) {
-            sender.sendMessage("§c[NetworkStorage] No storage provider is initialized.");
-            return;
-        }
-        Map<String, Object> snap = storageProvider.snapshot();
-        sender.sendMessage("§6§lNetworkStorage — Storage");
-        sender.sendMessage("  §7persistence_status: §f" + networkManager.getPersistenceStatus());
-        sender.sendMessage("  §7persistence_pending: §f" + networkManager.hasPendingPersistence());
-        sender.sendMessage("  §7persistence_last_success_at: §f" + networkManager.getLastPersistenceSuccessAt());
-        if (!networkManager.getLastPersistenceError().isBlank()) {
-            sender.sendMessage("  §cpersistence_last_error: §f" + networkManager.getLastPersistenceError());
-        }
-        for (Map.Entry<String, Object> entry : snap.entrySet()) {
-            sender.sendMessage("  §7" + entry.getKey() + ": §f" + entry.getValue());
-        }
-        File lock = new File(getDataFolder(), "migration.lock");
-        if (lock.exists()) {
-            sender.sendMessage("  §c⚠ migration.lock present — migration did not finish cleanly");
-        }
-    }
-
-    private void handleAdminUpdate(org.bukkit.command.CommandSender sender) {
-        if (updateChecker == null) {
-            sender.sendMessage("§c[NetworkStorage] Update checker is not initialized.");
-            return;
-        }
-        updateChecker.reportChecking(sender);
-        if (pendingUpdateFuture != null && !pendingUpdateFuture.isDone()) {
-            sender.sendMessage("§7[NetworkStorage] Update check already in progress.");
-            return;
-        }
-        pendingUpdateFuture = updateChecker.checkNow();
-        pendingUpdateFuture.whenComplete((result, error) -> {
-            pendingUpdateFuture = null;
-            Bukkit.getScheduler().runTask(this, () -> {
-                if (error != null) {
-                    sender.sendMessage("§c[NetworkStorage] Update check failed: " + error.getMessage());
-                    return;
-                }
-                if (result == null) {
-                    sender.sendMessage("§c[NetworkStorage] Update check returned no result.");
-                    return;
-                }
-                if (result.getStatus() == UpdateChecker.Status.DISABLED) {
-                    sender.sendMessage("§7[NetworkStorage] Update checks are disabled in config.yml.");
-                    return;
-                }
-                updateChecker.reportManualResult(sender);
-            });
-        });
-    }
-
-    private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
-        if (args.length < 2) {
-            sender.sendMessage("§cUsage: /ns admin info <network>");
-            return;
-        }
-        Network network = networkManager.getNetwork(args[1]);
-        if (network == null) {
-            sender.sendMessage("§cNetwork not found: " + args[1]);
-            return;
-        }
-        NetworkScanResult scan = networkManager.getNetworkScan(network, true,
-                result -> sendAdminInfo(sender, network, result));
-        sender.sendMessage("§7Network scan pending; current stored-item totals are not yet authoritative.");
-        if (scan.status() == NetworkScanStatus.COMPLETE) {
-            sendAdminInfo(sender, network, scan);
-        }
-    }
-
-    private void sendAdminInfo(org.bukkit.command.CommandSender sender,
-                               Network network,
-                               NetworkScanResult scan) {
-        sender.sendMessage("§6=== Network " + network.getName() + " ===");
-        sender.sendMessage("§eOwner: §f" + networkManager.getNetworkOwnerName(network));
-        sender.sendMessage("§eChests: §f" + network.getChestLocations().size());
-        sender.sendMessage("§eTerminals: §f" + network.getTerminalLocations().size());
-        sender.sendMessage("§eSender chests: §f" + network.getSenderChestLocations().size());
-        sender.sendMessage("§eTrusted: §f" + network.getTrustedPlayers().size());
-        sender.sendMessage("§eDescription: §f" + (network.getDescription().isEmpty() ? "(none)" : network.getDescription()));
-        sender.sendMessage("§eScan status: §f" + scan.status());
-        sender.sendMessage("§eContainers found: §f" + scan.containersFound() + "/" + scan.registeredLocations());
-        if (scan.hasAuthoritativeData()) {
-            sender.sendMessage("§eStored items: §f" + String.format(java.util.Locale.ROOT, "%,d", scan.totalItems()));
-            sender.sendMessage("§eUnique item types: §f" + scan.uniqueTypes());
-        } else if (network.hasLastCompleteScan()) {
-            sender.sendMessage("§eStored items: §f" + String.format(java.util.Locale.ROOT, "%,d", scan.totalItems()) + " §7(stale last complete scan)");
-            sender.sendMessage("§eUnique item types: §f" + scan.uniqueTypes() + " §7(stale last complete scan)");
-        } else {
-            sender.sendMessage("§eStored items: §6scan pending/incomplete");
-            sender.sendMessage("§eUnique item types: §6scan pending/incomplete");
-        }
-        for (String warning : scan.warnings()) {
-            sender.sendMessage("§cWarning: " + warning);
-        }
-    }
-
-    private void handleAdminRescan(org.bukkit.command.CommandSender sender, String[] args) {
-        if (args.length < 2) {
-            networkManager.rescanAllNetworks();
-            sender.sendMessage("§7Scheduled scans for all " + networkManager.getAllNetworks().size() + " network(s).");
-            return;
-        }
-
-        Network network = com.dermoha.networkstorage.storage.NetworkNames.find(
-                networkManager.getAllNetworks(), args[1]);
-        if (network == null) {
-            sender.sendMessage("§cNetwork not found: " + args[1]);
-            return;
-        }
-        networkManager.rescanNetwork(network);
-        sender.sendMessage("§7Scheduled a fresh scan for network " + network.getName() + ".");
-    }
-
-    private void handleAdminInspect(org.bukkit.command.CommandSender sender, String[] args) {
-        if (args.length < 2) {
-            sender.sendMessage("§cUsage: /ns admin inspect <network>");
-            return;
-        }
-        Network network = networkManager.getNetwork(args[1]);
-        if (network == null) {
-            sender.sendMessage("§cNetwork not found: " + args[1]);
-            return;
-        }
-        sender.sendMessage("§6=== Locations for " + network.getName() + " ===");
-        for (org.bukkit.Location loc : network.getChestLocations()) {
-            sender.sendMessage("§7Chest: §f" + formatLocation(loc));
-        }
-        for (org.bukkit.Location loc : network.getTerminalLocations()) {
-            sender.sendMessage("§bTerminal: §f" + formatLocation(loc));
-        }
-        for (org.bukkit.Location loc : network.getSenderChestLocations()) {
-            sender.sendMessage("§aSender: §f" + formatLocation(loc));
-        }
-    }
-
-    private String formatLocation(org.bukkit.Location loc) {
-        if (loc == null) {
-            return "<invalid-location>";
-        }
-        String world = loc.getWorld() == null ? "<unavailable-world>" : loc.getWorld().getName();
-        return world + " " + loc.getBlockX() + "," + loc.getBlockY() + "," + loc.getBlockZ();
     }
 
     private void registerListeners() {
@@ -630,10 +425,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
             }
 
             Object holder = topInventory.getHolder();
-            if (holder instanceof TerminalGUI
-                    || holder instanceof StatsGUI
-                    || holder instanceof NetworkSelectGUI
-                    || holder instanceof WirelessNetworkSelectGUI) {
+            if (holder instanceof com.dermoha.networkstorage.gui.PluginInventory) {
                 player.closeInventory();
             }
         }
@@ -666,168 +458,14 @@ public class NetworkStoragePlugin extends JavaPlugin {
         }
     }
 
-    private void registerRecipes() {
-        NamespacedKey key = new NamespacedKey(this, WIRELESS_RECIPE_KEY);
-        getServer().removeRecipe(key);
-        if (!tryRegisterWirelessRecipe(key, getConfiguredWirelessRecipeShape(), true)) {
-            getLogger().warning("Falling back to the default wireless terminal recipe.");
-            getServer().removeRecipe(key);
-            tryRegisterWirelessRecipe(key, getDefaultWirelessRecipeShape(), false);
-        }
-    }
-
-    private boolean tryRegisterWirelessRecipe(NamespacedKey key, String[] shape, boolean useConfiguredIngredients) {
-        try {
-            ShapedRecipe recipe = new ShapedRecipe(key, WirelessTerminalListener.createWirelessTerminal(this));
-            recipe.shape(shape);
-            if (useConfiguredIngredients) {
-                if (!applyConfiguredWirelessRecipeIngredients(recipe, shape)) {
-                    return false;
-                }
-            } else {
-                applyDefaultWirelessRecipeIngredients(recipe);
-            }
-            if (!getServer().addRecipe(recipe)) {
-                getLogger().warning("Wireless terminal recipe could not be registered.");
-                return false;
-            }
-            return true;
-        } catch (IllegalArgumentException e) {
-            getLogger().warning("Invalid wireless terminal recipe config: " + e.getMessage());
-            return false;
-        }
-    }
-
-    private String[] getConfiguredWirelessRecipeShape() {
-        List<String> shape = getConfig().getStringList("wireless-terminal-recipe.shape");
-        if (shape.isEmpty()) {
-            return getDefaultWirelessRecipeShape();
-        }
-        if (!isValidRecipeShape(shape)) {
-            getLogger().warning("Invalid wireless terminal recipe shape; using default shape.");
-            return getDefaultWirelessRecipeShape();
-        }
-        return shape.toArray(new String[0]);
-    }
-
-    private boolean isValidRecipeShape(List<String> shape) {
-        if (shape.isEmpty() || shape.size() > 3) {
-            return false;
-        }
-        int width = shape.get(0).length();
-        if (width == 0 || width > 3) {
-            return false;
-        }
-        boolean hasIngredientSlot = false;
-        for (String row : shape) {
-            if (row == null || row.length() != width) {
-                return false;
-            }
-            for (int i = 0; i < row.length(); i++) {
-                if (row.charAt(i) != ' ') {
-                    hasIngredientSlot = true;
-                }
-            }
-        }
-        return hasIngredientSlot;
-    }
-
-    private boolean applyConfiguredWirelessRecipeIngredients(ShapedRecipe recipe, String[] shape) {
-        Set<Character> requiredIngredients = getRequiredRecipeIngredients(shape);
-        Set<Character> configuredIngredients = new java.util.HashSet<>();
-        ConfigurationSection ingredients = getConfig().getConfigurationSection("wireless-terminal-recipe.ingredients");
-        if (ingredients == null) {
-            applyDefaultWirelessRecipeIngredients(recipe);
-            configuredIngredients.add('C');
-            configuredIngredients.add('S');
-            configuredIngredients.add('D');
-            return hasAllRequiredRecipeIngredients(requiredIngredients, configuredIngredients);
-        }
-
-        for (String keyChar : ingredients.getKeys(false)) {
-            if (keyChar.length() != 1) {
-                getLogger().warning("Ignoring invalid wireless recipe ingredient key '" + keyChar + "'.");
-                continue;
-            }
-            char ingredientKey = keyChar.charAt(0);
-            if (!requiredIngredients.contains(ingredientKey)) {
-                getLogger().warning("Ignoring unused wireless recipe ingredient key '" + keyChar + "'.");
-                continue;
-            }
-
-            String materialName = ingredients.getString(keyChar);
-            Material ingredient = materialName == null ? null : Material.matchMaterial(materialName);
-            if (ingredient == null || ingredient == Material.AIR || !ingredient.isItem()) {
-                getLogger().warning("Invalid material '" + materialName + "' in wireless terminal recipe.");
-                continue;
-            }
-            recipe.setIngredient(ingredientKey, ingredient);
-            configuredIngredients.add(ingredientKey);
-        }
-
-        return hasAllRequiredRecipeIngredients(requiredIngredients, configuredIngredients);
-    }
-
-    private Set<Character> getRequiredRecipeIngredients(String[] shape) {
-        Set<Character> requiredIngredients = new java.util.HashSet<>();
-        for (String row : shape) {
-            for (int i = 0; i < row.length(); i++) {
-                char ingredientKey = row.charAt(i);
-                if (ingredientKey != ' ') {
-                    requiredIngredients.add(ingredientKey);
-                }
-            }
-        }
-        return requiredIngredients;
-    }
-
-    private boolean hasAllRequiredRecipeIngredients(Set<Character> requiredIngredients, Set<Character> configuredIngredients) {
-        for (char ingredientKey : requiredIngredients) {
-            if (!configuredIngredients.contains(ingredientKey)) {
-                getLogger().warning("Missing wireless recipe ingredient for key '" + ingredientKey + "'.");
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private void applyDefaultWirelessRecipeIngredients(ShapedRecipe recipe) {
-        recipe.setIngredient('C', Material.COMPASS);
-        recipe.setIngredient('S', Material.NETHER_STAR);
-        recipe.setIngredient('D', Material.DIAMOND_BLOCK);
-    }
-
-    private String[] getDefaultWirelessRecipeShape() {
-        return new String[] {"CCC", "CSC", "CDC"};
-    }
-
     private void startSenderChestTask() {
-        int interval = configManager.getSenderChestTransferInterval() * 20;
-        senderChestTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
-            for (Network network : networkManager.getAllNetworks()) {
-                for (Location senderLoc : network.getSenderChestLocations()) {
-
-                    if (!networkManager.ensureLocationChunkLoaded(senderLoc)) {
-                        getLogger().warning("Sender chest chunk could not be loaded for " + network.getName() + ": " + senderLoc);
-                        continue;
-                    }
-
-                    if (senderLoc.getBlock().getState() instanceof org.bukkit.inventory.InventoryHolder holder) {
-                        Inventory senderInv = holder.getInventory();
-                        for (int i = 0; i < senderInv.getSize(); i++) {
-                            network.getMovement().absorbFromInventory(senderInv, i);
-                        }
-                    } else {
-                        networkManager.removeTrackedLocation(network, senderLoc);
-                        getLogger().info("Pruned non-inventory block at " + senderLoc.toString() + " from a network because it was no longer a container.");
-                    }
-                }
-            }
-        }, 100L, interval).getTaskId();
+        long interval = (long) configManager.getSenderChestTransferInterval() * NetworkStorageConstants.TICKS_PER_SECOND;
+        var transfers = new com.dermoha.networkstorage.runtime.SenderChestTransfers(this, interval);
+        senderChestTaskId = getServer().getScheduler().runTaskTimer(this, transfers::tick, 100L, 1L).getTaskId();
     }
 
     private void startAutoSaveTask() {
-        int interval = configManager.getAutoSaveInterval() * 60 * 20;
+        long interval = (long) configManager.getAutoSaveInterval() * 60 * 20;
         if (interval > 0) {
             autoSaveTaskId = getServer().getScheduler().runTaskTimer(this, () -> {
                 getLogger().info("Auto-saving network data...");

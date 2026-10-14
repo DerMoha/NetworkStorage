@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-public class StorageCommand implements CommandExecutor, TabCompleter {
+public class StorageCommand implements CommandExecutor, TabCompleter, org.bukkit.event.Listener {
 
     private static final long RESET_CONFIRMATION_WINDOW_MS = NetworkStorageConstants.RESET_CONFIRMATION_WINDOW_MS;
 
@@ -40,6 +40,12 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     public StorageCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
+        org.bukkit.Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        pendingResets.remove(event.getPlayer().getUniqueId());
     }
 
     @Override
@@ -56,7 +62,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        String subCommand = args[0].toLowerCase();
+        String subCommand = args[0].toLowerCase(java.util.Locale.ROOT);
 
         switch (subCommand) {
             case "wand":
@@ -375,7 +381,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        pendingResets.put(player.getUniqueId(), new PendingReset(network.getName(), System.currentTimeMillis() + RESET_CONFIRMATION_WINDOW_MS));
+        pendingResets.values().removeIf(value -> value.expiresAt() < System.currentTimeMillis());
+        pendingResets.put(player.getUniqueId(), new PendingReset(network, System.currentTimeMillis() + RESET_CONFIRMATION_WINDOW_MS));
 
         player.sendMessage(lang.getMessage("reset_confirm_1"));
         player.sendMessage(String.format(lang.getMessage("reset_confirm_2"), network.getChestLocations().size(), network.getTerminalLocations().size(), network.getSenderChestLocations().size()));
@@ -395,8 +402,8 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        Network network = plugin.getNetworkManager().findOwnedNetwork(player, pendingReset.networkName());
-        if (network == null) {
+        Network network = plugin.getNetworkManager().findOwnedNetwork(player, pendingReset.network().getName());
+        if (network == null || network != pendingReset.network()) {
             pendingResets.remove(player.getUniqueId());
             player.sendMessage(lang.getMessage("reset.not_found"));
             return;
@@ -431,6 +438,6 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
         return ItemUtils.formatNumber(number);
     }
 
-    private record PendingReset(String networkName, long expiresAt) {
+    private record PendingReset(Network network, long expiresAt) {
     }
 }

@@ -27,10 +27,10 @@ public class TerminalSessions implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
-    private final Map<UUID, TerminalSession> sessions = new ConcurrentHashMap<>();
+    private final Map<UUID, TerminalSession<TerminalGUI>> sessions = new ConcurrentHashMap<>();
 
-    private TerminalSession session(Player player) {
-        return sessions.computeIfAbsent(player.getUniqueId(), ignored -> new TerminalSession());
+    private TerminalSession<TerminalGUI> session(Player player) {
+        return sessions.computeIfAbsent(player.getUniqueId(), ignored -> new TerminalSession<>());
     }
 
     public TerminalSessions(NetworkStoragePlugin plugin) {
@@ -44,7 +44,7 @@ public class TerminalSessions implements Listener {
     }
 
     public boolean openTerminal(Player player, TerminalGUI gui) {
-        TerminalSession session = session(player);
+        TerminalSession<TerminalGUI> session = session(player);
         if (!gui.open()) {
             session.close();
             return false;
@@ -55,12 +55,12 @@ public class TerminalSessions implements Listener {
     }
 
     public boolean isCurrentTerminal(Player player, TerminalGUI terminal) {
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         return session != null && terminal.equals(session.visibleTerminal());
     }
 
     public void refreshNetwork(Network network) {
-        for (TerminalSession session : sessions.values()) {
+        for (TerminalSession<TerminalGUI> session : sessions.values()) {
             TerminalGUI terminal = session.visibleTerminal();
             if (terminal != null && terminal.getNetwork() == network) {
                 terminal.requestRefresh();
@@ -92,12 +92,12 @@ public class TerminalSessions implements Listener {
     }
 
     public boolean isSearching(Player player) {
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         return session != null && session.isSearching();
     }
 
     public void cancelSearch(Player player) {
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         if (session != null) {
             session.cancelSearch();
             cancelSearchTask(session);
@@ -106,7 +106,7 @@ public class TerminalSessions implements Listener {
 
     public void cleanup() {
         for (UUID playerId : Set.copyOf(sessions.keySet())) {
-            TerminalSession session = sessions.get(playerId);
+            TerminalSession<TerminalGUI> session = sessions.get(playerId);
             session.close();
             cancelSearchTask(session);
             Player player = plugin.getServer().getPlayer(playerId);
@@ -116,7 +116,7 @@ public class TerminalSessions implements Listener {
     }
 
     private void startSearch(Player player, TerminalGUI gui) {
-        TerminalSession session = session(player);
+        TerminalSession<TerminalGUI> session = session(player);
         cancelSearchTask(session);
         session.beginSearch(gui);
         session.searchTask(plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
@@ -128,7 +128,7 @@ public class TerminalSessions implements Listener {
         }, NetworkStorageConstants.SEARCH_TIMEOUT_TICKS).getTaskId());
     }
 
-    private void cancelSearchTask(TerminalSession session) {
+    private void cancelSearchTask(TerminalSession<TerminalGUI> session) {
         int taskId = session.takeSearchTask();
         if (taskId != -1) plugin.getServer().getScheduler().cancelTask(taskId);
     }
@@ -156,8 +156,8 @@ public class TerminalSessions implements Listener {
 
     private void handleSearchInput(Player player, String rawMessage) {
         UUID playerId = player.getUniqueId();
-        TerminalSession session = sessions.get(playerId);
-        TerminalSession.SearchInput input = session == null ? null : session.claimSearch();
+        TerminalSession<TerminalGUI> session = sessions.get(playerId);
+        TerminalSession.SearchInput<TerminalGUI> input = session == null ? null : session.claimSearch();
         if (input == null) {
             return;
         }
@@ -185,7 +185,7 @@ public class TerminalSessions implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         cancelSearch(player);
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         if (session != null) session.close();
         finishPendingWirelessBreak(player);
         sessions.remove(player.getUniqueId());
@@ -194,7 +194,7 @@ public class TerminalSessions implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         if (session == null) return;
 
         InventoryHolder holder = event.getInventory().getHolder();
@@ -203,7 +203,7 @@ public class TerminalSessions implements Listener {
             finished = session.closeStats();
         } else if (holder instanceof TerminalGUI closing) {
             closing.cancelBulkDeposit();
-            finished = session.closeTerminal();
+            finished = session.closeTerminal(closing);
         } else {
             return;
         }
@@ -214,7 +214,7 @@ public class TerminalSessions implements Listener {
     }
 
     private void finishPendingWirelessBreak(Player player) {
-        TerminalSession session = sessions.get(player.getUniqueId());
+        TerminalSession<TerminalGUI> session = sessions.get(player.getUniqueId());
         TerminalSession.PendingWirelessBreak pending = session == null ? null : session.takePendingBreak();
         if (pending == null) {
             return;

@@ -17,33 +17,41 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class NetworkSelectGUI implements InventoryHolder {
+public class NetworkSelectGUI implements PluginInventory {
 
     private final Player player;
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
     private final Inventory inventory;
+    private int page;
     private final Map<Integer, String> slotToNetwork = new HashMap<>();
 
     public NetworkSelectGUI(Player player, List<Network> networks, NetworkStoragePlugin plugin) {
         this.player = player;
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
-        int inventorySize = Math.max(9, Math.min(54, ((networks.size() - 1) / 9 + 1) * 9));
+        int inventorySize = 54;
         this.inventory = Bukkit.createInventory(this, inventorySize, lang.getMessage("network.select.title"));
 
         populateInventory(networks);
     }
 
     private void populateInventory(List<Network> networks) {
+        networks = networks.stream().sorted(java.util.Comparator.comparing(Network::getName)).toList();
+        SelectionPage<Network> selection = SelectionPage.of(networks, page);
+        page = selection.index();
+        inventory.clear();
+        slotToNetwork.clear();
+        if (selection.hasPrevious()) inventory.setItem(45, navigation("§ePrevious page"));
+        if (selection.hasNext()) inventory.setItem(53, navigation("§eNext page"));
         String activeNetworkName = null;
         Network activeNetwork = plugin.getNetworkManager().getPlayerNetwork(player);
         if (activeNetwork != null) {
             activeNetworkName = activeNetwork.getName();
         }
 
-        for (int i = 0; i < Math.min(networks.size(), inventory.getSize()); i++) {
-            Network network = networks.get(i);
+        for (int i = 0; i < selection.entries().size(); i++) {
+            Network network = selection.entries().get(i);
             ItemStack item = new ItemStack(Material.CHEST);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
@@ -67,7 +75,20 @@ public class NetworkSelectGUI implements InventoryHolder {
         }
     }
 
+    private ItemStack navigation(String label) {
+        ItemStack item = new ItemStack(org.bukkit.Material.ARROW);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(label);
+        item.setItemMeta(meta);
+        return item;
+    }
+
     public void handleClick(int slot) {
+        if (slot == 45 || slot == 53) {
+            if (inventory.getItem(slot) != null) page += slot == 45 ? -1 : 1;
+            populateInventory(plugin.getNetworkManager().getOwnedNetworks(player));
+            return;
+        }
         String networkName = slotToNetwork.get(slot);
         if (networkName == null) {
             return;

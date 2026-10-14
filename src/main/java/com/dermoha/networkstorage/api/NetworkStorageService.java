@@ -23,8 +23,18 @@ public interface NetworkStorageService {
 
     boolean canAccess(Player player, Network network);
 
+    /**
+     * Low-level main-thread deposit. Caller authorizes access and removes accepted items
+     * from its own inventory. Does not record player statistics; player is reserved for
+     * compatibility. Returns the unaccepted remainder, or null when fully accepted.
+     */
     ItemStack depositItem(Player player, Network network, ItemStack item);
 
+    /**
+     * Low-level main-thread withdrawal. Caller authorizes access and owns delivery and
+     * overflow handling. Does not record player statistics; player is reserved for
+     * compatibility. Returns the actual removed stack, possibly with amount zero.
+     */
     ItemStack withdrawItem(Player player, Network network, ItemStack template, int amount);
 
     int getStoredItemCount(Network network);

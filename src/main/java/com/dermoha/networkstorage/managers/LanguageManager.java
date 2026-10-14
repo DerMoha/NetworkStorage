@@ -9,6 +9,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 public class LanguageManager {
 
@@ -31,6 +34,7 @@ public class LanguageManager {
         // JAR's lang_<code>.yml (preserves current behavior for shipped
         // languages). Fall back to lang_en.yml for user-supplied languages.
         FileConfiguration reference = loadJarConfig(fileName);
+        boolean bundled = reference != null;
         FileConfiguration englishReference = loadJarConfig("lang_en.yml");
         if (reference == null && englishReference == null) {
             plugin.getLogger().severe("Default language file 'lang_en.yml' is missing from the JAR. Cannot load translations.");
@@ -47,7 +51,7 @@ public class LanguageManager {
         // (if present). If neither exists, fall back to English.
         File userFile = new File(plugin.getDataFolder(), fileName);
         if (!userFile.exists()) {
-            if (plugin.getResource(fileName) != null) {
+            if (bundled) {
                 plugin.saveResource(fileName, false);
             } else {
                 plugin.getLogger().warning("No translation file for language '" + requestedLang + "'. Expected '"
@@ -66,24 +70,14 @@ public class LanguageManager {
         langFile = userFile;
 
         try {
-            langConfig = YamlConfiguration.loadConfiguration(langFile);
+            YamlConfiguration parsed = new YamlConfiguration();
+            parsed.load(langFile);
+            langConfig = parsed;
         } catch (Exception e) {
-            plugin.getLogger().severe("Failed to parse '" + fileName + "': " + e.getMessage() + ". Falling back to English.");
-            lang = "en";
-            fileName = "lang_en.yml";
-            userFile = new File(plugin.getDataFolder(), fileName);
-            if (!userFile.exists()) {
-                plugin.saveResource(fileName, false);
-            }
-            langFile = userFile;
-            try {
-                langConfig = YamlConfiguration.loadConfiguration(langFile);
-            } catch (Exception ex) {
-                plugin.getLogger().severe("Failed to parse fallback 'lang_en.yml': " + ex.getMessage());
-                langConfig = new YamlConfiguration();
-                return;
-            }
-            reference = englishReference;
+            plugin.getLogger().severe("Failed to read '" + fileName + "': " + e.getMessage()
+                    + ". Preserving the file and using bundled translations in memory.");
+            langConfig = reference != null ? reference : new YamlConfiguration();
+            return;
         }
 
         // Merge missing keys from the reference into the loaded config so
@@ -102,7 +96,17 @@ public class LanguageManager {
 
         if (updated) {
             try {
-                langConfig.save(langFile);
+                java.nio.file.Path temporary = Files.createTempFile(langFile.toPath().getParent(), "translations-", ".tmp");
+                try {
+                    Files.writeString(temporary, langConfig.saveToString(), StandardCharsets.UTF_8);
+                    try {
+                        Files.move(temporary, langFile.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                    } catch (java.nio.file.AtomicMoveNotSupportedException unsupported) {
+                        Files.move(temporary, langFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } finally {
+                    Files.deleteIfExists(temporary);
+                }
                 plugin.getLogger().info("Updated '" + fileName + "' with missing translations.");
             } catch (IOException e) {
                 plugin.getLogger().severe("Could not save updated language file '" + fileName + "': " + e.getMessage());
@@ -115,9 +119,11 @@ public class LanguageManager {
         if (stream == null) {
             return null;
         }
-        try (InputStreamReader reader = new InputStreamReader(stream)) {
-            return YamlConfiguration.loadConfiguration(reader);
-        } catch (IOException e) {
+        try (InputStreamReader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
+            YamlConfiguration parsed = new YamlConfiguration();
+            parsed.load(reader);
+            return parsed;
+        } catch (Exception e) {
             plugin.getLogger().warning("Could not read '" + fileName + "' from JAR: " + e.getMessage());
             return null;
         }

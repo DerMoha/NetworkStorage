@@ -28,7 +28,10 @@ final class NetworkScanCoordinator {
     private final Logger logger;
     private final NetworkContentScanner contentScanner;
     private final Map<Network, ScanJob> scanJobs = new IdentityHashMap<>();
-    private final Set<Network> attachedNetworks = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Map<Network, Object> attachedNetworks = new IdentityHashMap<>();
+    private final java.util.ArrayDeque<ScanJob> ready = new java.util.ArrayDeque<>();
+    private int pumpTask = -1;
+    private long pumpGeneration;
     private boolean scansCancelled;
 
     NetworkScanCoordinator(NetworkStoragePlugin plugin) {
@@ -58,14 +61,19 @@ final class NetworkScanCoordinator {
      * schedules the scan if a caller ever mutates a network off-thread.
      */
     void attachNetwork(Network network) {
-        if (network == null || !attachedNetworks.add(network)) {
+        if (network == null || scansCancelled || attachedNetworks.containsKey(network)) {
             return;
         }
+        Object attachment = new Object();
+        attachedNetworks.put(network, attachment);
+        Runnable invalidate = () -> {
+            if (!scansCancelled && attachedNetworks.get(network) == attachment) getNetworkScan(network, false, null);
+        };
         network.setContentChangeListener(() -> {
             if (primaryThread.getAsBoolean()) {
-                getNetworkScan(network, false, null);
+                invalidate.run();
             } else {
-                schedule.applyAsInt(() -> getNetworkScan(network, false, null));
+                schedule.applyAsInt(invalidate);
             }
         });
     }
@@ -150,7 +158,23 @@ final class NetworkScanCoordinator {
     }
 
     private void scheduleScanStep(ScanJob job) {
-        job.taskId = schedule.applyAsInt(() -> advanceScan(job));
+        ready.addLast(job);
+        schedulePump();
+    }
+
+    private void schedulePump() {
+        if (pumpTask != -1 || ready.isEmpty() || scansCancelled) return;
+        long generation = ++pumpGeneration;
+        pumpTask = schedule.applyAsInt(() -> {
+            if (generation != pumpGeneration || scansCancelled) return;
+            pumpTask = -1;
+            int count = Math.min(ready.size(), NetworkContentScanner.DEFAULT_CHUNKS_PER_TICK);
+            for (int i = 0; i < count; i++) {
+                ScanJob job = ready.pollFirst();
+                if (job != null) advanceScan(job);
+            }
+            schedulePump();
+        });
     }
 
     private void advanceScan(ScanJob job) {
@@ -164,7 +188,7 @@ final class NetworkScanCoordinator {
         }
 
         NetworkContentScanner.ScanStep step = contentScanner.advance(
-                job.session(), NetworkContentScanner.DEFAULT_CHUNKS_PER_TICK);
+                job.session(), 1);
         if (!step.complete()) {
             scheduleScanStep(job);
             return;
@@ -214,9 +238,11 @@ final class NetworkScanCoordinator {
 
     private void cancelScan(Network network) {
         ScanJob job = scanJobs.remove(network);
-        if (job != null && job.taskId != -1) {
-            cancelTask.accept(job.taskId);
-            job.taskId = -1;
+        if (job != null) ready.remove(job);
+        if (ready.isEmpty() && pumpTask != -1) {
+            cancelTask.accept(pumpTask);
+            pumpTask = -1;
+            pumpGeneration++;
         }
     }
 
@@ -229,12 +255,13 @@ final class NetworkScanCoordinator {
     public void cancelScheduledScans() {
         requirePrimaryThread();
         scansCancelled = true;
-        for (ScanJob job : new ArrayList<>(scanJobs.values())) {
-            if (job.taskId != -1) {
-                cancelTask.accept(job.taskId);
-            }
-        }
+        if (pumpTask != -1) cancelTask.accept(pumpTask);
+        pumpTask = -1;
+        pumpGeneration++;
+        ready.clear();
         scanJobs.clear();
+        for (Network network : attachedNetworks.keySet()) network.setContentChangeListener(null);
+        attachedNetworks.clear();
     }
 
     private static final class ScanJob {

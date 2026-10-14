@@ -32,6 +32,7 @@ public class NetworkContainerListener implements Listener {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
+    private final java.util.Set<Network> pendingInvalidations = new java.util.HashSet<>();
 
     public NetworkContainerListener(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
@@ -129,6 +130,7 @@ public class NetworkContainerListener implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onInventoryClick(InventoryClickEvent event) {
+        invalidateNextTick(event.getView().getTopInventory());
         invalidateNextTick(event.getClickedInventory());
     }
 
@@ -153,8 +155,12 @@ public class NetworkContainerListener implements Listener {
         if (location == null) {
             return;
         }
+        Network network = plugin.getNetworkManager().getNetworkByLocation(location);
+        if (network == null || !pendingInvalidations.add(network)) {
+            return;
+        }
         org.bukkit.Bukkit.getScheduler().runTask(plugin, () -> {
-            Network network = plugin.getNetworkManager().getNetworkByLocation(location);
+            pendingInvalidations.remove(network);
             if (network != null && (network.isChestInNetwork(location)
                     || network.isChestInNetwork(plugin.getNetworkManager().getNormalizedLocation(location))
                     || network.isSenderChestInNetwork(location))) {

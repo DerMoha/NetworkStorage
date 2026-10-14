@@ -2,7 +2,6 @@ package com.dermoha.networkstorage.gui;
 
 import com.dermoha.networkstorage.NetworkStoragePlugin;
 import com.dermoha.networkstorage.managers.ConfigManager;
-import com.dermoha.networkstorage.util.ItemUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -14,10 +13,9 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-public class ConfigEditorGUI implements InventoryHolder {
+public class ConfigEditorGUI implements PluginInventory {
 
     private final NetworkStoragePlugin plugin;
     private final ConfigManager configManager;
@@ -37,7 +35,6 @@ public class ConfigEditorGUI implements InventoryHolder {
 
     private final Map<Integer, Runnable> toggleActions = new HashMap<>();
     private final Map<Integer, java.util.function.IntConsumer> intAdjustActions = new HashMap<>();
-    private final Map<Integer, String> intDisplayLabels = new HashMap<>();
     private final Map<Integer, java.util.function.Supplier<Integer>> intSuppliers = new HashMap<>();
 
     public ConfigEditorGUI(NetworkStoragePlugin plugin) {
@@ -59,14 +56,9 @@ public class ConfigEditorGUI implements InventoryHolder {
         intAdjustActions.put(SLOT_MAX_CHESTS, delta -> adjustClamped("max-chests-per-network", delta, 1, 10_000));
         intAdjustActions.put(SLOT_MAX_TERMINALS, delta -> adjustClamped("max-terminals-per-network", delta, 1, 10_000));
         intAdjustActions.put(SLOT_MAX_SENDERS, delta -> adjustClamped("max-sender-chests-per-network", delta, 1, 10_000));
-        intAdjustActions.put(SLOT_AUTO_SAVE, delta -> adjustClamped("auto-save-interval-minutes", delta, 1, 10_080));
+        intAdjustActions.put(SLOT_AUTO_SAVE, delta -> adjustClamped("auto-save-interval-minutes", delta, 0, 10_080));
         intAdjustActions.put(SLOT_SENDER_INTERVAL, delta -> adjustClamped("sender-chest-transfer-interval-seconds", delta, 1, 86_400));
 
-        intDisplayLabels.put(SLOT_MAX_CHESTS, "Max Chests");
-        intDisplayLabels.put(SLOT_MAX_TERMINALS, "Max Terminals");
-        intDisplayLabels.put(SLOT_MAX_SENDERS, "Max Senders");
-        intDisplayLabels.put(SLOT_AUTO_SAVE, "Auto-Save (min)");
-        intDisplayLabels.put(SLOT_SENDER_INTERVAL, "Sender Interval (s)");
 
         intSuppliers.put(SLOT_MAX_CHESTS, configManager::getMaxChestsPerNetwork);
         intSuppliers.put(SLOT_MAX_TERMINALS, configManager::getMaxTerminalsPerNetwork);
@@ -106,6 +98,7 @@ public class ConfigEditorGUI implements InventoryHolder {
         plugin.getConfig().set(path, !current);
         plugin.saveConfig();
         configManager.reloadConfig();
+        plugin.applyRuntimeConfig();
     }
 
     private void adjustClamped(String path, int delta, int min, int max) {
@@ -114,6 +107,7 @@ public class ConfigEditorGUI implements InventoryHolder {
         plugin.getConfig().set(path, next);
         plugin.saveConfig();
         configManager.reloadConfig();
+        plugin.applyRuntimeConfig();
     }
 
     private void refresh() {

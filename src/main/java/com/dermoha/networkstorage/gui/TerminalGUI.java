@@ -16,7 +16,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.*;
 import java.util.function.Consumer;
 
-public class TerminalGUI implements InventoryHolder {
+public class TerminalGUI implements PluginInventory {
 
     private final Player player;
     private final Network network;
@@ -55,7 +55,7 @@ public class TerminalGUI implements InventoryHolder {
         this.network = network;
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
-        this.defaultSort = initialSort;
+        this.defaultSort = plugin.getConfigManager().getDefaultSort();
         this.sortType = initialSort;
         this.inventory = Bukkit.createInventory(this, GUI_SIZE, lang.getMessage("terminal.title"));
         updateInventory();
@@ -373,7 +373,8 @@ public class TerminalGUI implements InventoryHolder {
     }
 
     private void handleItemExtraction(ItemStack itemType, int amountToTake) {
-        network.getMovement().withdrawToPlayer(player, itemType, amountToTake, this);
+        network.getMovement().withdrawToPlayer(player, itemType, amountToTake);
+        requestRefresh();
     }
 
     private void prepareBulkDeposit() {

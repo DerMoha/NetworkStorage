@@ -82,6 +82,7 @@ public final class NetworkMovement {
         return new DepositResult(deposited, returned);
     }
 
+    @Deprecated
     public DepositResult depositFromPlayerToTerminal(Player player, ItemSource source, TerminalGUI terminal) {
         DepositResult result = depositFromPlayer(player, source);
         if (result.deposited() > 0 || result.returned() > 0) {
@@ -90,7 +91,14 @@ public final class NetworkMovement {
         return result;
     }
 
+    @Deprecated
     public WithdrawResult withdrawToPlayer(Player player, ItemStack template, int requestedAmount, TerminalGUI terminal) {
+        WithdrawResult result = withdrawToPlayer(player, template, requestedAmount);
+        if (!result.noItems()) events.scheduleRefresh(terminal, terminal::requestRefresh);
+        return result;
+    }
+
+    public WithdrawResult withdrawToPlayer(Player player, ItemStack template, int requestedAmount) {
         if (requestedAmount <= 0 || template == null || template.getType().isAir()) {
             events.sendWithdrawMessage(player, new WithdrawResult(0, 0, 0, 0), template);
             return new WithdrawResult(0, 0, 0, 0);
@@ -130,8 +138,6 @@ public final class NetworkMovement {
             network.recordItemsWithdrawn(player, withdrawn);
         }
         events.sendWithdrawMessage(player, result, template);
-        events.scheduleRefresh(terminal, terminal::requestRefresh);
-
         return result;
     }
 

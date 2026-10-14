@@ -129,6 +129,48 @@ class NetworkScanCoordinatorTest {
         assertEquals(1, results.size());
     }
 
+    @Test
+    void oldOffThreadInvalidationCannotReattachDeletedNetwork() {
+        scans.attachNetwork(network);
+        primaryThread.set(false);
+        network.invalidateItemCache();
+        primaryThread.set(true);
+        scans.detachNetwork(network);
+        tick();
+        assertTrue(tasks.isEmpty());
+        network.invalidateItemCache();
+        assertTrue(tasks.isEmpty());
+    }
+
+    @Test
+    void oldOffThreadInvalidationCannotAffectNewAttachment() {
+        scans.attachNetwork(network);
+        primaryThread.set(false);
+        network.invalidateItemCache();
+        primaryThread.set(true);
+        scans.detachNetwork(network);
+        scans.attachNetwork(network);
+        tick();
+        assertTrue(tasks.isEmpty());
+    }
+
+    @Test
+    void manyNetworksShareOneScheduledPumpAndReceiveFairTurns() {
+        List<NetworkScanResult> results = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            scans.getNetworkScan(new Network("n" + i, UUID.randomUUID(), null), false, results::add);
+        }
+        assertEquals(1, tasks.size());
+        tick();
+        assertEquals(4, results.size());
+        assertEquals(1, tasks.size());
+        tick();
+        assertEquals(8, results.size());
+        tick();
+        assertEquals(10, results.size());
+        assertTrue(tasks.isEmpty());
+    }
+
     private void tick() {
         int id = tasks.keySet().iterator().next();
         tasks.remove(id).run();

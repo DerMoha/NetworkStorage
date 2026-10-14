@@ -18,7 +18,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-public class NetworkCommand implements CommandExecutor, TabCompleter {
+public class NetworkCommand implements CommandExecutor, TabCompleter, org.bukkit.event.Listener {
 
     private final NetworkStoragePlugin plugin;
     private final LanguageManager lang;
@@ -29,6 +29,12 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
     public NetworkCommand(NetworkStoragePlugin plugin) {
         this.plugin = plugin;
         this.lang = plugin.getLanguageManager();
+        org.bukkit.Bukkit.getPluginManager().registerEvents(this, plugin);
+    }
+
+    @org.bukkit.event.EventHandler
+    public void onQuit(org.bukkit.event.player.PlayerQuitEvent event) {
+        pendingDeletes.remove(event.getPlayer().getUniqueId());
     }
 
     @Override
@@ -45,7 +51,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        String subCommand = args[0].toLowerCase();
+        String subCommand = args[0].toLowerCase(java.util.Locale.ROOT);
 
         switch (subCommand) {
             case "create":
@@ -127,7 +133,8 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
                 return;
             }
         }
-        pendingDeletes.put(player.getUniqueId(), new PendingDelete(network.getName(), System.currentTimeMillis() + DELETE_CONFIRMATION_WINDOW_MS));
+        pendingDeletes.values().removeIf(value -> value.expiresAt() < System.currentTimeMillis());
+        pendingDeletes.put(player.getUniqueId(), new PendingDelete(network, System.currentTimeMillis() + DELETE_CONFIRMATION_WINDOW_MS));
         player.sendMessage(String.format(lang.getMessage("network.delete.confirm_warning"), network.getName()));
         player.sendMessage(String.format(lang.getMessage("network.delete.confirm_warning_details"), network.getChestLocations().size(), network.getTerminalLocations().size(), network.getSenderChestLocations().size()));
         player.sendMessage(lang.getMessage("network.delete.confirm_prompt"));
@@ -143,7 +150,11 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
             player.sendMessage(lang.getMessage("network.delete.expired"));
             return;
         }
-        plugin.getNetworkManager().deleteNetwork(player, pending.networkName());
+        if (plugin.getNetworkManager().getNetwork(pending.network().getName()) != pending.network()) {
+            player.sendMessage(lang.getMessage("network.delete.no_pending"));
+            return;
+        }
+        plugin.getNetworkManager().deleteNetwork(player, pending.network().getName());
     }
 
     private void handleDescriptionCommand(Player player, String[] args) {
@@ -195,7 +206,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
         return Collections.emptyList();
     }
 
-    private record PendingDelete(String networkName, long expiresAt) {
+    private record PendingDelete(Network network, long expiresAt) {
     }
 
     private void handleSelectCommand(Player player, String[] args) {

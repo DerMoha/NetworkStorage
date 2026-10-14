@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.time.Duration;
@@ -47,10 +46,7 @@ public class NetworkManager {
     private final Map<UUID, String> selectedNetworks = new ConcurrentHashMap<>();
     private final Map<UUID, String> selectedWirelessNetworks = new ConcurrentHashMap<>();
     private final Map<UUID, String> sortTypes = new ConcurrentHashMap<>();
-    private final Set<String> dirtyNetworks = ConcurrentHashMap.newKeySet();
     private final NetworkScanCoordinator scans;
-    private volatile boolean storageDirty;
-    private volatile boolean playerStateDirty;
     private final Object renameLock = new Object();
     private static final String GLOBAL_NETWORK_NAME = "Global";
     private static final UUID GLOBAL_NETWORK_OWNER = UUID.fromString("00000000-0000-0000-0000-000000000000");
@@ -74,14 +70,18 @@ public class NetworkManager {
         return provider;
     }
 
+    private Network newNetwork(String name, UUID owner) {
+        return new Network(name, owner, plugin.getConfigManager(), plugin.getMovementEvents());
+    }
+
     private void loadAll() {
         provider.loadNetworks(networks, selectedNetworks, selectedWirelessNetworks, sortTypes);
 
         boolean isGlobalMode = plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL;
         if (isGlobalMode && !networks.containsKey(GLOBAL_NETWORK_NAME)) {
-            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
+            Network globalNetwork = newNetwork(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
-            markDirty(GLOBAL_NETWORK_NAME);
+
             plugin.getLogger().info("Created new global network in memory. It will be saved on next auto-save.");
         }
 
@@ -120,13 +120,6 @@ public class NetworkManager {
         for (Location location : network.getSenderChestLocations()) locationIndex.put(location, network);
     }
 
-    private void markDirty(String name) {
-        storageDirty = true;
-        if (name != null) {
-            dirtyNetworks.add(name);
-        }
-    }
-
     private void pruneInvalidPlayerState() {
         boolean changed = false;
 
@@ -159,9 +152,6 @@ public class NetworkManager {
 
     public void queueNetworkSave() {
         requirePrimaryThread();
-        if (!hasPendingChanges()) {
-            return;
-        }
         queueSnapshotNow();
     }
 
@@ -172,7 +162,7 @@ public class NetworkManager {
 
     public void queuePlayerStateSave() {
         requirePrimaryThread();
-        playerStateDirty = true;
+
         queueSnapshotNow();
     }
 
@@ -181,17 +171,7 @@ public class NetworkManager {
             queuePlayerStateSave();
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            playerStateDirty = true;
-            queueSnapshotNow();
-        });
-    }
-
-    private boolean hasPendingChanges() {
-        if (storageDirty || playerStateDirty) {
-            return true;
-        }
-        return networks.values().stream().anyMatch(Network::isDirty);
+        Bukkit.getScheduler().runTask(plugin, this::queueSnapshotNow);
     }
 
     private void queueSnapshotNow() {
@@ -222,9 +202,7 @@ public class NetworkManager {
         boolean saved = persistence.flush(Duration.ofSeconds(30));
         if (saved) {
             for (Network network : networks.values()) network.setDirty(false);
-            dirtyNetworks.clear();
-            storageDirty = false;
-            playerStateDirty = false;
+
         }
         return saved;
     }
@@ -325,7 +303,7 @@ public class NetworkManager {
         scans.attachNetwork(network);
         network.addChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
-        markDirty(network.getName());
+
     }
 
     public void addTerminalToNetwork(Network network, Location location) {
@@ -334,7 +312,7 @@ public class NetworkManager {
         scans.attachNetwork(network);
         network.addTerminal(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
-        markDirty(network.getName());
+
     }
 
     public void addSenderChestToNetwork(Network network, Location location) {
@@ -343,7 +321,7 @@ public class NetworkManager {
         scans.attachNetwork(network);
         network.addSenderChest(normalizedLocation);
         locationIndex.put(normalizedLocation, network);
-        markDirty(network.getName());
+
     }
 
     public boolean removeTrackedLocation(Network network, Location location) {
@@ -352,9 +330,6 @@ public class NetworkManager {
         boolean changed = removeTrackedLocationExact(network, location);
         if (!normalizedLocation.equals(location)) {
             changed = removeTrackedLocationExact(network, normalizedLocation) || changed;
-        }
-        if (changed) {
-            markDirty(network.getName());
         }
         return changed;
     }
@@ -383,6 +358,7 @@ public class NetworkManager {
     }
 
     public void createNetwork(Player player, String networkName) {
+        requirePrimaryThread();
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             player.sendMessage(lang.getMessage("network.create.global_mode"));
             return;
@@ -395,13 +371,13 @@ public class NetworkManager {
             player.sendMessage(lang.getMessage("network.create.exists"));
             return;
         }
-        Network network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
+        Network network = newNetwork(networkName, player.getUniqueId());
         scans.attachNetwork(network);
         networks.put(networkName, network);
         scans.getNetworkScan(network, true, null);
-        markDirty(networkName);
+
         selectedNetworks.put(player.getUniqueId(), networkName);
-        playerStateDirty = true;
+
         queueNetworkSave();
         player.sendMessage(String.format(lang.getMessage("network.create.success"), networkName));
     }
@@ -419,6 +395,7 @@ public class NetworkManager {
     }
 
     public void renameNetwork(Player player, String oldName, String newName) {
+        requirePrimaryThread();
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             player.sendMessage(lang.getMessage("network.rename.global_mode"));
             return;
@@ -450,21 +427,14 @@ public class NetworkManager {
             network.setName(newName);
             networks.put(newName, network);
             networks.remove(oldName);
-            dirtyNetworks.remove(oldName);
-            markDirty(newName);
-            boolean playerStateChanged = false;
+
             if (oldName.equals(selectedNetworks.get(network.getOwner()))) {
                 selectedNetworks.put(network.getOwner(), newName);
-                playerStateChanged = true;
             }
             for (Map.Entry<UUID, String> entry : selectedWirelessNetworks.entrySet()) {
                 if (oldName.equals(entry.getValue())) {
                     entry.setValue(newName);
-                    playerStateChanged = true;
                 }
-            }
-            if (playerStateChanged) {
-                playerStateDirty = true;
             }
         }
         queueNetworkSave();
@@ -483,11 +453,11 @@ public class NetworkManager {
     }
 
     public Map<String, Network> getNetworks() {
-        return networks;
+        return Map.copyOf(networks);
     }
 
     public Map<UUID, String> getSelectedWirelessNetworks() {
-        return selectedWirelessNetworks;
+        return Map.copyOf(selectedWirelessNetworks);
     }
 
     public Network getNetworkByLocation(Location location) {
@@ -537,10 +507,10 @@ public class NetworkManager {
         requirePrimaryThread();
         Block block = location.getBlock();
         if (!plugin.getConfigManager().isNetworkContainerBlock(block.getType())) {
-            return location;
+            return location.clone();
         }
         if (!(block.getBlockData() instanceof Chest chestData)) {
-            return location;
+            return location.clone();
         }
         if (chestData.getType() == Chest.Type.RIGHT) {
             BlockFace direction = BlockUtils.findOtherChestHalf(Chest.Type.RIGHT, chestData.getFacing());
@@ -548,7 +518,7 @@ public class NetworkManager {
                 return block.getRelative(direction).getLocation();
             }
         }
-        return location;
+        return location.clone();
     }
 
     public List<Network> getOwnedNetworks(Player player) {
@@ -705,6 +675,7 @@ public class NetworkManager {
     }
 
     public synchronized Network getOrCreatePlayerNetwork(Player player) {
+        requirePrimaryThread();
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             return networks.get(GLOBAL_NETWORK_NAME);
         }
@@ -721,11 +692,11 @@ public class NetworkManager {
                 player.sendMessage(lang.getMessage("network.orcreate.exists"));
                 return null;
             }
-            network = new Network(networkName, player.getUniqueId(), plugin.getConfigManager());
+            network = newNetwork(networkName, player.getUniqueId());
             scans.attachNetwork(network);
             networks.put(networkName, network);
             scans.getNetworkScan(network, true, null);
-            markDirty(networkName);
+
         }
         return network;
     }
@@ -735,6 +706,7 @@ public class NetworkManager {
     }
 
     public synchronized int purgeAllNetworksForSeasonReset() {
+        requirePrimaryThread();
         List<Network> networksToPurge = new ArrayList<>(networks.values());
         if (networksToPurge.isEmpty()) {
             return 0;
@@ -752,15 +724,12 @@ public class NetworkManager {
         selectedNetworks.clear();
         selectedWirelessNetworks.clear();
         sortTypes.clear();
-        dirtyNetworks.clear();
-        storageDirty = true;
-        playerStateDirty = true;
 
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
-            Network globalNetwork = new Network(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER, plugin.getConfigManager());
+            Network globalNetwork = newNetwork(GLOBAL_NETWORK_NAME, GLOBAL_NETWORK_OWNER);
             scans.attachNetwork(globalNetwork);
             scans.getNetworkScan(globalNetwork, true, null);
-            markDirty(GLOBAL_NETWORK_NAME);
+
             networks.put(GLOBAL_NETWORK_NAME, globalNetwork);
         }
 
@@ -769,6 +738,7 @@ public class NetworkManager {
     }
 
     public synchronized boolean deleteNetwork(Player player, String networkName) {
+        requirePrimaryThread();
         if (plugin.getConfigManager().getNetworkMode() == ConfigManager.NetworkMode.GLOBAL) {
             player.sendMessage(lang.getMessage("network.delete.global_mode"));
             return false;
@@ -792,22 +762,9 @@ public class NetworkManager {
         scans.detachNetwork(network);
         resetNetworkInternal(network);
         networks.remove(networkName);
-        dirtyNetworks.remove(networkName);
-        storageDirty = true;
-        playerStateDirty = true;
 
-        for (Map.Entry<UUID, String> entry : selectedNetworks.entrySet()) {
-            if (networkName.equals(entry.getValue())) {
-                entry.setValue(null);
-            }
-        }
-        selectedNetworks.values().removeIf(Objects::isNull);
-        for (Map.Entry<UUID, String> entry : selectedWirelessNetworks.entrySet()) {
-            if (networkName.equals(entry.getValue())) {
-                entry.setValue(null);
-            }
-        }
-        selectedWirelessNetworks.values().removeIf(Objects::isNull);
+        selectedNetworks.entrySet().removeIf(entry -> networkName.equals(entry.getValue()));
+        selectedWirelessNetworks.entrySet().removeIf(entry -> networkName.equals(entry.getValue()));
 
         queueNetworkSave();
         archiveDeletedNetworkStats(networkName, network);
@@ -852,8 +809,9 @@ public class NetworkManager {
     }
 
     public boolean resetNetwork(Network network) {
+        requirePrimaryThread();
         resetNetworkInternal(network);
-        markDirty(network.getName());
+
         queueNetworkSave();
         return true;
     }

@@ -9,33 +9,46 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TerminalSessionTest {
     // Rendering is outside this lifecycle; no Bukkit inventory is needed for these transitions.
-    private final TerminalSession session = new TerminalSession();
+    private final TerminalSession<String> session = new TerminalSession<>();
+
+    @Test
+    void staleCloseDoesNotCloseNewTerminalAndSearchRetainsIdentity() {
+        String first = new String("first");
+        String second = new String("second");
+        session.opened(first);
+        session.opened(second);
+        assertFalse(session.closeTerminal(first));
+        assertSame(second, session.visibleTerminal());
+        session.beginSearch(second);
+        assertFalse(session.closeTerminal(second));
+        assertSame(second, session.claimSearch().terminal());
+    }
 
     @Test
     void searchSurvivesTerminalCloseAndInputIsClaimedOnce() {
-        session.opened(null);
-        session.beginSearch(null);
+        session.opened("terminal");
+        session.beginSearch("terminal");
         assertFalse(session.closeTerminal());
         assertTrue(session.isSearching());
-        TerminalSession.SearchInput input = session.claimSearch();
+        TerminalSession.SearchInput<String> input = session.claimSearch();
         assertNotNull(input);
         assertFalse(session.isSearching());
         assertNull(session.claimSearch());
         assertTrue(session.acceptsSearchInput(input));
         assertFalse(session.expireSearch(), "claimed input wins over timeout");
-        session.opened(null);
+        session.opened("terminal");
         assertFalse(session.acceptsSearchInput(input));
     }
 
     @Test
     void statsRoundTripPreservesPendingFinalUse() {
         session.pendingBreak(EquipmentSlot.HAND, new TestItemStack(Material.STICK, 1));
-        session.opened(null);
+        session.opened("terminal");
         session.beginStats();
         assertFalse(session.closeTerminal());
         session.returnFromStats();
         assertFalse(session.closeStats());
-        session.opened(null);
+        session.opened("terminal");
         assertTrue(session.closeTerminal());
         assertNotNull(session.takePendingBreak());
         assertNull(session.takePendingBreak());
@@ -51,20 +64,20 @@ class TerminalSessionTest {
 
     @Test
     void timeoutAndCancellationStopSearch() {
-        session.beginSearch(null);
+        session.beginSearch("terminal");
         session.closeTerminal();
         assertTrue(session.expireSearch());
         assertFalse(session.expireSearch());
         assertNull(session.claimSearch());
-        session.beginSearch(null);
+        session.beginSearch("terminal");
         session.cancelSearch();
         assertNull(session.claimSearch());
     }
 
     @Test
     void quitInvalidatesQueuedInputAndTaskIsCancelledOnce() {
-        session.beginSearch(null);
-        TerminalSession.SearchInput input = session.claimSearch();
+        session.beginSearch("terminal");
+        TerminalSession.SearchInput<String> input = session.claimSearch();
         session.searchTask(12);
         session.close();
         assertFalse(session.acceptsSearchInput(input));
@@ -74,10 +87,10 @@ class TerminalSessionTest {
 
     @Test
     void earlierSearchInputCannotReopenANewerSearch() {
-        session.beginSearch(null);
-        TerminalSession.SearchInput oldInput = session.claimSearch();
-        session.beginSearch(null);
-        TerminalSession.SearchInput newInput = session.claimSearch();
+        session.beginSearch("terminal");
+        TerminalSession.SearchInput<String> oldInput = session.claimSearch();
+        session.beginSearch("terminal");
+        TerminalSession.SearchInput<String> newInput = session.claimSearch();
         assertFalse(session.acceptsSearchInput(oldInput));
         assertTrue(session.acceptsSearchInput(newInput));
     }

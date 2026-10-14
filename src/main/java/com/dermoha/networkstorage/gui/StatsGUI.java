@@ -19,7 +19,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-public class StatsGUI implements InventoryHolder {
+public class StatsGUI implements PluginInventory {
 
     private final Inventory inventory;
     private final Player player;
@@ -73,13 +73,7 @@ public class StatsGUI implements InventoryHolder {
             }
             meta.setDisplayName(String.format(lang.getMessage("stats.player.name"), rank, stat.getPlayerName()));
 
-            List<String> lore = new ArrayList<>();
-            lore.add(String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()));
-            lore.add(String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()));
-            long balance = stat.getItemsDeposited() - stat.getItemsWithdrawn();
-            lore.add(String.format(lang.getMessage("stats.player.balance"), balance));
-
-            meta.setLore(lore);
+            meta.setLore(statLore(stat));
             item.setItemMeta(meta);
         }
         return item;
@@ -92,13 +86,15 @@ public class StatsGUI implements InventoryHolder {
             return (SkullMeta) fallback.getItemMeta();
         }
         skullMeta.setDisplayName(String.format(lang.getMessage("stats.player.name"), rank, stat.getPlayerName()));
-        List<String> lore = new ArrayList<>();
-        lore.add(String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()));
-        lore.add(String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()));
-        long balance = stat.getItemsDeposited() - stat.getItemsWithdrawn();
-        lore.add(String.format(lang.getMessage("stats.player.balance"), balance));
-        skullMeta.setLore(lore);
+        skullMeta.setLore(statLore(stat));
         return skullMeta;
+    }
+
+    private List<String> statLore(PlayerStat stat) {
+        return List.of(
+                String.format(lang.getMessage("stats.player.deposited"), stat.getItemsDeposited()),
+                String.format(lang.getMessage("stats.player.withdrawn"), stat.getItemsWithdrawn()),
+                String.format(lang.getMessage("stats.player.balance"), stat.getItemsDeposited() - stat.getItemsWithdrawn()));
     }
 
     public void handleClick(int slot) {

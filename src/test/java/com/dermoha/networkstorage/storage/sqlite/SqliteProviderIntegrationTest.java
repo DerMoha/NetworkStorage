@@ -158,7 +158,7 @@ class SqliteProviderIntegrationTest {
         Network network = network("Main", owner);
         network.setDescription("kept");
         network.addTrustedPlayer(trusted);
-        network.getPlayerStats().put(owner, new PlayerStat(owner, "Alex", 4, 2));
+        network.restorePlayerStat( new PlayerStat(owner, "Alex", 4, 2));
         Map<UUID, String> selected = new HashMap<>(Map.of(owner, "Main"));
         Map<UUID, String> wireless = new HashMap<>(Map.of(trusted, "Main"));
         try {
