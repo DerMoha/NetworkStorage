@@ -1023,8 +1023,9 @@ public class SqliteNetworkStorageProvider implements NetworkStorageProvider {
             try (ResultSet rs = s.executeQuery("SELECT network_name, player_uuid, expires_at FROM network_trusted")) {
                 while (rs.next()) {
                     long expiry = rs.getLong("expires_at");
+                    boolean permanent = rs.wasNull();
                     rows.add("trusted|" + rs.getString("network_name") + "|" + rs.getString("player_uuid") + "|"
-                            + (rs.wasNull() ? "" : expiry));
+                            + (permanent ? "" : expiry));
                 }
             }
             try (ResultSet rs = s.executeQuery(

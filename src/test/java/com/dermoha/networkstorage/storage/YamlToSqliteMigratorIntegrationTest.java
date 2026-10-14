@@ -206,6 +206,74 @@ class YamlToSqliteMigratorIntegrationTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void permanentTrustSurvivesMigrationAndRestart(boolean packed) throws Exception {
+        writeLegacySource(packed, java.util.Map.of("Main", "trusted:\n  - " + trusted + "\n"),
+                java.util.Map.of(), java.util.Map.of());
+        migrateSource(packed);
+        assertFalse(Files.exists(dataDirectory.resolve("migration.lock")));
+        for (int restart = 0; restart < 2; restart++) {
+            SqliteNetworkStorageProvider provider = new SqliteNetworkStorageProvider(database.toFile());
+            try {
+                provider.initialize();
+                java.util.Map<String, Network> loaded = new java.util.HashMap<>();
+                provider.loadNetworks(loaded, new java.util.HashMap<>(), new java.util.HashMap<>(), new java.util.HashMap<>());
+                assertTrue(loaded.get("Main").getTrustedPlayers().contains(trusted));
+                assertFalse(loaded.get("Main").getTrustedPlayersWithExpiry().containsKey(trusted));
+                provider.verifySnapshot(StorageSnapshot.capture(loaded.values(), java.util.Map.of(), java.util.Map.of(), java.util.Map.of()));
+            } finally {
+                provider.shutdown();
+            }
+        }
+    }
+
+    private void migrateSource(boolean packed) {
+        if (packed) migrator().migrateLegacyDatabase(database.toFile());
+        else migrator().migrateYaml();
+    }
+
+    private void writeLegacySource(boolean packed, java.util.Map<String, String> networks,
+                                   java.util.Map<UUID, String> selected,
+                                   java.util.Map<UUID, String> wireless) throws Exception {
+        if (packed) {
+            try (var c = DriverManager.getConnection("jdbc:sqlite:" + database);
+                 var st = c.createStatement()) {
+                st.execute("CREATE TABLE networks(name TEXT PRIMARY KEY, owner TEXT NOT NULL, description TEXT, data TEXT NOT NULL)");
+                st.execute("CREATE TABLE player_state(player_uuid TEXT PRIMARY KEY, selected_network TEXT, selected_wireless TEXT)");
+                for (var entry : networks.entrySet()) {
+                    try (var insert = c.prepareStatement("INSERT INTO networks VALUES (?, ?, ?, ?)")) {
+                        insert.setString(1, entry.getKey()); insert.setString(2, owner.toString());
+                        insert.setString(3, ""); insert.setString(4, entry.getValue().isEmpty() ? "trusted: []\n" : entry.getValue());
+                        insert.executeUpdate();
+                    }
+                }
+                var ids = new java.util.HashSet<>(selected.keySet()); ids.addAll(wireless.keySet());
+                for (UUID id : ids) {
+                    try (var insert = c.prepareStatement("INSERT INTO player_state VALUES (?, ?, ?)")) {
+                        insert.setString(1, id.toString()); insert.setString(2, selected.get(id));
+                        insert.setString(3, wireless.get(id)); insert.executeUpdate();
+                    }
+                }
+            }
+        } else {
+            StringBuilder yaml = new StringBuilder("networks:\n");
+            for (var entry : networks.entrySet()) {
+                yaml.append("  ").append(entry.getKey()).append(":\n    owner: ").append(owner).append("\n");
+                entry.getValue().lines().forEach(line -> yaml.append("    ").append(line).append("\n"));
+            }
+            writeYaml(yaml.toString());
+            var ids = new java.util.HashSet<>(selected.keySet()); ids.addAll(wireless.keySet());
+            StringBuilder players = new StringBuilder("players:\n");
+            for (UUID id : ids) {
+                players.append("  ").append(id).append(":\n");
+                if (selected.containsKey(id)) players.append("    selected-owned-network: ").append(selected.get(id)).append("\n");
+                if (wireless.containsKey(id)) players.append("    selected-wireless-network: ").append(wireless.get(id)).append("\n");
+            }
+            if (!ids.isEmpty()) Files.writeString(playerStateYaml, players.toString());
+        }
+    }
+
     private YamlToSqliteMigrator migrator() {
         NetworkAccessRules rules = new NetworkAccessRules() {
             @Override public boolean isGlobalNetworkMode() { return false; }
