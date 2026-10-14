@@ -16,8 +16,8 @@ commands:
     usage: /<command> [create|edit|rename|select|list|delete|confirm-delete|description]
     aliases: [net]
   networkstorage:
-    description: Admin commands for NetworkStorage
-    usage: /<command> [reload|list|info|inspect|rescan|config|storage|update]
+    description: NetworkStorage commands
+    usage: /<command> help
 
 permissions:
   networkstorage.*:

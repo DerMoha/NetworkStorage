@@ -292,7 +292,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
         PluginCommand networkStorageCommand = getCommand("networkstorage");
         networkStorageCommand.setExecutor((sender, command, label, args) -> {
             if (args.length == 0) {
-                sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|rescan|config|storage|update>");
+                sender.sendMessage("§cUsage: /ns admin <reload|list|info|inspect|rescan|config|storage|update>");
                 return true;
             }
 
@@ -337,10 +337,16 @@ public class NetworkStoragePlugin extends JavaPlugin {
                     handleAdminUpdate(sender);
                     break;
                 default:
-                    sender.sendMessage("§cUsage: /networkstorage <reload|list|info|inspect|rescan|config|storage|update>");
+                    sender.sendMessage("§cUsage: /ns admin <reload|list|info|inspect|rescan|config|storage|update>");
             }
             return true;
         });
+        var unified = new com.dermoha.networkstorage.commands.UnifiedCommand(
+                this, storageCommand, networkCommand, networkStorageCommand.getExecutor());
+        for (String name : new String[] {"storage", "network", "networkstorage"}) {
+            getCommand(name).setExecutor(unified);
+            getCommand(name).setTabCompleter(unified);
+        }
     }
 
     private void handleAdminList(org.bukkit.command.CommandSender sender) {
@@ -410,7 +416,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private void handleAdminInfo(org.bukkit.command.CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage("§cUsage: /networkstorage info <network>");
+            sender.sendMessage("§cUsage: /ns admin info <network>");
             return;
         }
         Network network = networkManager.getNetwork(args[1]);
@@ -472,7 +478,7 @@ public class NetworkStoragePlugin extends JavaPlugin {
 
     private void handleAdminInspect(org.bukkit.command.CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage("§cUsage: /networkstorage inspect <network>");
+            sender.sendMessage("§cUsage: /ns admin inspect <network>");
             return;
         }
         Network network = networkManager.getNetwork(args[1]);

@@ -106,14 +106,7 @@ public class NetworkCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelp(Player player) {
-        player.sendMessage(lang.getMessage("network.help.title"));
-        player.sendMessage(lang.getMessage("network.help.create"));
-        player.sendMessage(lang.getMessage("network.help.edit"));
-        player.sendMessage(lang.getMessage("network.help.rename"));
-        player.sendMessage(lang.getMessage("network.help.select"));
-        player.sendMessage(lang.getMessage("network.help.list"));
-        player.sendMessage(lang.getMessage("network.help.delete"));
-        player.sendMessage(lang.getMessage("network.help.description"));
+        CommandHelp.send(plugin, player);
     }
 
     private void handleDeleteCommand(Player player, String[] args) {

@@ -14,15 +14,17 @@ A Minecraft plugin that allows players to create a centralized storage network.
 
 ## Commands
 
-*   `/storage wand`: Get the storage wand.
-*   `/storage info`: View your network information.
-*   `/storage trust <player>`: Trust a player to your network.
-*   `/storage untrust <player>`: Untrust a player from your network.
-*   `/storage wireless`: Get a wireless terminal.
+Use `/ns` or `/ns help` for the shared command help. `/storage`, `/network`, and `/networkstorage` use the same command surface; existing short aliases still work. Network actions such as `/ns select`, `/ns list`, and `/ns create` live alongside player actions. Administrative diagnostics and settings use `/ns admin <command>` (for example, `/ns admin storage` or `/ns admin reload`) and require admin permission.
+
+*   `/ns wand`: Get the storage wand.
+*   `/ns info`: View your network information.
+*   `/ns trust <player>`: Trust a player to your network.
+*   `/ns untrust <player>`: Untrust a player from your network.
+*   `/ns wireless`: Get a wireless terminal.
 
 ## How to Use
 
-1.  Use `/storage wand` to get a storage wand.
+1.  Use `/ns wand` to get a storage wand.
 2.  Right-click with the wand to create a new network.
 3.  Left-click on chests with the wand to add them to your network.
 4.  Place a terminal to access all your items in one place.
@@ -36,13 +38,13 @@ A Minecraft plugin that allows players to create a centralized storage network.
 In the `config.yml`, you can choose between two modes:
 
 *   **`PLAYER` (Default):** Each player has their own private network. This is the classic behavior.
-*   **`GLOBAL`:** There is only one, single, massive network for the entire server. All players share this one network. Commands like `/storage trust` or `/network` are disabled in this mode.
+*   **`GLOBAL`:** There is only one, single, massive network for the entire server. All players share this one network. Commands like `/ns trust` or `/network` are disabled in this mode.
 
 ### Trust System (`enable-trust-system`)
 
 This option is only relevant in `PLAYER` mode:
 
-*   **`true` (Default):** Only the owner and players they have added via `/storage trust` can use a network.
+*   **`true` (Default):** Only the owner and players they have added via `/ns trust` can use a network.
 *   **`false`:** The trust system is completely disabled. **Every player can use every network.** Ideal for small, private servers where everyone works together.
 
 Trust grants usage access through terminals, wireless terminals, and protected containers. It does not grant management access: only the owner or an admin can add, remove, break, rename, or delete network components. Physical storage chests remain normal Minecraft chests when `protect-network-containers` is disabled, so use your server's land-claim or block-protection plugin if needed.

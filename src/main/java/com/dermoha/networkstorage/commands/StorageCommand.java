@@ -424,29 +424,7 @@ public class StorageCommand implements CommandExecutor, TabCompleter {
     }
 
     private void sendHelpMessage(Player player) {
-        player.sendMessage(lang.getMessage("help_title"));
-        player.sendMessage(lang.getMessage("help_wand"));
-        player.sendMessage(lang.getMessage("help_info"));
-        player.sendMessage(lang.getMessage("help_reset"));
-        player.sendMessage(lang.getMessage("help_confirm_reset"));
-        player.sendMessage(lang.getMessage("help_cancel_reset"));
-        player.sendMessage(lang.getMessage("help_trust"));
-        player.sendMessage(lang.getMessage("help_untrust"));
-        player.sendMessage(lang.getMessage("help_wireless"));
-        player.sendMessage(lang.getMessage("help_help"));
-        player.sendMessage("");
-        player.sendMessage(lang.getMessage("help_usage"));
-        player.sendMessage(lang.getMessage("help_step1"));
-        player.sendMessage(lang.getMessage("help_step2"));
-        player.sendMessage(lang.getMessage("help_step3"));
-        player.sendMessage(lang.getMessage("help_step4"));
-        player.sendMessage(lang.getMessage("help_step5"));
-        player.sendMessage("");
-        player.sendMessage(lang.getMessage("help_wireless_title"));
-        player.sendMessage(lang.getMessage("help_wireless_step1"));
-        player.sendMessage(lang.getMessage("help_wireless_step2"));
-        player.sendMessage(lang.getMessage("help_wireless_step3"));
-        player.sendMessage(lang.getMessage("help_wireless_step4"));
+        CommandHelp.send(plugin, player);
     }
 
     private String formatNumber(long number) {
