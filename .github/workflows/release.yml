@@ -3,6 +3,11 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      skip_github:
+        description: Skip GitHub release creation (retry other platforms)
+        required: false
+        default: 'false'
+        type: boolean
       skip_modrinth:
         description: Skip Modrinth upload
         required: false
@@ -48,6 +53,7 @@ jobs:
         run: mvn -B package --file pom.xml -q
 
       - name: Create GitHub Release
+        if: github.event.inputs.skip_github != 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.version }}
@@ -73,33 +79,10 @@ jobs:
             26.3
           files: ${{ steps.version.outputs.jar_file }}
 
-      - name: Read release notes
-        id: notes
-        shell: bash
-        run: |
-          {
-            echo 'body<<RELEASE_NOTES_EOF'
-            cat CHANGELOG.md
-            echo 'RELEASE_NOTES_EOF'
-          } >> "$GITHUB_OUTPUT"
-
       - name: Upload to Hangar
         if: github.event.inputs.skip_hangar != 'true'
-        uses: milkdrinkers/Hangar-Publish@v2
-        with:
-          api_token: ${{ secrets.HANGAR_API_TOKEN }}
-          slug: NetworkStorage
-          version: ${{ steps.version.outputs.version }}
-          channel: ${{ github.event.inputs.hangar_channel }}
-          description: ${{ steps.notes.outputs.body }}
-          files: |
-            [
-              {
-                "path": "${{ steps.version.outputs.jar_file }}",
-                "platforms": ["PAPER"]
-              }
-            ]
-          platform_dependencies: |
-            {
-              "PAPER": ["26.3"]
-            }
+        run: python3 scripts/publish-hangar.py
+        env:
+          HANGAR_API_TOKEN: ${{ secrets.HANGAR_API_TOKEN }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          HANGAR_CHANNEL: ${{ github.event.inputs.hangar_channel }}
