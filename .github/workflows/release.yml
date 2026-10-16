@@ -52,7 +52,9 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           files: ${{ steps.version.outputs.jar_file }}
-          generate_release_notes: true
+          name: ${{ steps.version.outputs.version }} for Minecraft 26.3
+          target_commitish: ${{ github.sha }}
+          body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -64,11 +66,22 @@ jobs:
           modrinth-token: ${{ secrets.MODRINTH_API_TOKEN }}
           version: ${{ steps.version.outputs.version }}
           version-type: release
+          changelog-file: CHANGELOG.md
           loaders: |
             paper
           game-versions: |
-            >=1.21 <=26.3
+            26.3
           files: ${{ steps.version.outputs.jar_file }}
+
+      - name: Read release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            cat CHANGELOG.md
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload to Hangar
         if: github.event.inputs.skip_hangar != 'true'
@@ -78,6 +91,7 @@ jobs:
           slug: NetworkStorage
           version: ${{ steps.version.outputs.version }}
           channel: ${{ github.event.inputs.hangar_channel }}
+          description: ${{ steps.notes.outputs.body }}
           files: |
             [
               {
@@ -87,5 +101,5 @@ jobs:
             ]
           platform_dependencies: |
             {
-              "PAPER": [">=1.21 <=26.3"]
+              "PAPER": ["26.3"]
             }
